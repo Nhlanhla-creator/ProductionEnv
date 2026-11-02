@@ -15,7 +15,6 @@ export default function CatalystScoringCustomisationTab({
   isLocked = false,
 }) {
   const [selectedStage, setSelectedStage] = useState("growth")
-  const [selectedTrack, setSelectedTrack] = useState("ed")
 
   const scoringConfig = programme.scoringConfiguration || {
     mode: "default", // "default" or "custom"
@@ -23,23 +22,23 @@ export default function CatalystScoringCustomisationTab({
     configurationNote: "",
   }
 
-  const isESD = programme.programmeType === "esd"
   const isCustomMode = scoringConfig.mode === "custom"
 
-  const currentWeights =
-    scoringConfig.stageWeights?.[selectedStage] ||
-    DEFAULT_STAGE_WEIGHTS_CATALYST[selectedStage] || {
-      compliance: 20,
-      legitimacy: 20,
-      governanceLeadership: 20,
-      operational: 20,
-      valueCreation: 20,
-    }
+  const defaultWeights = DEFAULT_STAGE_WEIGHTS_CATALYST[selectedStage] || DEFAULT_STAGE_WEIGHTS_CATALYST.growth
+  const rawSavedStage = scoringConfig.stageWeights?.[selectedStage]
 
-  const defaultWeights = DEFAULT_STAGE_WEIGHTS_CATALYST[selectedStage]
+  const currentWeights = rawSavedStage
+    ? {
+        compliance: rawSavedStage.compliance ?? defaultWeights.compliance,
+        legitimacy: rawSavedStage.legitimacy ?? defaultWeights.legitimacy,
+        governanceLeadership: rawSavedStage.governanceLeadership ?? defaultWeights.governanceLeadership,
+        operational: rawSavedStage.operational ?? defaultWeights.operational,
+        fundability: rawSavedStage.fundability ?? rawSavedStage.valueCreation ?? defaultWeights.fundability,
+      }
+    : { ...defaultWeights }
 
-  const totalPercentage = Object.values(currentWeights).reduce(
-    (sum, val) => sum + (Number(val) || 0),
+  const totalPercentage = SCORE_COMPONENTS_INFO.reduce(
+    (sum, comp) => sum + (Number(currentWeights[comp.id]) || 0),
     0
   )
   const isTotalValid = totalPercentage === 100
@@ -99,7 +98,7 @@ export default function CatalystScoringCustomisationTab({
     legitimacy: 60,
     governanceLeadership: 70,
     operational: 80,
-    valueCreation: 55,
+    fundability: 55,
   }
 
   const defaultScore = Math.round(
@@ -198,41 +197,6 @@ export default function CatalystScoringCustomisationTab({
           <label style={{ fontSize: "13px", fontWeight: "600", color: "#5d4037" }}>
             Select Business Stage to Inspect / Override:
           </label>
-          {isESD && (
-            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-              <span style={{ fontSize: "12px", color: "#6d4c41", fontWeight: 600 }}>Track:</span>
-              <button
-                type="button"
-                onClick={() => setSelectedTrack("ed")}
-                style={{
-                  padding: "2px 8px",
-                  fontSize: "12px",
-                  borderRadius: "4px",
-                  border: `1px solid ${selectedTrack === "ed" ? "#795548" : "#ccc"}`,
-                  backgroundColor: selectedTrack === "ed" ? "#795548" : "#fff",
-                  color: selectedTrack === "ed" ? "#fff" : "#555",
-                  cursor: "pointer",
-                }}
-              >
-                ED Track
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedTrack("sd")}
-                style={{
-                  padding: "2px 8px",
-                  fontSize: "12px",
-                  borderRadius: "4px",
-                  border: `1px solid ${selectedTrack === "sd" ? "#795548" : "#ccc"}`,
-                  backgroundColor: selectedTrack === "sd" ? "#795548" : "#fff",
-                  color: selectedTrack === "sd" ? "#fff" : "#555",
-                  cursor: "pointer",
-                }}
-              >
-                SD Track
-              </button>
-            </div>
-          )}
         </div>
 
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>

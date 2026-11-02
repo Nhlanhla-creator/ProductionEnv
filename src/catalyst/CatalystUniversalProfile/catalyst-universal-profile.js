@@ -151,8 +151,6 @@ export default function CatalystUniversalProfile() {
       listingVisibility: "members",
       promotionalOptIn: true,
       shareCapabilityWithSponsors: true,
-      onboardingRelationship: "self_managed",
-      thirdPartyAccessScopes: ["profile_edits", "programme_setup"],
     },
   })
 
@@ -175,8 +173,7 @@ export default function CatalystUniversalProfile() {
         programmeBrief: {
           programmeLead: "Nomsa Dlamini",
           aboutProgramme: legacyPB.aboutProgram || "Comprehensive incubation and supplier-readiness pathway connecting emerging enterprises to industrial supply chains.",
-          primaryMandate: "ed_to_sd_pipeline",
-          esdTrackStructure: "sequential",
+          primaryMandate: "combined_esd_readiness",
           fundingSources: ["corporate"],
           sponsorOrganisation: "Corporate Partner Consortium",
           isSponsorConfidential: false,
