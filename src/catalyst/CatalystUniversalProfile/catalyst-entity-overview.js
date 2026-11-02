@@ -8,6 +8,7 @@ import { collection, getDocs } from "firebase/firestore"
 import {
   ORGANISATION_TYPES,
   ORGANISATIONAL_ARRANGEMENTS,
+  PRE_SEEDED_SA_PARENT_ORGS,
   LEGAL_ENTITIES_SA,
   REGISTRATION_IDENTIFIER_TYPES,
   COMPANY_SIZES,
@@ -272,6 +273,7 @@ function MultiSelectDropdown({ options, selected = [], onChange, placeholder = "
 
 export default function CatalystEntityOverview({ data = {}, updateData, isLocked = false }) {
   const [dynamicSponsors, setDynamicSponsors] = useState(null)
+  const [marketplaceOrgs, setMarketplaceOrgs] = useState([])
 
   useEffect(() => {
     const fetchSponsors = async () => {
@@ -281,15 +283,17 @@ export default function CatalystEntityOverview({ data = {}, updateData, isLocked
           Investor: "MyuniversalProfiles",
           Catalyst: "catalystProfiles",
           Advisor: "advisorProfiles",
+          SME: "universalProfiles",
         }
         const loadedSponsors = {}
+        const orgMap = new Map()
         for (const [type, collName] of Object.entries(collections)) {
           const qSnap = await getDocs(collection(db, collName))
           const list = []
           qSnap.forEach((docSnap) => {
             const docData = docSnap.data()
             let label = ""
-            if (type === "CMF" || type === "Investor" || type === "Catalyst") {
+            if (type === "CMF" || type === "Investor" || type === "Catalyst" || type === "SME") {
               label =
                 docData?.entityOverview?.tradingName ||
                 docData?.entityOverview?.registeredName ||
@@ -300,7 +304,7 @@ export default function CatalystEntityOverview({ data = {}, updateData, isLocked
                 docData?.formData?.contactDetails?.contactName ||
                 docData?.formData?.contactDetails?.primaryContactName ||
                 docData?.registeredName ||
-                docSnap.id
+                ""
             } else if (type === "Advisor") {
               label =
                 docData?.personalProfessionalOverview?.fullName ||
@@ -308,13 +312,29 @@ export default function CatalystEntityOverview({ data = {}, updateData, isLocked
                 docData?.contactDetails?.contactName ||
                 docData?.formData?.contactDetails?.contactName ||
                 docData?.name ||
-                docSnap.id
+                ""
             }
-            list.push({ value: docSnap.id, label: label })
+            const resolvedLabel = (label || docSnap.id).toString().trim()
+            list.push({ value: docSnap.id, label: resolvedLabel })
+
+            if (
+              label &&
+              resolvedLabel &&
+              resolvedLabel !== docSnap.id &&
+              !orgMap.has(resolvedLabel.toLowerCase())
+            ) {
+              orgMap.set(resolvedLabel.toLowerCase(), {
+                value: resolvedLabel,
+                label: `${resolvedLabel} (${type})`,
+              })
+            }
           })
           loadedSponsors[type] = list
         }
         setDynamicSponsors(loadedSponsors)
+        setMarketplaceOrgs(
+          Array.from(orgMap.values()).sort((a, b) => a.label.localeCompare(b.label))
+        )
       } catch (err) {
         console.error("Error loading dynamic sponsors:", err)
       }
@@ -475,18 +495,54 @@ export default function CatalystEntityOverview({ data = {}, updateData, isLocked
             <FormField
               label="Parent Organisation"
               required
-              tooltip="Legal host of the operating unit (e.g. Ubuntu University, Corporate Parent)."
+              tooltip="Select your parent organisation from BIG Marketplace or South African institutions, or specify if not listed."
             >
-              <input
-                type="text"
+              <select
                 name="parentOrganisation"
                 value={data.parentOrganisation || ""}
                 onChange={handleChange}
-                placeholder="e.g. Ubuntu University"
-                className={styles.formInput}
+                className={styles.formSelect}
                 required
                 disabled={isLocked}
-              />
+              >
+                <option value="">Select Parent Organisation</option>
+                {data.parentOrganisation &&
+                  data.parentOrganisation !== "other" &&
+                  !marketplaceOrgs.some((o) => o.value === data.parentOrganisation) &&
+                  !PRE_SEEDED_SA_PARENT_ORGS.some((o) => o.value === data.parentOrganisation) && (
+                    <option value={data.parentOrganisation}>{data.parentOrganisation}</option>
+                  )}
+                {marketplaceOrgs.length > 0 && (
+                  <optgroup label="BIG Marketplace Organisations">
+                    {marketplaceOrgs.map((org) => (
+                      <option key={`mp_${org.value}`} value={org.value}>
+                        {org.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="South African Universities, DFIs & Corporates">
+                  {PRE_SEEDED_SA_PARENT_ORGS.map((org) => (
+                    <option key={`sa_${org.value}`} value={org.value}>
+                      {org.label} ({org.category})
+                    </option>
+                  ))}
+                </optgroup>
+                <option value="other">Other / Not listed (Specify below)</option>
+              </select>
+              {data.parentOrganisation === "other" && (
+                <input
+                  type="text"
+                  name="parentOrganisationOther"
+                  value={data.parentOrganisationOther || ""}
+                  onChange={handleChange}
+                  placeholder="Specify parent organisation name..."
+                  className={styles.formInput}
+                  style={{ marginTop: "6px" }}
+                  required
+                  disabled={isLocked}
+                />
+              )}
             </FormField>
           )}
 

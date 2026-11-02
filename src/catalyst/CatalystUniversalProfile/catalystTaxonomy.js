@@ -67,6 +67,41 @@ export const ORGANISATIONAL_ARRANGEMENTS = [
   { value: "unit_within_parent", label: "Unit / Department / Initiative within a Parent Organisation" },
 ]
 
+export const PRE_SEEDED_SA_PARENT_ORGS = [
+  // Universities & Higher Education
+  { value: "University of Cape Town (UCT)", label: "University of Cape Town (UCT)", category: "University / Higher Education" },
+  { value: "University of the Witwatersrand (Wits)", label: "University of the Witwatersrand (Wits)", category: "University / Higher Education" },
+  { value: "University of Pretoria (UP)", label: "University of Pretoria (UP)", category: "University / Higher Education" },
+  { value: "Stellenbosch University (SU)", label: "Stellenbosch University (SU)", category: "University / Higher Education" },
+  { value: "University of Johannesburg (UJ)", label: "University of Johannesburg (UJ)", category: "University / Higher Education" },
+  { value: "University of KwaZulu-Natal (UKZN)", label: "University of KwaZulu-Natal (UKZN)", category: "University / Higher Education" },
+  { value: "Tshwane University of Technology (TUT)", label: "Tshwane University of Technology (TUT)", category: "University / Higher Education" },
+  { value: "North-West University (NWU)", label: "North-West University (NWU)", category: "University / Higher Education" },
+  { value: "University of the Free State (UFS)", label: "University of the Free State (UFS)", category: "University / Higher Education" },
+  { value: "Nelson Mandela University (NMU)", label: "Nelson Mandela University (NMU)", category: "University / Higher Education" },
+  // DFIs, Public Institutions & Science Councils
+  { value: "Industrial Development Corporation (IDC)", label: "Industrial Development Corporation (IDC)", category: "DFI / Public Institution" },
+  { value: "Small Enterprise Development and Finance Agency (SEDFA / SEDA)", label: "Small Enterprise Development and Finance Agency (SEDFA / SEDA)", category: "DFI / Public Institution" },
+  { value: "Technology Innovation Agency (TIA)", label: "Technology Innovation Agency (TIA)", category: "DFI / Public Institution" },
+  { value: "Council for Scientific and Industrial Research (CSIR)", label: "Council for Scientific and Industrial Research (CSIR)", category: "DFI / Public Institution" },
+  { value: "National Youth Development Agency (NYDA)", label: "National Youth Development Agency (NYDA)", category: "DFI / Public Institution" },
+  // Major SA Corporate ESD Hosts & Sponsors
+  { value: "Anglo American (Zimele)", label: "Anglo American (Zimele)", category: "SA Corporate" },
+  { value: "Sasol", label: "Sasol", category: "SA Corporate" },
+  { value: "Eskom", label: "Eskom", category: "SA Corporate" },
+  { value: "Exxaro", label: "Exxaro", category: "SA Corporate" },
+  { value: "Sanlam", label: "Sanlam", category: "SA Corporate" },
+  { value: "Standard Bank", label: "Standard Bank", category: "SA Corporate" },
+  { value: "Nedbank", label: "Nedbank", category: "SA Corporate" },
+  { value: "Absa Group", label: "Absa Group", category: "SA Corporate" },
+  { value: "FirstRand / FNB", label: "FirstRand / FNB", category: "SA Corporate" },
+  { value: "MTN South Africa", label: "MTN South Africa", category: "SA Corporate" },
+  { value: "Vodacom South Africa", label: "Vodacom South Africa", category: "SA Corporate" },
+  { value: "Telkom FutureMakers", label: "Telkom FutureMakers", category: "SA Corporate" },
+  { value: "Discovery", label: "Discovery", category: "SA Corporate" },
+  { value: "Old Mutual", label: "Old Mutual", category: "SA Corporate" },
+]
+
 export const LEGAL_ENTITIES_SA = [
   { value: "pty_ltd", label: "Private Company ((Pty) Ltd)" },
   { value: "public_ltd", label: "Public Company (Ltd)" },
@@ -208,9 +243,9 @@ export const PROGRAMME_TYPES = [
   },
   {
     id: "esd",
-    label: "Combined ESD",
+    label: "Combined ESD (ED + SD)",
     badgeColor: "#3e2723",
-    description: "Combines ED and SD pathways using sequential progression or parallel specialized tracks.",
+    description: "Combines Enterprise Development (ED) and Supplier Development (SD) pathways within a unified programme.",
   },
 ]
 
@@ -248,16 +283,14 @@ export const PRIMARY_MANDATES_BY_TYPE = {
     { value: "other", label: "Other (specify)" },
   ],
   esd: [
-    { value: "ed_to_sd_pipeline", label: "ED-to-SD sequential progression pipeline" },
-    { value: "parallel_ed_sd", label: "Parallel ED and SD specialised tracks" },
+    { value: "combined_esd_readiness", label: "Combined enterprise & supplier readiness (ED + SD)" },
+    { value: "enterprise_strengthening", label: "Enterprise strengthening & commercial compliance" },
+    { value: "prospective_supplier_dev", label: "Prospective supplier development for confirmed opportunity" },
+    { value: "existing_supplier_perf", label: "Existing supplier performance & capacity expansion" },
+    { value: "local_industrial_development", label: "Localisation & community industrial development" },
     { value: "other", label: "Other combined pathway (specify)" },
   ],
 }
-
-export const ESD_TRACK_STRUCTURES = [
-  { value: "sequential", label: "Sequential: Progression from ED to SD track upon meeting milestones" },
-  { value: "parallel", label: "Parallel: Concurrent distinct tracks with independent criteria" },
-]
 
 export const SPONSOR_SOURCES = [
   { id: "corporate", label: "Corporate Sponsor / Enterprise Client" },
@@ -497,67 +530,67 @@ export const EVIDENCE_RULES = [
 
 export const DEFAULT_STAGE_WEIGHTS_CATALYST = {
   startup: {
-    compliance: 30,
-    legitimacy: 25,
-    governanceLeadership: 20,
-    operational: 15,
-    valueCreation: 10,
+    compliance: 25,
+    legitimacy: 15,
+    governanceLeadership: 12,
+    operational: 13,
+    fundability: 35,
   },
   growth: {
-    compliance: 25,
-    legitimacy: 20,
-    governanceLeadership: 20,
-    operational: 20,
-    valueCreation: 15,
+    compliance: 28,
+    legitimacy: 13,
+    governanceLeadership: 10,
+    operational: 14,
+    fundability: 35,
   },
   scaling: {
-    compliance: 20,
-    legitimacy: 15,
-    governanceLeadership: 20,
-    operational: 25,
-    valueCreation: 20,
+    compliance: 32,
+    legitimacy: 12,
+    governanceLeadership: 8,
+    operational: 13,
+    fundability: 35,
   },
   turnaround: {
-    compliance: 25,
-    legitimacy: 20,
-    governanceLeadership: 25,
-    operational: 20,
-    valueCreation: 10,
+    compliance: 30,
+    legitimacy: 13,
+    governanceLeadership: 10,
+    operational: 12,
+    fundability: 35,
   },
   mature: {
-    compliance: 20,
-    legitimacy: 15,
-    governanceLeadership: 20,
-    operational: 25,
-    valueCreation: 20,
+    compliance: 38,
+    legitimacy: 8,
+    governanceLeadership: 7,
+    operational: 12,
+    fundability: 35,
   },
 }
 
 export const SCORE_COMPONENTS_INFO = [
   {
     id: "compliance",
-    label: "Compliance & Statutory",
-    tooltip: "Legal structure, tax standing, regulatory licenses, and employment compliance.",
+    label: "Compliance",
+    tooltip: "Regulatory & legal standing, tax compliance, and statutory registrations.",
   },
   {
     id: "legitimacy",
-    label: "Legitimacy & Market Standing",
-    tooltip: "Operating history, brand assets, track record, and commercial authenticity.",
+    label: "Legitimacy",
+    tooltip: "Business verification status, professional digital identity, and market standing.",
   },
   {
     id: "governanceLeadership",
-    label: "Leadership & Governance",
-    tooltip: "Management depth, executive decision-making rules, and board oversight.",
+    label: "Governance & Leadership",
+    tooltip: "Governance structure, management capability, and board oversight.",
   },
   {
     id: "operational",
     label: "Operational Strength",
-    tooltip: "Production capacity, systems, value chain risk, and delivery reliability.",
+    tooltip: "Operational capacity, systems, value chain resilience, and delivery reliability.",
   },
   {
-    id: "valueCreation",
-    label: "Value Creation & Sustainability",
-    tooltip: "Commercial model, gross margins, cash sustainability, and revenue durability.",
+    id: "fundability",
+    label: "Capital Appeal",
+    tooltip: "Investment readiness, financial strength, and fundability.",
   },
 ]
 

@@ -7,7 +7,6 @@ import styles from "./catalyst-universal-profile.module.css"
 import {
   PROGRAMME_TYPES,
   PRIMARY_MANDATES_BY_TYPE,
-  ESD_TRACK_STRUCTURES,
   SPONSOR_SOURCES,
   SPONSOR_REPORTING_PRIORITIES,
   PROGRAMME_DURATIONS,
@@ -93,7 +92,6 @@ export default function CatalystProgrammeBriefTab({
 
   const progType = programme.programmeType || "incubator"
   const mandateOptions = PRIMARY_MANDATES_BY_TYPE[progType] || PRIMARY_MANDATES_BY_TYPE.incubator
-  const isESD = progType === "esd"
 
   return (
     <div style={{ marginTop: "1rem" }}>
@@ -203,28 +201,6 @@ export default function CatalystProgrammeBriefTab({
             className={styles.formInput}
           />
         </FormField>
-
-        {isESD && (
-          <FormField
-            label="ESD Track Structure"
-            required
-            tooltip="Relationship between the ED foundation track and SD buyer-linked track."
-          >
-            <select
-              name="esdTrackStructure"
-              value={brief.esdTrackStructure || "sequential"}
-              onChange={handleBriefChange}
-              className={styles.formSelect}
-              required
-            >
-              {ESD_TRACK_STRUCTURES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-        )}
       </div>
 
       <div style={{ marginTop: "1rem" }}>

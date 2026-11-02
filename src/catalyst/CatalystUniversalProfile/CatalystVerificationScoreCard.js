@@ -96,21 +96,42 @@ export default function CatalystVerificationScoreCard({ profileData = {}, onEdit
       programmePortfolio: {
         programmesConfigured: programmes.length > 0 || !!legacyBrief.programName,
         programmeBriefComplete:
-          programmes.some((p) => !!(p.programmeBrief?.programmeName || p.name)) ||
-          !!legacyBrief.programName,
+          programmes.some(
+            (p) =>
+              !!(
+                p.programmeName ||
+                p.programmeBrief?.programmeName ||
+                p.programmeBrief?.aboutProgramme ||
+                p.programmeBrief?.primaryMandate ||
+                p.name
+              )
+          ) || !!legacyBrief.programName,
         matchingPreferencesConfigured:
           programmes.some(
             (p) =>
               (p.matchingPreferences?.sectorFocus?.length || 0) > 0 ||
-              (p.matchingPreferences?.geographicFocus?.length || 0) > 0
+              (p.matchingPreferences?.supportOfferings?.length || 0) > 0 ||
+              (p.matchingPreferences?.geographicFocus?.length || 0) > 0 ||
+              !!p.matchingPreferences?.geographicScope
           ) || (legacyBrief.sectorFocus?.length || 0) > 0,
         bigScoreConfigured:
-          programmes.some((p) => !!p.bigScoreCustomisation?.pillarWeights) ||
-          programmes.length > 0,
+          programmes.some(
+            (p) =>
+              !!(
+                p.scoringConfiguration?.stageWeights ||
+                p.bigScoreCustomisation?.pillarWeights
+              )
+          ) || programmes.length > 0,
         applicationRequirements:
           programmes.some(
             (p) =>
-              !!(p.applicationBrief?.overviewObjectives || p.applicationBrief?.cohortCapacity)
+              !!(
+                (p.applicationBrief?.selectionStages?.length || 0) > 0 ||
+                (p.applicationBrief?.requiredDocuments?.length || 0) > 0 ||
+                p.applicationBrief?.instructionsForApplicants ||
+                p.applicationBrief?.overviewObjectives ||
+                p.applicationBrief?.cohortCapacity
+              )
           ) || !!legacyApp.cohortCapacity,
       },
       operatingCapacity: {
@@ -127,8 +148,8 @@ export default function CatalystVerificationScoreCard({ profileData = {}, onEdit
         dataProcessingConfirmed: !!declaration.dataProcessing,
         termsConfirmed: !!declaration.termsConditions,
         governanceMandate:
+          !!declaration.authority ||
           !!declaration.popiaCompliance ||
-          !!declaration.onboardingRelationship ||
           !!declaration.listingVisibility,
       },
     }
@@ -196,7 +217,7 @@ export default function CatalystVerificationScoreCard({ profileData = {}, onEdit
         tier: "Tier 1",
         status: "Fully Verified",
         badge: "🟢",
-        description: "Complete organisation profile, valid legal identity evidence, and confirmed representative authority.",
+        description: "Complete organisation profile, valid legal identity evidence, and confirmed representative authority. Programmes are live to SMEs.",
         color: "linear-gradient(135deg, #4CAF50, #2E7D32)",
         ringColor: "#2E7D32",
         textColor: "#1b5e20",
@@ -208,7 +229,7 @@ export default function CatalystVerificationScoreCard({ profileData = {}, onEdit
         tier: "Tier 2",
         status: "Mostly Complete",
         badge: "🔵",
-        description: "Core identity and contacts confirmed; profile completion ≥80%; verification review pending.",
+        description: "Core identity and contacts confirmed; profile completion ≥70%. Programmes are live to SMEs.",
         color: "linear-gradient(135deg, #2196F3, #1565C0)",
         ringColor: "#1565C0",
         textColor: "#0d47a1",
@@ -220,7 +241,7 @@ export default function CatalystVerificationScoreCard({ profileData = {}, onEdit
         tier: "Tier 3",
         status: "Partially Verified",
         badge: "🟡",
-        description: "Core basics established; outstanding supporting documentation or programme setups required.",
+        description: "Core basics established; programmes are allowed to go live to SMEs while supporting documentation is being completed.",
         color: "linear-gradient(135deg, #FF9800, #F57C00)",
         ringColor: "#F57C00",
         textColor: "#e65100",
@@ -229,9 +250,9 @@ export default function CatalystVerificationScoreCard({ profileData = {}, onEdit
     }
     return {
       tier: "Tier 4",
-      status: "Incomplete",
+      status: "Self-Declared",
       badge: "🔴",
-      description: "Essential identity, contact details, or statutory declarations missing.",
+      description: "Initial profile stage; programmes are allowed to go live to SMEs while identity and statutory evidence are completed.",
       color: "linear-gradient(135deg, #F44336, #C62828)",
       ringColor: "#C62828",
       textColor: "#b71c1c",
@@ -256,8 +277,8 @@ export default function CatalystVerificationScoreCard({ profileData = {}, onEdit
       bbbeeEvidence: "B-BBEE Certificate or Sworn Affidavit",
       programmesConfigured: "At Least 1 Programme Configured",
       programmeBriefComplete: "Programme Brief, Type & Mandate Configured",
-      matchingPreferencesConfigured: "Target Sectors, Geography & Turnover Defined",
-      bigScoreConfigured: "5Cs Pillar Weights & Stage Customised",
+      matchingPreferencesConfigured: "Target Sectors, Geography & Support Defined",
+      bigScoreConfigured: "BIG Score Stage Weights Configured",
       applicationRequirements: "Eligibility & Document Rules Defined",
       operatingHistory: "Operating History / Year Established",
       industrySector: "Target Support Industry Sector",
@@ -266,7 +287,7 @@ export default function CatalystVerificationScoreCard({ profileData = {}, onEdit
       accuracyConfirmed: "Declaration of Accuracy Confirmed",
       dataProcessingConfirmed: "POPIA Data Processing Consent Confirmed",
       termsConfirmed: "Platform Terms & Conditions Accepted",
-      governanceMandate: "Onboarding Relationship & Governance Mandate",
+      governanceMandate: "Authority to Act & Listing Visibility Confirmed",
     }
     return labels[key] || key
   }

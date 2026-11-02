@@ -518,7 +518,6 @@ export default function CatalystProgrammeSetup({
           const intakeMeta =
             INTAKE_STATUSES.find((s) => s.value === prog.intakeStatus) || INTAKE_STATUSES[0]
           const isArchived = prog.status === "archived"
-          const isESD = prog.programmeType === "esd"
 
           return (
             <div
@@ -552,20 +551,6 @@ export default function CatalystProgrammeSetup({
                     >
                       {typeMeta.label}
                     </span>
-                    {isESD && (
-                      <span
-                        style={{
-                          backgroundColor: "#f3ebe0",
-                          color: "#6b4c2a",
-                          fontSize: "10px",
-                          fontWeight: 700,
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                        }}
-                      >
-                        {prog.programmeBrief?.esdTrackStructure === "parallel" ? "Parallel Tracks" : "Sequential ED→SD"}
-                      </span>
-                    )}
                   </div>
 
                   <span
