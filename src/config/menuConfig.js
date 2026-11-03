@@ -679,44 +679,27 @@ export const smeMenuItems = [
         icon: <Heart size={16} />,
         route: "/overall-company-health",
       },
-      // ─── Operations (Digital Twin) nested under Growth Suite ─────────────
+      // Configure once under Setup; run daily work under Operations.
       {
-        id: "operations",
-        label: "Operations",
-        icon: <Boxes size={16} />,
-        route: "/digital-twin/dashboard",
-        hasSubmenu: true,
+        id: "operations-setup", label: "Setup", icon: <Settings size={16} />,
+        route: "/digital-twin/setup", hasSubmenu: true,
         subItems: [
-          {
-            id: "operations-setup",
-            label: "Setup Guide",
-            icon: <Rocket size={16} />,
-            route: "/digital-twin/setup",
-          },
-          {
-            id: "operations-overview",
-            label: "Command Centre",
-            icon: <BarChart3 size={16} />,
-            route: "/digital-twin/dashboard",
-          },
-          {
-            id: "operations-assets",
-            label: "My Assets",
-            icon: <Truck size={16} />,
-            route: "/digital-twin/assets",
-          },
-          {
-            id: "operations-downtime",
-            label: "Downtime",
-            icon: <Wrench size={16} />,
-            route: "/digital-twin/downtime",
-          },
-          {
-            id: "operations-imports",
-            label: "Data Imports",
-            icon: <Upload size={16} />,
-            route: "/digital-twin/imports",
-          },
+          { id: "operations-setup-guide", label: "Operating structure", icon: <Rocket size={16} />, route: "/digital-twin/setup/guide" },
+          { id: "operations-assets", label: "Asset register", icon: <Truck size={16} />, route: "/digital-twin/setup/assets" },
+          { id: "operations-groups", label: "Equipment groups", icon: <Boxes size={16} />, route: "/digital-twin/setup/groups" },
+          { id: "operations-master-codes", label: "Master Codes", icon: <ListChecks size={16} />, route: "/digital-twin/setup/master-codes" },
+          { id: "operations-periods", label: "Reporting periods", icon: <Calendar size={16} />, route: "/digital-twin/setup/periods" },
+          { id: "operations-imports", label: "Data imports", icon: <Upload size={16} />, route: "/digital-twin/setup/imports" },
+          { id: "operations-packs", label: "Sector packs", icon: <Package size={16} />, route: "/digital-twin/setup/packs" },
+          { id: "operations-convert", label: "Capacity configuration", icon: <Network size={16} />, route: "/digital-twin/setup/convert" },
+        ],
+      },
+      {
+        id: "operations", label: "Operations", icon: <Boxes size={16} />,
+        route: "/digital-twin/operations/performance", hasSubmenu: true,
+        subItems: [
+          { id: "operations-downtime", label: "Downtime", icon: <Wrench size={16} />, route: "/digital-twin/operations/downtime" },
+          { id: "operational-performance", label: "Performance", icon: <Activity size={16} />, route: "/digital-twin/operations/performance" },
         ],
       },
       // ─── RAPs (Overall Company Health removed) ───────────────────────────
@@ -752,13 +735,6 @@ export const smeMenuItems = [
         label: "Financial Performance",
         icon: <PieChart size={16} />,
         route: "/FinancialPerformance",
-      },
-      // ─── Operational Performance (sibling of Financial) ─────────────────
-      {
-        id: "operational-performance",
-        label: "Operational Performance",
-        icon: <Activity size={16} />,
-        route: "/OperationalStrength",
       },
       // ─── People Performance ─────────────────────────────────────────────
       {

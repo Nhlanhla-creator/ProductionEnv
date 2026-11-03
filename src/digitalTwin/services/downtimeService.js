@@ -2,7 +2,7 @@
 import { db } from "../../firebaseConfig";
 import { collection, doc, getDoc, getDocs, query, where, runTransaction } from "firebase/firestore";
 import { DOWNTIME_LEVEL_1, DOWNTIME_LOSS_TYPE, DATA_CONFIDENCE } from "../models/enums";
-import { durationOf, overlapping, selectedClassification, canCaptureAsset } from "../models/downtimeCodes";
+import { eventTiming, overlapping, selectedClassification, canCaptureAsset } from "../models/downtimeCodes";
 import { masterRef, downtimeActor } from "./downtimeMasterService";
 const eventsCol = tenantId => collection(db,"digitalTwinTenants",tenantId,"downtimeEvents");
 const eventRef = (tenantId,id) => doc(eventsCol(tenantId),id);
@@ -95,7 +95,7 @@ async function allAssetEvents(tenantId,assetId) {
 }
 export async function validateDowntimeInput(tenantId,input) {
   if (!tenantId || !input.assetId) throw new Error('Organisation and Asset ID are required.');
-  const timing = durationOf(input.eventStart,input.eventEnd);
+  const timing = eventTiming(input.eventStart,input.eventEnd);
   if (!input.masterListId || !input.selectedCodeId) throw new Error('Select a published master list and terminal code.');
   const [assetSnap,masterSnap,events] = await Promise.all([
     getDoc(resourceRef(tenantId,input.assetId)),getDoc(masterRef(tenantId,input.masterListId)),allAssetEvents(tenantId,input.assetId),
@@ -114,10 +114,10 @@ export async function validateDowntimeInput(tenantId,input) {
 }
 // A revision lock protects the outside-transaction query. If another cooperating writer
 // changes this asset's events, rerun the query before attempting a new transaction.
-async function mutateEvent(tenantId,input,{ eventId = null,reason = '',legacyClose = false } = {}) {
+async function mutateEvent(tenantId,input,{ eventId = null,reason = '',legacyClose = false,returnStatus = 'available' } = {}) {
   if (!tenantId || !input.assetId) throw new Error('Organisation and Asset ID are required.');
   if (eventId && !reason.trim()) throw new Error('A correction reason is required.');
-  const actor = downtimeActor(), timing = durationOf(input.eventStart,input.eventEnd);
+  const actor = downtimeActor(), timing = eventTiming(input.eventStart,input.eventEnd);
   const ref = eventId ? eventRef(tenantId,eventId) : doc(eventsCol(tenantId));
   const lock = lockRef(tenantId,input.assetId);
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -142,6 +142,13 @@ async function mutateEvent(tenantId,input,{ eventId = null,reason = '',legacyClo
         const assetSnap = await tx.get(resourceRef(tenantId,input.assetId));
         if (!assetSnap.exists() || (!old && !canCaptureAsset(assetSnap.data()))) throw new Error('Select an active registered asset.');
         const asset = assetSnap.data();
+        if (old?.eventEnd && !timing.eventEnd) throw new Error('A closed event cannot be reopened. Record a new downtime event.');
+        if (!timing.eventEnd && asset.activeDowntimeEventId && asset.activeDowntimeEventId !== ref.id) throw new Error('This asset already has ongoing downtime. Mark it back online before starting another event.');
+        const closing = old && !old.eventEnd && timing.eventEnd;
+        if ((!timing.eventEnd || closing) && !canCaptureAsset(asset)) throw new Error('Retired, disposed or inactive assets cannot be marked down or returned online.');
+        if (closing && asset.activeDowntimeEventId && asset.activeDowntimeEventId !== ref.id) throw new Error('The active downtime event changed. Refresh before closing it.');
+        if (closing && Date.parse(timing.eventEnd)>Date.now()) throw new Error('The return-online time cannot be in the future.');
+        if (closing && !['available','operating','standby'].includes(returnStatus)) throw new Error('Choose a valid online asset status.');
         let classification = {};
         if (legacyClose && old && !old.masterListId) {
           if (old.eventEnd) throw new Error('This event is already closed.');
@@ -160,20 +167,28 @@ async function mutateEvent(tenantId,input,{ eventId = null,reason = '',legacyClo
             categoryLevel3:path[2].reportingLabel, categoryLevel4:path[3]?.label || null,categoryLevel5:path[4]?.label || null,
             lossType:path[1].reportingLabel === 'Engineering' ? DOWNTIME_LOSS_TYPE.AVAILABILITY_LOSS : DOWNTIME_LOSS_TYPE.UTILISATION_LOSS };
         }
+        const notes = String(input.notes ?? old?.notes ?? '');
+        if (notes.length > 10000) throw new Error('Notes cannot exceed 10,000 characters. Shorten the additional notes before saving.');
         const now = new Date().toISOString();
         const payload = { ...(old || {}),...classification,...timing,
-          eventId:ref.id,tenantId,assetId:input.assetId,
+          eventId:ref.id,tenantId,assetId:input.assetId,eventStatus:timing.eventEnd?'closed':'open',
           assetName:old?.assetName || asset.name,assetNumber:old?.assetNumber || asset.internalNumber || input.assetId,
           groupId:old ? (old.groupId ?? null) : (input.groupId || asset.equipmentGroupId || null),equipmentTypeId:old ? (old.equipmentTypeId ?? null) : (asset.equipmentTypeId || null),
           siteId:old ? (old.siteId ?? null) : (input.siteId || asset.siteId || null),contractId:old ? (old.contractId ?? null) : (input.contractId || null),
           activityId:old ? (old.activityId ?? null) : (input.activityId || null),serviceId:old ? (old.serviceId ?? null) : (input.serviceId || null),
-          notes:String(input.notes ?? old?.notes ?? ''),timezone:input.timezone || old?.timezone || 'Africa/Johannesburg',
+          notes,timezone:input.timezone || old?.timezone || 'Africa/Johannesburg',
           lostOperatingHours:timing.durationHours,confidence:old?.confidence || input.confidence || DATA_CONFIDENCE.MANUAL_ACTUAL,
           source:old?.source || input.source || 'manual',ingestionBatchId:old?.ingestionBatchId || input.ingestionBatchId || null,
           externalSourceId:old?.externalSourceId || input.externalSourceId || null,
           validationStatus:'valid',eventVersion:(old?.eventVersion || 0)+1,
           createdAt:old?.createdAt || now,createdBy:old?.createdBy || actor,updatedAt:now,updatedBy:actor };
         tx.set(ref,payload);
+        tx.set(doc(ref,'validation','classification'),{eventVersion:payload.eventVersion,snapshot:payload});
+        if (!timing.eventEnd || closing) tx.update(resourceRef(tenantId,input.assetId), {
+          status:closing?returnStatus:(payload.lossType==='availability_loss'?(payload.planned?'planned_maintenance':'unplanned_downtime'):'standby'),
+          activeDowntimeEventId:closing?null:ref.id,
+          resourceVersion:(asset.resourceVersion||0)+1,updatedAt:now,updatedBy:actor,
+        });
         tx.set(lock,{ revision:revision+1,updatedAt:now,updatedBy:actor });
         tx.set(doc(collection(ref,'auditLog')),{ action:old ? 'corrected' : 'created',reason,actor,at:now,before:old,after:payload });
         return payload;
@@ -188,19 +203,21 @@ export async function correctDowntimeEvent(tenantId,eventId,patch,{ reason,expec
   if (!existing) throw new Error('Event not found.');
   return mutateEvent(tenantId,{ ...existing,...patch,assetId:existing.assetId,eventVersion:expectedVersion },{ eventId,reason });
 }
-export async function closeDowntimeEvent(tenantId,eventId,{ eventEnd,actionTaken = '',rootCause = '' } = {}) {
+export async function closeDowntimeEvent(tenantId,eventId,{ eventEnd,actionTaken = '',rootCause = '',expectedVersion,returnStatus = 'available' } = {}) {
   const old = await getDowntimeEvent(tenantId,eventId);
   if (!old) throw new Error('Event not found.');
   if (old.eventEnd) throw new Error('This event is already closed.');
+  if (expectedVersion != null && expectedVersion !== old.eventVersion) throw new Error('This event changed. Refresh before marking it back online.');
+  if (!eventEnd) throw new Error('Enter the date and time the asset returned online.');
   return mutateEvent(tenantId,{ ...old,eventStart:new Date(old.eventStart).toISOString(),eventEnd,notes:[old.notes,actionTaken,rootCause].filter(Boolean).join('\n') },
-    { eventId,reason:'Closed an existing open event',legacyClose:true });
+    { eventId,reason:'Asset returned online',legacyClose:true,returnStatus });
 }
-export const parentDowntime = (events = []) => {
+export const parentDowntime = (events = [],asOf = Date.now()) => {
   const intervals = events
-    .filter((e) => e.validationStatus !== "void" && Number.isFinite(Date.parse(e.eventStart)) && Date.parse(e.eventEnd) > Date.parse(e.eventStart))
+    .filter((e) => e.validationStatus !== "void" && Number.isFinite(Date.parse(e.eventStart)) && (e.eventEnd?Date.parse(e.eventEnd):asOf) > Date.parse(e.eventStart))
     .map((e) => ({
       start: new Date(e.eventStart).getTime(),
-      end: new Date(e.eventEnd).getTime(),
+      end: e.eventEnd?new Date(e.eventEnd).getTime():asOf,
       category: e.categoryLevel1,
       planned: e.planned,
     }))

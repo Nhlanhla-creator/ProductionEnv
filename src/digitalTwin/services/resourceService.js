@@ -101,6 +101,10 @@ export const updateResource = async (tenantId, resourceId, patch) => {
     if (existing.updatedAt !== initial.updatedAt || (existing.resourceVersion || 0) !== (initial.resourceVersion || 0)) throw new Error("This asset changed. Reload before saving.");
     const merged = { ...existing, ...patch, tenantId, assetId: resourceId, resourceKind: existing.resourceKind,
       internalNumber: nextNumber, createdAt: existing.createdAt, createdBy: existing.createdBy };
+    // Runtime downtime state is maintained by the event transaction, never a stale asset form.
+    if (existing.activeDowntimeEventId && merged.status !== existing.status) throw new Error("Mark the asset back online in Operations → Downtime before changing its lifecycle status.");
+    if (Object.hasOwn(existing,'activeDowntimeEventId')) merged.activeDowntimeEventId = existing.activeDowntimeEventId;
+    else delete merged.activeDowntimeEventId;
     delete merged.id;
     const { ok, errors, warnings } = validateResource(merged);
     if (!ok) { const error = new Error(errors.map(e => e.message).join(" ")); error.validationErrors = errors; throw error; }
