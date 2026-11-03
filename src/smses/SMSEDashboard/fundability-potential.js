@@ -186,6 +186,107 @@ export const CAPITAL_APPEAL_SPLIT = {
   mature:     { financialStrength: 65, fundability: 35 },
 }
 
+// Capital Appeal = Financial Strength + ESG Strength. The four components are
+// weighted equally; a component that is not scored yet is left out and the
+// others share its weight, so an unscored pillar never counts as a zero.
+export const CAPITAL_APPEAL_PILLARS = [
+  { key: "financialStrength", label: "Financial Strength", weight: 25, scored: true },
+  { key: "environmental", label: "Environmental Strength", weight: 25, scored: false },
+  { key: "social", label: "Social Strength", weight: 25, scored: false },
+  { key: "governance", label: "Governance Strength", weight: 25, scored: true },
+]
+
+// Share of Capital Appeal (0-100) held by each scored component.
+export const capitalAppealShares = ({ hasGovernance, hasEnvironmental, hasSocial } = {}) => {
+  const availability = { governance: !!hasGovernance, environmental: !!hasEnvironmental, social: !!hasSocial }
+  const live = CAPITAL_APPEAL_PILLARS.filter((p) =>
+    p.scored || availability[p.key]
+  )
+  const total = live.reduce((n, p) => n + p.weight, 0) || 1
+  return Object.fromEntries(CAPITAL_APPEAL_PILLARS.map((p) => [p.key, live.includes(p) ? (p.weight / total) * 100 : 0]))
+}
+
+const positiveText = (value) => String(value || "").trim().length >= 15
+const percentCredit = (value, target) => Math.min(Math.max(num(value) || 0, 0) / target, 1)
+
+export const scoreEnvironmentalStrength = (profileData) => {
+  const app = profileData?.socialImpact || {}
+  const gov = profileData?.governance || {}
+  const profileFields = [
+    gov.exposureType && gov.exposureType !== "none" ? gov.exposureType === "indirect" ? 0.5 : 1 : 0,
+    gov.complianceRequired === "yes" ? (gov.permitsInPlace === "yes" ? 1 : gov.permitsInPlace === "partial" ? 0.5 : 0) : (gov.complianceRequired === "no" ? 1 : 0),
+    gov.permitsInPlace === "yes" ? 1 : gov.permitsInPlace === "partial" ? 0.5 : 0,
+    gov.incidents === "none" ? 1 : gov.incidents === "minor" ? 0.4 : 0,
+    gov.controls === "formal" ? 1 : gov.controls === "basic" ? 0.5 : 0,
+  ]
+  const profileAnswered =
+    (gov.exposureType && gov.exposureType !== "none") ||
+    gov.complianceRequired === "yes" ||
+    (gov.permitsInPlace && gov.permitsInPlace !== "no") ||
+    (gov.incidents && gov.incidents !== "none") ||
+    (gov.controls && gov.controls !== "none")
+  const appCredit = positiveText(app.environmentalImpact) ? 1 : 0.4
+  const appAnswer = positiveText(app.environmentalImpact) || /environment/i.test(String(app.csrFocusAreas || "") || "")
+  const appScore = appAnswer ? (appCredit * 0.7 + (answered(app.sdgAlignment) ? 0.3 : 0)) : 0
+  const hasEvidence = profileAnswered || appAnswer
+  if (!hasEvidence) return { available: false, percent: null, breakdown: [] }
+  const score = profileAnswered
+    ? profileFields.reduce((sum, v) => sum + v, 0) / 5 * 100
+    : appScore * 100
+  const breakdown = profileAnswered ? [
+    { key: "environmentalExposure", label: "Environmental Exposure", percent: Math.round(profileFields[0] * 100), weight: 20 },
+    { key: "environmentalCompliance", label: "Environmental Compliance", percent: Math.round(profileFields[1] * 100), weight: 20 },
+    { key: "environmentalPermits", label: "Environmental Permits", percent: Math.round(profileFields[2] * 100), weight: 20 },
+    { key: "environmentalIncidents", label: "Incident Record", percent: Math.round(profileFields[3] * 100), weight: 20 },
+    { key: "environmentalControls", label: "Environmental Controls", percent: Math.round(profileFields[4] * 100), weight: 20 },
+  ] : [
+    { key: "environmentalImpact", label: "Environmental Impact Description", percent: Math.round(appCredit * 100), weight: 70 },
+    { key: "sdgAlignment", label: "SDG Alignment", percent: answered(app.sdgAlignment) ? 100 : 0, weight: 30 },
+  ]
+  return { available: true, percent: Math.round(score), breakdown }
+}
+
+export const scoreSocialStrength = (profileData) => {
+  const app = profileData?.socialImpact || {}
+  const gov = profileData?.governance || {}
+  const profileItems = [
+    gov.employmentPractices === "yes", gov.healthSafety === "yes", gov.fairTreatment === "yes",
+    gov.skillsDevelopment === "yes", gov.supplyChain === "yes", gov.socialIncidents === "no",
+  ]
+  const profileAnswered =
+    gov.employmentPractices === "yes" || gov.healthSafety === "yes" || gov.fairTreatment === "yes" ||
+    gov.skillsDevelopment === "yes" || gov.supplyChain === "yes" || gov.socialIncidents === "yes"
+  const appCredits = [
+    Math.min((num(app.jobsToCreate) || 0) / 10, 1),
+    percentCredit(app.blackOwnership, 51) * 0.7 + percentCredit(app.womenOwnership, 30) * 0.3,
+    Math.min((num(app.localEmployeesHired) || 0) / 5, 1),
+    positiveText(app.socialInvestmentCommunities) ? 1 : 0,
+    positiveText(app.environmentalImpact) ? 1 : 0,
+    pos(app.numberOfBeneficiaries) ? 1 : 0,
+  ]
+  const appAnswer = [app.jobsToCreate, app.blackOwnership, app.womenOwnership, app.localEmployeesHired, app.socialInvestmentCommunities, app.environmentalImpact, app.numberOfBeneficiaries]
+    .some((v) => answered(v))
+  if (!profileAnswered && !appAnswer) return { available: false, percent: null, breakdown: [] }
+  const profileScore = profileItems.filter(Boolean).length / profileItems.length * 100
+  const appScore = appCredits.reduce((sum, v) => sum + v, 0) / appCredits.length * 100
+  const percent = profileAnswered ? Math.round((profileScore + appScore) / 2) : Math.round(appScore)
+  const breakdown = profileAnswered ? [
+    { key: "employmentPractices", label: "Employment Practices", percent: profileItems[0] ? 100 : 0, weight: 16 },
+    { key: "healthSafety", label: "Health & Safety", percent: profileItems[1] ? 100 : 0, weight: 16 },
+    { key: "fairTreatment", label: "Fair Treatment & Grievances", percent: profileItems[2] ? 100 : 0, weight: 16 },
+    { key: "skillsDevelopment", label: "Skills & Development", percent: profileItems[3] ? 100 : 0, weight: 16 },
+    { key: "supplyChain", label: "Supply Chain", percent: profileItems[4] ? 100 : 0, weight: 16 },
+    { key: "socialIncidents", label: "Incident & Risk Record", percent: profileItems[5] ? 100 : 0, weight: 20 },
+  ] : [
+    { key: "jobs", label: "Jobs & Local Employment", percent: Math.round((appCredits[0] + appCredits[2]) / 2 * 100), weight: 25 },
+    { key: "ownershipInclusion", label: "Ownership Inclusion", percent: Math.round(appCredits[1] * 100), weight: 20 },
+    { key: "communityInvestment", label: "Community Investment", percent: Math.round(appCredits[3] * 100), weight: 20 },
+    { key: "socialImpact", label: "Social & Environmental Impact", percent: Math.round(appCredits[4] * 100), weight: 20 },
+    { key: "beneficiaries", label: "Beneficiaries", percent: Math.round(appCredits[5] * 100), weight: 15 },
+  ]
+  return { available: true, percent, breakdown }
+}
+
 // §9 — default Fundability sub-component weights by stage (v2.1 retained)
 export const FUNDABILITY_BASE_WEIGHTS = {
   businessPlan:        { startup: 26, growth: 22, scaling: 18, turnaround: 24, mature: 14 },
@@ -1167,8 +1268,19 @@ export const buildCapitalAppealAssessment = ({
   securityInstruments = [],
   solvencyAnalysis,
   financialStatementsAnalysis,
+  governancePercent = null, // Governance Strength, 0-100, from the governance scorer; null = not available
+  environmentalPercent = null,
+  socialPercent = null,
+  environmentalBreakdown = [],
+  socialBreakdown = [],
   today = new Date(),
 }) => {
+  const shares = capitalAppealShares({
+    hasGovernance: governancePercent != null,
+    hasEnvironmental: environmentalPercent != null,
+    hasSocial: socialPercent != null,
+  })
+  const fsShare = shares.financialStrength / 100
   const stage = resolveBigStage(profileData)
   const split = CAPITAL_APPEAL_SPLIT[stage.key]
   const factorWeights = FS_FACTOR_WEIGHTS[stage.key]
@@ -1181,13 +1293,13 @@ export const buildCapitalAppealAssessment = ({
     key: "financialStrength",
     label: "Financial Strength",
     color: "#8D6E63",
-    blockWeight: 100,
+    blockWeight: shares.financialStrength,
     percent: fs.percent,
     subCategories: fs.subCategories.map((sc) => ({
       ...sc,
       effectiveWeight: sc.weight,
       items: sc.items.map((i) => {
-        const pointValue = (i.withheld / sc.possible) * sc.weight
+        const pointValue = (i.withheld / sc.possible) * sc.weight * fsShare // points of Capital Appeal, not of Financial Strength
         return {
           ...i,
           pointValue,
@@ -1229,7 +1341,11 @@ export const buildCapitalAppealAssessment = ({
   }
 
   // ── Original ──
-  const totalRaw = fs.percent
+  const totalRaw =
+    fs.percent * (shares.financialStrength / 100) +
+    (environmentalPercent != null ? environmentalPercent * (shares.environmental / 100) : 0) +
+    (socialPercent != null ? socialPercent * (shares.social / 100) : 0) +
+    (governancePercent != null ? governancePercent * (shares.governance / 100) : 0)
   const fsItems = financialStrength.items
   const fundItems = blocks.flatMap((b) => (b.key === "fundability" ? b.items : []))
   const allItems = [...fsItems, ...fundItems]
@@ -1252,7 +1368,7 @@ export const buildCapitalAppealAssessment = ({
     instrumentResults: instrumentResults.map((r) => ({ group: r.group, label: r.label, percent: r.percent })),
   }
   if (single) {
-    const raw = fs.percent * (split.financialStrength / 100) + single.percent * (split.fundability / 100)
+    const raw = totalRaw * (split.financialStrength / 100) + single.percent * (split.fundability / 100)
     const appFs = fsItems.map((i) => ({ ...i, pointValue: i.applicationPointValue }))
     const app = recoverable([...appFs, ...fundItems], (i) => i.pointValue)
     const appOut = app.claim.sort((x, y) => y.pointValue - x.pointValue)
@@ -1280,6 +1396,7 @@ export const buildCapitalAppealAssessment = ({
     blocks,
     statements: fs.statements,
     financialStrength,
+    capitalAppeal: { shares, governancePercent, environmentalPercent, socialPercent, environmentalBreakdown, socialBreakdown, financialStrengthPercent: fs.percent },
     fundabilityComponents,
     instrumentResults,
     allItems,

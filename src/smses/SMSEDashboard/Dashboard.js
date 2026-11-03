@@ -240,7 +240,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     if (!reportData) return false;
     const hasScores =
       reportData.overallScore > 0 ||
-      reportData.governanceLeadershipScore > 0 ||
+      reportData.leadershipScore > 0 ||
       reportData.operationalScore > 0;
     const hasStructuredContent =
       reportData.structuredContent &&
@@ -273,7 +273,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         overallScore: 0,
         bigScore: 0,
         fundabilityStatus: "Assessment Incomplete",
-        governanceLeadershipScore: 0,
+        leadershipScore: 0,
         operationalScore: 0,
         weightedAverageScore: 0,
         detailedScores: [],
@@ -323,7 +323,7 @@ if (bigEvalSnap.exists()) {
   const scores = bigEvalData.scores || {};
   newReportData.bigScore            = scores.bigScore       ?? 0;
   newReportData.overallScore        = scores.bigScore       ?? newReportData.overallScore;
-  newReportData.governanceLeadershipScore = scores.governanceLeadership ?? newReportData.governanceLeadershipScore;
+  newReportData.leadershipScore = scores.leadership ?? newReportData.leadershipScore;
   newReportData.operationalScore    = scores.operational    ?? newReportData.operationalScore;
   newReportData.complianceScore     = scores.compliance     ?? 0;
   newReportData.legitimacyScore     = scores.legitimacy     ?? 0;
@@ -448,16 +448,14 @@ if (bigEvalSnap.exists()) {
         availableData.governance = true;
         newReportData.aiEvaluations.governance = governanceSnap.data() || {};
       } else {
-        newReportData.missingSections.push("Leadership & Governance Evaluation");
+        newReportData.missingSections.push("Governance Strength Evaluation");
       }
 
       if (leadershipSnap.exists()) {
         availableData.leadership = true;
         newReportData.aiEvaluations.leadership = leadershipSnap.data() || {};
-      } else if (!governanceSnap.exists()) {
-        // Avoid double-listing
       } else {
-        newReportData.missingSections.push("Leadership & Governance Evaluation");
+        newReportData.missingSections.push("Leadership Evaluation");
       }
 
       if (operationalSnap.exists()) {
@@ -468,7 +466,7 @@ if (bigEvalSnap.exists()) {
       }
 
       const scores = [];
-      if (newReportData.governanceLeadershipScore) scores.push(newReportData.governanceLeadershipScore);
+      if (newReportData.leadershipScore) scores.push(newReportData.leadershipScore);
       if (newReportData.operationalScore) scores.push(newReportData.operationalScore);
 
       if (scores.length > 0 && !availableData.combinedEvaluations) {
@@ -593,9 +591,9 @@ const rejectedDocsText = (reportData.rejectedDocs || []).length
   const scoreSummaryText = `
 Compliance: ${reportData.complianceScore ?? "N/A"}
 Legitimacy: ${reportData.legitimacyScore ?? "N/A"}
-Leadership & Governance: ${reportData.governanceLeadershipScore ?? "N/A"}
+Leadership: ${reportData.leadershipScore ?? "N/A"}
 Operational Strength: ${reportData.operationalScore ?? "N/A"}
-Capital Appeal (Fundability): ${reportData.fundabilityScore ?? "N/A"}
+Capital Appeal (Financial, Environmental, Social and Governance Strength): ${reportData.fundabilityScore ?? "N/A"}
 `.trim();
 
 const combinedText = `
@@ -605,11 +603,13 @@ ${scoreSummaryText}
 Capital Appeal Analysis:
 ${reportData.aiEvaluations.fundability?.result || ""}
 
+Governance Strength Evaluation (part of Capital Appeal):
+${reportData.aiEvaluations.governance?.result || ""}
+
 AI Legitimacy Analysis:
 ${reportData.aiEvaluations.legitimacy?.result || ""}
 
-Leadership & Governance Evaluation:
-${reportData.aiEvaluations.governance?.result || ""}
+Leadership Evaluation:
 ${reportData.aiEvaluations.leadership?.result || ""}
 
 Operational Strength Evaluation:
@@ -670,11 +670,15 @@ You are an expert business analyst. Summarize key improvement areas grouped unde
 - [Improvement 1]
 - [Improvement 2]
 
+### Governance Strength Evaluation
+- [Improvement 1]
+- [Improvement 2]
+
 ### AI Legitimacy Analysis
 - [Improvement 1]
 - [Improvement 2]
 
-### Leadership & Governance Evaluation
+### Leadership Evaluation
 - [Improvement 1]
 - [Improvement 2]
 
@@ -726,7 +730,7 @@ Keep it concise, professional, and actionable.
 
   const generateIntelligentFallback = (reportData) => {
     const scores = {
-      governanceLeadership: reportData.governanceLeadershipScore || 0,
+      leadership: reportData.leadershipScore || 0,
       operational: reportData.operationalScore || 0,
       overall: reportData.overallScore || 0,
     };
@@ -734,10 +738,10 @@ Keep it concise, professional, and actionable.
     const sortedScores = Object.entries(scores).sort(([, a], [, b]) => a - b);
 
     const priorityMap = {
-      governanceLeadership: {
-        title: "Leadership & Governance",
+      leadership: {
+        title: "Leadership",
         description:
-          "Strengthen board structure, decision-making processes, and leadership credentials to build investor confidence.",
+          "Strengthen leadership credentials, role coverage and the operating team to build investor confidence. Board and governance structure are addressed under Capital Appeal.",
       },
       operational: {
         title: "Operational Strength",
@@ -906,7 +910,7 @@ Keep it concise, professional, and actionable.
 
 <div class="score-card"><div class="score-value">${reportData.complianceScore ?? 0}%</div><div class="score-label">Compliance</div></div>
 <div class="score-card"><div class="score-value">${reportData.legitimacyScore ?? 0}</div><div class="score-label">Legitimacy</div></div>
-<div class="score-card"><div class="score-value">${reportData.governanceLeadershipScore ?? 0}</div><div class="score-label">Leadership & Governance</div></div>
+<div class="score-card"><div class="score-value">${reportData.leadershipScore ?? 0}</div><div class="score-label">Leadership</div></div>
 <div class="score-card"><div class="score-value">${reportData.operationalScore ?? 0}</div><div class="score-label">Operational Strength</div></div>
 <div class="score-card"><div class="score-value">${reportData.fundabilityScore ?? 0}</div><div class="score-label">Capital Appeal</div></div>
             </div>
@@ -1130,7 +1134,7 @@ export function Dashboard() {
 
   const [complianceScore, setComplianceScore] = useState(0)
   const [legitimacyScore, setLegitimacyScore] = useState(0)
-  const [governanceLeadershipScore, setGovernanceLeadershipScore] = useState(0)
+  const [leadershipScore, setLeadershipScore] = useState(0)
   const [operationalScore, setOperationalScore] = useState(0)
   const [fundabilityScore, setFundabilityScore] = useState(0)
 
@@ -1193,7 +1197,7 @@ const [userRole, setUserRole] = useState(null);
     {
       title: "Business Metrics",
       content:
-        "Monitor your BIG Score components: Compliance, Legitimacy, Leadership, Fundability, PIS Score and overall BIG Score to understand how your business is perceived.",
+        "Monitor your BIG Score components: Compliance, Legitimacy, Leadership, Operational Strength, Capital Appeal (Financial, Environmental, Social and Governance Strength) and your overall BIG Score to understand how your business is perceived.",
       icon: "📈",
     },
     {
@@ -1541,7 +1545,7 @@ useEffect(() => {
                   profileData={profileData}
                   complianceScore={complianceScore}
                   legitimacyScore={legitimacyScore}
-                  governanceLeadershipScore={governanceLeadershipScore}
+                  leadershipScore={leadershipScore}
                   operationalScore={operationalScore}
                   fundabilityScore={fundabilityScore}
                   onScoreUpdate={score => console.log("Updated BIG Score:", score)}
@@ -1622,9 +1626,10 @@ useEffect(() => {
 />
 
 <GovernanceLeadershipScoreCard
+  scope="leadership"
   styles={styles}
   profileData={profileData?.formData}
-  onScoreUpdate={setGovernanceLeadershipScore}
+  onScoreUpdate={setLeadershipScore}
   apiKey={apiKey}
   userId={targetUserId}
 />

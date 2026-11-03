@@ -32,9 +32,9 @@ import {
 import { prepareLeadershipData, buildBoardPromptAddendum } from "./governance-prompts"
 
 // ─────────────────────────────────────────────────────────────────────────
-// LEADERSHIP & GOVERNANCE
+// LEADERSHIP (BIG pillar 3) and GOVERNANCE STRENGTH (Capital Appeal sub-component)
 //
-// Same navigation shell as Capital Appeal. The scoring is untouched —
+// One component, two scopes — see the `scope` prop. Same navigation shell as Capital Appeal. The scoring is untouched —
 // computeAll is still the single path and the AI still never writes a number.
 // What changed is that the modal stopped showing everything at once.
 //
@@ -66,6 +66,13 @@ import { prepareLeadershipData, buildBoardPromptAddendum } from "./governance-pr
 //   Its "What is missing" list moves to that element's 2.3 Improvements tab,
 //   where an evidence gap belongs.
 // ─────────────────────────────────────────────────────────────────────────
+
+// Leadership and Governance are scored separately: each is its domain's
+// 0-100 percent from buildDomains. (computeAll().overall is the old blend.)
+const scopedScore = (a, scope) => {
+  const dom = buildDomains(buildPillars(a)).find((d) => d.key === scope)
+  return dom ? dom.percent : a.overall
+}
 
 const INTERPRETATION = [
   { range: "91–100%", label: "Scaler", color: "#1B5E20", meaning: "High ambition and high execution. Leadership is an asset in the file, not a risk to be managed." },
@@ -469,7 +476,12 @@ function EvidenceGaps({ gaps }) {
 
 // ═════════════════════════════════════════════════════════════════════════
 
-export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey, onNavigate, userId: propUserId }) {
+// scope "leadership"  → the Leadership pillar card (BIG Score pillar 3).
+// scope "governance"  → Governance Strength, a sub-component of Capital Appeal.
+//                       Mounted headless by FundabilityScoreCard, which receives
+//                       { score, explorer } through onData and renders the block.
+export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey, onNavigate, userId: propUserId, scope = "leadership", headless = false, onData, wantPotential = false }) {
+  const isGov = scope === "governance"
   // The profile whose scores are shown: passed by the Dashboard (company owner's, or own), else the logged-in user
   const profileUid = propUserId || auth?.currentUser?.uid
   const [showModal, setShowModal] = useState(false)
@@ -510,23 +522,24 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     try {
       const a = computeAll(profileData, cvProfiles)
       setAssessment(a)
-      setOverallScore(a.overall)
-      if (onScoreUpdate) onScoreUpdate(a.overall)
+      const s = scopedScore(a, scope)
+      setOverallScore(s)
+      if (onScoreUpdate) onScoreUpdate(s)
     } catch (e) {
       console.error("Governance scoring error:", e)
     }
-  }, [profileData, cvProfiles])
+  }, [profileData, cvProfiles, scope])
 
   // ── Potential points — each figure measured by re-running computeAll with
   //    the action applied. Deferred until the modal opens. ──
   useEffect(() => {
-    if (!showModal || !profileData || !assessment) return
+    if (!(showModal || wantPotential) || !profileData || !assessment) return
     try {
-      setPotential(buildOpportunities(profileData, cvProfiles, (p, c) => computeAll(p, c).overall, assessment.leadership))
+      setPotential(buildOpportunities(profileData, cvProfiles, (p, c) => scopedScore(computeAll(p, c), scope), assessment.leadership))
     } catch (e) {
       console.error("Potential points error:", e)
     }
-  }, [showModal, profileData, cvProfiles, assessment])
+  }, [showModal, wantPotential, profileData, cvProfiles, assessment, scope])
 
   const goTo = (route) => {
     if (!route) return
@@ -545,8 +558,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     try {
       const userId = profileUid
       const functions = getFunctions()
-      const generateLeadershipAnalysis = httpsCallable(functions, "generateLeadershipAnalysis")
-      const generateGovernanceAnalysis = httpsCallable(functions, "generateGovernanceAnalysis")
+      const generateAnalysis = httpsCallable(functions, isGov ? "generateGovernanceAnalysis" : "generateLeadershipAnalysis")
 
       const om = profileData?.ownershipManagement || {}
       const validDirectors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
@@ -571,38 +583,27 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
         cvProfiles,
       })
 
-      const leadershipPrompt = await prepareLeadershipData(userId, profileData, cvProfiles)
-      const governancePrompt =
-        buildGovernancePrompt(profileData, pisCalc, board.requirement.stage, board.requirement.label) +
-        buildBoardPromptAddendum(board)
+      const prompt = isGov
+        ? buildGovernancePrompt(profileData, pisCalc, board.requirement.stage, board.requirement.label) + buildBoardPromptAddendum(board)
+        : await prepareLeadershipData(userId, profileData, cvProfiles)
 
-      const [leadershipResp, governanceResp] = await Promise.all([
-        generateLeadershipAnalysis({ prompt: leadershipPrompt }),
-        generateGovernanceAnalysis({ prompt: governancePrompt }),
-      ])
-
-      const leadershipText = leadershipResp?.data?.content
-      const governanceText = governanceResp?.data?.content
-      if (!leadershipText && !governanceText) throw new Error("Invalid response format from server")
+      const resp = await generateAnalysis({ prompt })
+      const text = resp?.data?.content
+      if (!text) throw new Error("Invalid response format from server")
 
       const timestamp = new Date()
-      if (leadershipText) setLeadershipAiResult(leadershipText)
-      if (governanceText) setGovernanceAiResult(governanceText)
+      if (isGov) setGovernanceAiResult(text)
+      else setLeadershipAiResult(text)
       setEvaluationTimestamp(timestamp.toLocaleString())
 
       if (userId) {
-        if (leadershipText) {
-          await setDoc(doc(db, "aiLeadershipEvaluation", userId), { result: leadershipText, timestamp, profileSnapshot: profileData }, { merge: true })
-        }
-        if (governanceText) {
-          await setDoc(doc(db, "aiGovernanceEvaluation", userId), { result: governanceText, timestamp, profileSnapshot: profileData }, { merge: true })
-        }
+        await setDoc(doc(db, isGov ? "aiGovernanceEvaluation" : "aiLeadershipEvaluation", userId), { result: text, timestamp, profileSnapshot: profileData }, { merge: true })
       }
       return true
     } catch (error) {
       console.error("Governance & Leadership AI evaluation error:", error)
       setEvaluationError(`Failed to get AI evaluation: ${error.message}`)
-      await logAnalysisFailure(db, profileUid, "governanceLeadership", error)
+      await logAnalysisFailure(db, profileUid, scope, error)
       return false
     } finally {
       setIsEvaluating(false)
@@ -615,34 +616,33 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     if (!profileUid || !apiKey) return
     const userId = profileUid
     const profileRef = doc(db, "universalProfiles", userId)
-    const leadershipRef = doc(db, "aiLeadershipEvaluation", userId)
-    const governanceRef = doc(db, "aiGovernanceEvaluation", userId)
+    const resultRef = doc(db, isGov ? "aiGovernanceEvaluation" : "aiLeadershipEvaluation", userId)
+    const triggerFlag = isGov ? "triggerGovernanceEvaluation" : "triggerLeadershipEvaluation"
 
     const unsubscribe = onSnapshot(profileRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data()
-        const needsRun = data.triggerLeadershipEvaluation === true || data.triggerGovernanceEvaluation === true
+        const needsRun = data[triggerFlag] === true
         // One attempt per mount: the failure log below writes to this same doc,
         // which re-fires this listener. A failed run leaves the trigger set, so
         // the next page open tries again.
         if (needsRun && !isEvaluating && !triggerTried.current) {
           triggerTried.current = true
           const ok = await runAiEvaluation()
-          if (ok) await updateDoc(profileRef, { triggerLeadershipEvaluation: false, triggerGovernanceEvaluation: false, "analysisFailures.governanceLeadership": deleteField() })
+          if (ok) await updateDoc(profileRef, { [triggerFlag]: false, [`analysisFailures.${scope}`]: deleteField() })
         }
       }
       try {
-        const [ls, gs] = await Promise.all([getDoc(leadershipRef), getDoc(governanceRef)])
-        if (ls.exists() && ls.data().result) setLeadershipAiResult(ls.data().result)
-        if (gs.exists() && gs.data().result) setGovernanceAiResult(gs.data().result)
-        const ts = gs.data()?.timestamp || ls.data()?.timestamp
+        const rs = await getDoc(resultRef)
+        if (rs.exists() && rs.data().result) (isGov ? setGovernanceAiResult : setLeadershipAiResult)(rs.data().result)
+        const ts = rs.data()?.timestamp
         if (ts) setEvaluationTimestamp(new Date(ts.toDate()).toLocaleString())
       } catch (e) {
         console.error("Error loading saved evaluations:", e)
       }
     })
     return () => unsubscribe()
-  }, [profileUid, apiKey])
+  }, [profileUid, apiKey, scope])
 
   // ─────────────────────────────────────────────────────────────────────
   // Assemble what the explorer needs
@@ -652,8 +652,8 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   const b = a?.board
 
   const narrative = useMemo(
-    () => ({ ...parseNarrative(leadershipAiResult), ...parseNarrative(governanceAiResult) }),
-    [leadershipAiResult, governanceAiResult]
+    () => parseNarrative(isGov ? governanceAiResult : leadershipAiResult),
+    [leadershipAiResult, governanceAiResult, isGov]
   )
 
   const explorer = useMemo(() => {
@@ -792,10 +792,10 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
         note: "What structures hold them to account? Ownership and directorship, plus how mature the governance around them is. A strong founder with no board passes Leadership and fails here.",
         elements: govElements,
       },
-    ]
+    ].filter((bl) => bl.key === scope)
 
     const attention = []
-    if (b && b.gap > 0) {
+    if (isGov && b && b.gap > 0) {
       attention.push({
         key: "boardGap",
         headline: `Board required but not in place — ${b.penalty}-point penalty`,
@@ -806,7 +806,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
         route: "/profile?section=ownershipManagement",
       })
     }
-    const blocking = (b?.evidenceGaps || []).filter((g) => g.severity === "high")
+    const blocking = isGov ? (b?.evidenceGaps || []).filter((g) => g.severity === "high") : []
     if (blocking.length) {
       attention.push({
         key: "evidence",
@@ -824,7 +824,9 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
       attention,
       about: {
         definition:
-          "This card answers two separate questions, and a funder treats them as two separate findings. Leadership asks who is running the business and whether they are any good at it. Governance asks what structures hold them to account. A capable founder with no board passes the first and fails the second, so the two are kept apart rather than averaged into one verdict.",
+          isGov
+            ? "Governance Strength asks what structures hold the people running the business to account: ownership and directorship, and how mature the governance around them is. It is one of the four components of Capital Appeal. A capable founder with no board passes Leadership and fails here."
+            : "Leadership asks who is running the business and whether they are any good at it. It is scored from uploaded CVs, the operating team and the Business Leadership answers. Governance — the structures that hold them to account — is scored separately, under Capital Appeal.",
         definitionNotes: [
           {
             title: "Why Ownership & Structure sits under Governance",
@@ -853,16 +855,11 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
             "Unlike the other cards, a point value here cannot be divided out of a table: the board shortfall penalty deducts twice, composition checks drop out of their own denominator when evidence is missing, and the Public Interest Score moves the requirement band — so adding one director can move the score by an amount no fixed table would predict. Every figure is measured by applying the action to a copy of your profile and re-running the same scoring function the card uses.",
           tables: [
             {
-              title: "Domain weighting",
-              firstColumn: "Domain",
-              rows: domains.map((d) => ({ label: d.label, weight: `${d.weight}%`, now: `${d.percent}%` })),
-              note: "Each domain scores 0–100 on its own terms, then contributes at the weight shown.",
-            },
-            {
               title: "Pillar weighting",
               firstColumn: "Pillar",
-              rows: pillars.map((p) => ({ label: `${p.label} — ${p.source}`, weight: `${p.weight}%`, now: `${p.percent}%` })),
+              rows: pillars.filter((p) => p.domain === scope).map((p) => ({ label: `${p.label} — ${p.source}`, weight: `${Math.round((p.weight / (domains.find((d) => d.key === scope)?.weight || 100)) * 100)}%`, now: `${p.percent}%` })),
             },
+            ...(isGov ? [
             {
               title: "Within Board Structure (5.3)",
               firstColumn: "Check",
@@ -878,7 +875,8 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
                 { label: "Exec / non-exec classification", weight: "4%", now: b ? `${b.boardSplit?.unclassified || 0} unclassified` : "—" },
               ],
               note: `If 5.1 says a board is needed and 5.2 says there is not one, the score is penalised by ${BOARD_GAP_PENALTY[1]}–${BOARD_GAP_PENALTY[3]} points and Governance Maturity takes a further deduction. PIS = Employees + (Turnover ÷ R1m) + (Liabilities ÷ R1m) + Shareholders.`,
-            },
+            }
+            ] : []),
           ],
         },
       },
@@ -922,16 +920,24 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     }
   }, [a, b, narrative, potential, overallScore])
 
+  // Headless (Governance Strength inside Capital Appeal): no card, no modal.
+  // The parent builds its own explorer and just needs this one's pieces.
+  useEffect(() => {
+    if (onData && explorer) onData({ score: overallScore, explorer, aiPending: isEvaluating, runAnalysis: runAiEvaluation })
+  }, [explorer, overallScore, isEvaluating])
+
+  if (headless) return null
+
   return (
     <>
       {/* ── Card ── */}
       <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)", borderRadius: "20px", boxShadow: "0 8px 32px rgba(141,110,99,0.15)", border: "1px solid #e8ddd6", overflow: "hidden", position: "relative", width: "100%", minWidth: "210px" }}>
         <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 30px 20px 30px", color: "white", position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Leadership &amp; Governance</h2>
+            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>{isGov ? "Governance Strength" : "Leadership"}</h2>
             <Users size={24} style={{ opacity: 0.8 }} />
           </div>
-          <p style={{ margin: 0, fontSize: "13px", opacity: 0.9 }}>Who's in charge,are they trusted</p>
+          <p style={{ margin: 0, fontSize: "13px", opacity: 0.9 }}>Who's in charge, are they capable</p>
           <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "80px", height: "80px", background: "rgba(255,255,255,0.1)", borderRadius: "50%", opacity: 0.6 }} />
           <div style={{ position: "absolute", bottom: "-10px", left: "-10px", width: "60px", height: "60px", background: "rgba(255,255,255,0.05)", borderRadius: "50%" }} />
         </div>
@@ -947,7 +953,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
             </div>
           </div>
 
-          {b && b.gap > 0 && (
+          {isGov && b && b.gap > 0 && (
             <div style={{ marginTop: "8px", display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 12px", background: "#fdecea", border: "1px solid #e6b8ac", borderRadius: "20px", color: "#B71C1C", fontWeight: 700, fontSize: "10.5px", lineHeight: 1.4 }}>
               <AlertCircle size={12} /> Board required but not in place
             </div>
@@ -979,12 +985,12 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
           >
             {explorer ? (
               <ScoreExplorer
-                title="Leadership & Governance"
+                title={isGov ? "Governance Strength" : "Leadership"}
                 score={overallScore}
                 band={scoreLevel}
                 contextLine={
                   <>
-                    {b ? (
+                    {isGov && b ? (
                       <>
                         Governance stage: <strong style={{ color: "#5d4037" }}>{b.requirement.stage} — {b.requirement.label}</strong>
                       </>
