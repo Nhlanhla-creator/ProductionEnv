@@ -93,7 +93,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
               </h3>
               <p style={{ margin: 0, fontSize: "14px", color: "#D7CCC8", lineHeight: 1.55, maxWidth: "620px" }}>
                 {completed
-                  ? "Your sites, contracts, services and equipment groups are configured. You can re-run the wizard to add more structure, or jump straight to the command centre."
+                  ? "Your sites, contracts, services and equipment groups are configured. You can re-run the wizard to add more structure, or jump straight to the performance dashboard."
                   : started
                     ? `You're on step ${currentStep + 1} of ${totalSteps}. Nothing is saved until the final step — pick up where you left off.`
                     : "The guided setup takes about 5 minutes and builds your sites, contracts, services and equipment groups. You can pause at any time."}
@@ -155,7 +155,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
                         boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       }}>
                       <TrendingUp size={15} />
-                      Go to command centre
+                      Go to performance dashboard
                     </button>
                     <button
                       type="button"
@@ -264,9 +264,9 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
             />
             <StepItem
               num={3}
-              title="View your command centre"
+              title="View your performance dashboard"
               description="Your KPI tiles will populate as soon as there's data to calculate from."
-              action={{ label: "Open command centre", onClick: () => handleClick("dashboard"), icon: TrendingUp }}
+              action={{ label: "Open performance dashboard", onClick: () => handleClick("dashboard"), icon: TrendingUp }}
               noBorder
             />
           </div>
@@ -298,7 +298,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
           </div>
           <div>
             <div style={{ fontSize: "13px", fontWeight: 600, color: T.accent }}>
-              Operations Command Centre is live
+              Your operating structure is ready
             </div>
             <div style={{ fontSize: "11.5px", color: T.muted }}>
               Add assets and capture shift data to populate your KPIs.
@@ -354,7 +354,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
               margin: "0 0 6px", fontSize: "18px",
               fontWeight: 700, color: "#EFEBE9", letterSpacing: "-0.2px",
             }}>
-              Set up your Operations Command Centre
+              Set up your operating structure
             </h3>
             <p style={{ margin: 0, fontSize: "13.5px", color: "#D7CCC8", lineHeight: 1.55, maxWidth: "520px" }}>
               Track availability, utilisation, productivity and cost across your fleet or
@@ -465,7 +465,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
         </div>
         <div>
           <div style={{ fontSize: "13.5px", fontWeight: 600, color: T.accent }}>
-            Operations Command Centre is live
+            Your operating structure is ready
           </div>
           <div style={{ fontSize: "12px", color: T.muted }}>
             Review your asset performance, capacity and downtime.
@@ -485,7 +485,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
           whiteSpace: "nowrap",
         }}>
         <TrendingUp size={14} />
-        Open command centre
+        Open performance dashboard
       </button>
     </div>
   )

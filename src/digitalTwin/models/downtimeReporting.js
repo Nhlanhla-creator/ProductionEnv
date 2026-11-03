@@ -7,16 +7,16 @@ export function reportWindow(from,to) {
   if((from&&!Number.isFinite(start))||(to&&!Number.isFinite(end.getTime()))||start>=(end?.getTime()??Infinity))throw new Error('Choose a valid reporting date range.');
   return {start,end:end?.getTime()??Infinity};
 }
-export function periodSeconds(e,window={start:-Infinity,end:Infinity}) {
-  const a=Date.parse(e.eventStart),b=Date.parse(e.eventEnd);
+export function periodSeconds(e,window={start:-Infinity,end:Infinity},asOf=Date.now()) {
+  const a=Date.parse(e.eventStart),b=e.eventEnd?Date.parse(e.eventEnd):asOf;
   return Number.isFinite(a)&&Number.isFinite(b)&&b>a?Math.max(0,Math.min(b,window.end)-Math.max(a,window.start))/1000:0;
 }
-export function filterReport(events,{assetId='',groupId='',siteId='',type='',from='',to='',path=[]}={}) {
+export function filterReport(events,{assetId='',groupId='',siteId='',type='',from='',to='',path=[],asOf=Date.now()}={}) {
   const window=reportWindow(from,to);
   return events.filter(e=>e.validationStatus!=='void'&&(!assetId||e.assetId===assetId)&&(!groupId||(groupId==='__none__'?!e.groupId:e.groupId===groupId))&&(!siteId||(siteId==='__none__'?!e.siteId:e.siteId===siteId))&&
     (!type||(type==='planned'?e.planned===true:e.planned===false))&&path.every((key,i)=>classificationKey(e,i)===key))
-    .map(e=>({...e,periodDurationSeconds:periodSeconds(e,window),periodDurationHours:periodSeconds(e,window)/3600}))
-    .filter(e=>e.periodDurationSeconds>0||(!e.eventEnd&&Date.parse(e.eventStart)<window.end));
+    .map(e=>({...e,asOf:new Date(asOf).toISOString(),periodDurationSeconds:periodSeconds(e,window,asOf),periodDurationHours:periodSeconds(e,window,asOf)/3600}))
+    .filter(e=>e.periodDurationSeconds>0);
 }
 export function classificationLabel(e,index) {
   const part=e.classificationPath?.[index];
@@ -42,10 +42,10 @@ export function aggregateReport(events,dimension='asset') {
   return [...groups.values()].sort((a,b)=>b.seconds-a.seconds).map(r=>{cumulative+=r.seconds;return {...r,assets:[...r.assets],hours:r.seconds/3600,share:total?r.seconds/total*100:0,cumulative:total?cumulative/total*100:0};});
 }
 const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-export function downtimeTrend(events,{from='',to='',grain='day'}={}) {
+export function downtimeTrend(events,{from='',to='',grain='day',asOf=Date.now()}={}) {
   const window=reportWindow(from,to),buckets=new Map();let iterations=0;
   events.forEach(e=>{
-    const a=Math.max(Date.parse(e.eventStart),window.start),b=Math.min(Date.parse(e.eventEnd),window.end);
+    const a=Math.max(Date.parse(e.eventStart),window.start),b=Math.min(e.eventEnd?Date.parse(e.eventEnd):asOf,window.end);
     if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a)return;
     let cursor=a;
     while(cursor<b){

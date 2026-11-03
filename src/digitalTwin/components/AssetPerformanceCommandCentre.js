@@ -3,7 +3,7 @@
 /**
  * digitalTwin/components/AssetPerformanceCommandCentre.jsx
  *
- * Screen 4 from the brief: outcome-led, exception-driven command centre.
+ * Screen 4 from the brief: outcome-led, exception-driven performance dashboard.
  * Hero tiles (Availability, Utilisation, Accepted output, Cost per tonne),
  * availability-loss-by-category panel, Attention required + Recommended
  * next step.
@@ -11,7 +11,7 @@
  * Every number is a real KPI calculation — click any tile to open its
  * lineage.
  *
- * Setup guide is shown FIRST, before the header and hero tiles.
+ * Configuration lives under Setup; daily capture lives under Operations.
  */
 
 import { useEffect, useState } from "react"
@@ -23,9 +23,7 @@ import { getAncestryPath, listNodes } from "../services/hierarchyService"
 import { NODE_TYPES } from "../models/enums"
 import KpiLineageModal from "./KpiLineageModal"
 import DrillDownView from "./DrillDownView"
-import OperationsSetupCard from "./OperationsSetupCard"
-import AssetRegister from "./AssetRegister"
-import { auth } from "../../firebaseConfig"
+import { twinPath } from "../models/navigation"
 
 const T = {
   ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", faint: "#8a7a74",
@@ -62,8 +60,8 @@ const CATEGORY_COLORS = {
   commercial_or_strategic_standby: "#57534e",
 }
 
-export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpenLineage }) {
-  const [showDowntime, setShowDowntime] = useState(false)
+export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpenLineage, onNavigate }) {
+  const openDowntime=()=>onNavigate?onNavigate('capture'):window.location.assign(twinPath('capture'))
   const [loading, setLoading] = useState(true)
   const [anchor, setAnchor] = useState(null)              // root node for the current view
   const [tiles, setTiles] = useState([])
@@ -120,29 +118,17 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     }
   }
 
-  if (showDowntime) return <AssetRegister tenantId={tenantId} onBack={() => setShowDowntime(false)} />
 
   if (loading && !anchor) {
-    return <div style={{ padding: "40px", textAlign: "center", color: T.muted }}>Loading command centre…</div>
+    return <div style={{ padding: "40px", textAlign: "center", color: T.muted }}>Loading performance dashboard…</div>
   }
 
   if (!anchor) {
     return (
       <div style={{ padding: "24px", maxWidth: "820px", margin: "0 auto" }}>
-        <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => setShowDowntime(true)}>Open asset & downtime workspace</button>
+        <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => openDowntime()}>Record downtime</button>
         {/* Setup guide still shown so the user can start the wizard */}
-        <OperationsSetupCard
-          variant="compact"
-          onNavigate={(target) => {
-            if (target === "setup") {
-              window.location.href = "/digital-twin?setup=true"
-            } else if (target === "dashboard") {
-              window.location.href = "/digital-twin/dashboard"
-            } else if (target === "assets") {
-              window.location.href = "/digital-twin?view=assets"
-            }
-          }}
-        />
+        <a className="dt-button" href="/digital-twin/setup">Open Setup</a>
 
         <div style={{ ...cardS, background: T.amberBg, borderColor: `${T.amber}33` }}>
           <div style={{ display: "flex", gap: "10px", alignItems: "flex-start", color: T.amber }}>
@@ -150,7 +136,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
             <div>
               <div style={{ fontWeight: 600, marginBottom: "4px" }}>No operating structure yet</div>
               <div style={{ fontSize: "13.5px" }}>
-                Create a company and at least one site or contract first, then come back to the command centre.
+                Create a company and at least one site or contract first, then come back to the performance dashboard.
               </div>
             </div>
           </div>
@@ -182,26 +168,15 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     <div>
       {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back</button>}
 
-      <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => setShowDowntime(true)}>Asset register · Downtime setup · Capture · Reports</button>
+      <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => openDowntime()}>Asset register · Downtime setup · Capture · Reports</button>
       {/* ── SETUP GUIDE — SHOWN FIRST ── */}
-      <OperationsSetupCard
-        variant="compact"
-        onNavigate={(target) => {
-          if (target === "setup") {
-            window.location.href = "/digital-twin?setup=true"
-          } else if (target === "dashboard") {
-            window.location.href = "/digital-twin/dashboard"
-          } else if (target === "assets") {
-            window.location.href = "/digital-twin?view=assets"
-          }
-        }}
-      />
+      <a className="dt-button" href="/digital-twin/setup">Open Setup</a>
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "14px", marginBottom: "18px", flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 700, color: T.accent, letterSpacing: "-0.4px" }}>
-            Asset performance command centre
+            KPI dashboards
           </h2>
           <p style={{ margin: 0, fontSize: "13.5px", color: T.muted }}>
             {anchor.name} · {periodLabel.slice(2)} · every figure recomputed from source records

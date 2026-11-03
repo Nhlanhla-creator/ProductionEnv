@@ -260,10 +260,9 @@ export const availabilityLossByCategory = async (tenantId, { scope = {}, periodL
   let unplannedHours = 0;
 
   events.forEach((e) => {
-    if (!e.eventEnd) return; // ignore open events
     // Clip events spanning period boundaries; the service includes overlapping events.
     const start = Math.max(Date.parse(e.eventStart), period.startFrom ? Date.parse(period.startFrom) : -Infinity);
-    const end = Math.min(Date.parse(e.eventEnd), period.endTo ? Date.parse(period.endTo) + 1000 : Infinity);
+    const end = Math.min(e.eventEnd?Date.parse(e.eventEnd):Date.now(), period.endTo ? Date.parse(period.endTo) + 1000 : Infinity);
     const hours = Math.max(0, end - start) / 3600000;
     if (!Number.isFinite(hours) || hours <= 0) return;
     const cat = e.categoryLevel1 || "unknown";
