@@ -1,8 +1,8 @@
 "use client"
+import { twinPath } from '../models/navigation';
 import '../styles/Downtime.css';
-export default function DowntimeFlowNav({ current,onNavigate,disabled = false }) {
-  const steps=[['assets','Asset register','Register your equipment'],['setup','Master codes','Configure & publish'],['capture','Capture downtime','Classify the event'],['records','Records & analysis','Review, drill down & export']];
-  return <nav className="dt-stepper" aria-label="Downtime workflow">{steps.map(([key,title,description],i) => <button type="button" key={key} className="dt-step" disabled={disabled || !onNavigate} aria-current={key===current ? 'step' : undefined} onClick={() => onNavigate?.(key)}>
-    <span className="dt-step-num">{i+1}</span><span><strong>{title}</strong><small>{description}</small></span>
-  </button>)}</nav>;
+export default function DowntimeFlowNav({current,onNavigate,disabled=false}) {
+  const setup=['assets','setup'].includes(current);
+  const items=setup?[['assets','Asset register'],['setup','Master Codes']]:[['capture','Ongoing downtime'],['records','History & analysis']];
+  return <nav className="dt-actions" aria-label={setup?'Setup navigation':'Downtime operations navigation'}>{items.map(([key,label])=><button key={key} type="button" className={`dt-button ${key===current?'dt-button-primary':''}`} disabled={disabled||key===current} aria-current={key===current?'page':undefined} onClick={()=>onNavigate?onNavigate(key):window.location.assign(twinPath(key))}>{label}</button>)}</nav>;
 }
