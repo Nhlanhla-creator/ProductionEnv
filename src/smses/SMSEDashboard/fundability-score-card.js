@@ -11,10 +11,11 @@ import { useSolvencyScore } from "../hooks/useSolvencyScore";
 import { normalizeSolvencyScore } from "../MyGrowthTools/financial/data_utils/solvencyScoreUtils";
 import {
   buildCapitalAppealAssessment, fmtPts, detectInstruments, applicationSnapshot, METHODOLOGY_VERSION,
-  STAGE_LABELS, FS_FACTOR_WEIGHTS,
+  STAGE_LABELS, FS_FACTOR_WEIGHTS, scoreEnvironmentalStrength, scoreSocialStrength,
 } from "./fundability-potential";
 import { buildDocumentFindings } from "./document-findings";
 import ScoreExplorer from "./ScoreExplorer";
+import { GovernanceLeadershipScoreCard } from "./governance-leadership-score-card";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CAPITAL APPEAL — BIG Score Scoring Methodology v3.0
@@ -102,7 +103,7 @@ const millis = (v) => (v?.toMillis ? v.toMillis() : v?.toDate ? v.toDate().getTi
 
 // Every qualifying application, assessed separately. With none, one profile-only
 // assessment is returned so the headline still exists.
-const assessAll = (pd, apps, analyses, fallbackApplied) => {
+const assessAll = (pd, apps, analyses, fallbackApplied, governancePercent = null) => {
   const { profileSecurity = [], ...engineAnalyses } = analyses;
   const qualifying = (apps || [])
     .filter(isAppComplete)
@@ -111,12 +112,19 @@ const assessAll = (pd, apps, analyses, fallbackApplied) => {
   return (qualifying.length ? qualifying : [null]).map((app) => {
     const merged = app ? withApplication(pd, app) : pd;
     const detected = detectInstruments(merged);
+    const environmental = scoreEnvironmentalStrength(merged);
+    const social = scoreSocialStrength(merged);
     const assessment = buildCapitalAppealAssessment({
       profileData: merged,
       hasAppliedForFunding: app ? true : fallbackApplied,
       instrumentGroups: detected.groups,
       unmappedInstruments: detected.unmapped,
       securityInstruments: securityFor(app, profileSecurity),
+      governancePercent,
+      environmentalPercent: environmental.available ? environmental.percent : null,
+      socialPercent: social.available ? social.percent : null,
+      environmentalBreakdown: environmental.breakdown || [],
+      socialBreakdown: social.breakdown || [],
       ...engineAnalyses,
     });
     return {
@@ -256,6 +264,9 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
   const [solvencyAnalysis, setSolvencyAnalysis] = useState(null);
   const [financialStatementsAnalysis, setFinancialStatementsAnalysis] = useState(null);
   const [isFundingDataLoaded, setIsFundingDataLoaded] = useState(false);
+  // Governance Strength — scored and explained by the governance card, mounted headless below.
+  const [gov, setGov] = useState(null);
+  const governancePercent = gov ? gov.score : null;
 
   const [applications, setApplications] = useState([]);
   const [hasAppliedForFunding, setHasAppliedForFunding] = useState(false);
@@ -490,7 +501,8 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
         profileData,
         applications,
         { businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis, profileSecurity, solvencyAnalysis, financialStatementsAnalysis },
-        hasAppliedForFunding
+        hasAppliedForFunding,
+        governancePercent
       );
     } catch (e) {
       console.error("Capital appeal scoring error:", e);
@@ -499,7 +511,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
   }, [
     profileData, applications, hasAppliedForFunding, fundingCheckComplete,
     businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis,
-    profileSecurity, solvencyAnalysis, financialStatementsAnalysis, isFundingDataLoaded,
+    profileSecurity, solvencyAnalysis, financialStatementsAnalysis, isFundingDataLoaded, governancePercent,
   ]);
 
   useEffect(() => { resultsRef.current = results; }, [results]);
@@ -595,7 +607,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     return sections;
   };
 
-  const buildPrompt = (a, docFindings = {}, instrumentLabel = null, appRef = null) => {
+  const buildPrompt = (a, docFindings = {}, instrumentLabel = null, appRef = null, applicationSocialImpact = null) => {
     const line = (i) =>
       `  - ${i.label}: ${
         i.state === "missing" ? "NOT CAPTURED" : i.withheld === 0 ? "COUNTED IN FULL" : `${Math.round(i.earned * 10) / 10}/${i.points} item points — ${Math.round(i.withheld * 10) / 10} withheld`
@@ -652,6 +664,38 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
       })
       .join("\n\n");
 
+    const currentProfile = profileDataRef.current || profileData || {};
+    const esgProfileData = {
+      governance: currentProfile.governance || {},
+      ownershipManagement: currentProfile.ownershipManagement || {},
+      enterpriseReadiness: currentProfile.enterpriseReadiness || {},
+      socialImpact: applicationSocialImpact || currentProfile.socialImpact || {},
+    };
+    const esgOutputFormat = `### ${sections.length + 1}. Environmental Strength
+**Evidence:** [profile governance Environment fields and Social Impact environmental evidence actually on file]
+**Points withheld:** [missing or weak environmental evidence and why]
+**Rationale:** [what environmental evidence tells a funder]
+**Points available:** [specific governance profile or Social Impact fields to complete]
+
+### ${sections.length + 2}. Social Strength
+**Evidence:** [profile governance Social fields and Social Impact evidence actually on file]
+**Points withheld:** [missing or weak social evidence and why]
+**Rationale:** [what social evidence tells a funder]
+**Points available:** [specific governance profile or Social Impact fields to complete]
+
+### ${sections.length + 3}. Governance Strength
+**Evidence:** [governance and ownership-management fields actually on file]
+**Points withheld:** [missing or weak governance evidence and why]
+**Rationale:** [what governance evidence tells a funder]
+**Points available:** [specific governance profile fields to complete]`;
+    const esgSectionData = `
+=== ENVIRONMENTAL, SOCIAL AND GOVERNANCE PROFILE DATA ===
+${JSON.stringify(esgProfileData, null, 2)}
+Environmental Strength score: ${a.capitalAppeal?.environmentalPercent ?? "Not scored yet — not a zero"}%
+Social Strength score: ${a.capitalAppeal?.socialPercent ?? "Not scored yet — not a zero"}%
+Governance Strength score: ${a.capitalAppeal?.governancePercent ?? "Not scored yet — not a zero"}%
+Assess these as separate Capital Appeal components. Use only the supplied profile fields; do not infer missing answers as facts.`;
+
     return `You are writing the capital appeal findings for a funding-readiness report.
 
 EVERY NUMBER BELOW IS FINAL. You do not calculate, adjust or re-derive anything. Your job is to explain what was counted, what was withheld and why, and what to do next. Stating a different number is an error.
@@ -666,7 +710,7 @@ A section marked OUT OF SCOPE costs the business nothing for this instrument and
 
 WRITE ONE SECTION PER HEADING BELOW, WITH THE HEADING TEXT COPIED EXACTLY. Do not merge sections, do not skip sections, do not reorder them and do not add sections. Each heading is read on its own screen, so each section must stand alone and must be SHORT — a reader sees one at a time, not the set.
 
-CAPITAL APPEAL (original — Financial Strength alone, the figure the BIG Score uses): ${a.totalScore}%
+CAPITAL APPEAL (original score using available Financial Strength, Governance, Environmental and Social components): ${a.totalScore}%
 Recoverable in total on the original score: ${a.availablePoints}%${a.lockedPoints > 0 ? `\nFixed deductions that cannot be recovered by editing the profile: ${a.lockedPoints}%` : ""}
 Business stage: ${a.stage.label} (${a.stage.basis}).${appRef ? `\nThis analysis is for funding application ${appRef}. The business may hold other applications; do not refer to them.` : ""}
 ${
@@ -681,6 +725,7 @@ ${
 
 ═══ SCORED DATA ═══
 ${sectionData}
+${esgSectionData}
 
 ${a.statements?.present ? `
 ═══ FINANCIAL STATEMENTS ON FILE ═══
@@ -701,6 +746,8 @@ RULES
 OUTPUT FORMAT — follow exactly, including the bold labels and the section numbering:
 
 ${outputFormat}
+
+${esgOutputFormat}
 
 ### Overall Assessment
 **Strongest section:** [name it and say in one line why it stands out to a funder]
@@ -769,7 +816,7 @@ ${outputFormat}
       const ta = target.assessment;
 
       const result = await callFunction("generateFundabilityAnalysis", {
-        prompt: buildPrompt(ta, buildDocumentFindings(pickAnalyses(fresh)), ta.application.instrumentLabel, labelFor(target)),
+        prompt: buildPrompt(ta, buildDocumentFindings(pickAnalyses(fresh)), ta.application.instrumentLabel, labelFor(target), target?.app?.socialImpact || null),
       });
       return { content: result?.content || "", target };
     } catch (error) {
@@ -939,7 +986,7 @@ ${outputFormat}
         headline: missingFundingSections.length
           ? `${missingFundingSections.length} funding application section${missingFundingSections.length === 1 ? "" : "s"} still to complete`
           : "No funding application on file",
-        detail: `Your Capital Appeal score is Financial Strength alone and does not wait on this. A complete funding application adds an application view: Fundability for your instrument, weighted ${share}% against Financial Strength at the ${a.stage.label} stage. Until then that view is Not assessed — it is not a zero.`,
+        detail: `Your Capital Appeal score does not wait on this. A complete funding application adds an application view: Fundability for your instrument, weighted ${share}% against Financial Strength at the ${a.stage.label} stage. Until then that view is Not assessed — it is not a zero.`,
         chips: missingFundingSections.map((k) => FUNDING_SECTION_LABELS[k] || k),
         cta: "Go to the funding application",
         route: FUNDING_ROUTE,
@@ -1007,8 +1054,8 @@ ${outputFormat}
         key: "financialStrength",
         label: "Financial Strength",
         percent: a.financialStrength.percent,
-        blockWeight: 100,
-        note: `This is your Capital Appeal score. Factor weights are those for the ${stageLabel} stage (${a.stage.basis}). Scored in code against the fields on your Financial Overview and the credit report on file.`,
+        blockWeight: Math.round(a.capitalAppeal.shares.financialStrength),
+        note: `This is the Financial Strength component of your Capital Appeal. Factor weights are those for the ${stageLabel} stage (${a.stage.basis}). Scored in code against the fields on your Financial Overview and the credit report on file.`,
         elements: a.financialStrength.subCategories.map((sc) =>
           toElement(sc, "financialStrength", {
             sourceNote: "Read from the fields on your Financial Overview, plus the credit report on file.",
@@ -1016,6 +1063,60 @@ ${outputFormat}
         ),
       },
     ];
+
+    // ── Capital Appeal's other components: Environmental, Social, Governance ──
+    const shares = a.capitalAppeal.shares;
+    blocks.push(
+      {
+        key: "environmental",
+        label: "Environmental Strength",
+        percent: a.capitalAppeal.environmentalPercent ?? 0,
+        blockWeight: Math.round(shares.environmental || 0),
+        inactive: a.capitalAppeal.environmentalPercent == null,
+        note: a.capitalAppeal.environmentalPercent == null
+          ? "Complete the Environment information in Profile Governance or the Social Impact section of a funding application to activate this component."
+          : "Environmental exposure, controls, compliance and application impact evidence from the Social Impact section are included.",
+        elements: (a.capitalAppeal.environmentalBreakdown || []).map((e) => ({
+          key: `environmental:${e.key}`,
+          label: e.label,
+          weight: e.weight,
+          effectiveWeight: Math.round(e.weight * (shares.environmental / 100) * 10) / 10,
+          percent: e.percent,
+          sourceNote: "Profile Governance Environment and Social Impact evidence.",
+        })),
+      },
+      {
+        key: "social",
+        label: "Social Strength",
+        percent: a.capitalAppeal.socialPercent ?? 0,
+        blockWeight: Math.round(shares.social || 0),
+        inactive: a.capitalAppeal.socialPercent == null,
+        note: a.capitalAppeal.socialPercent == null
+          ? "Complete the Social information in Profile Governance or the Social Impact section of a funding application to activate this component."
+          : "Workforce, community, inclusion and local value evidence from Profile Governance and the funding application's Social Impact section are included.",
+        elements: (a.capitalAppeal.socialBreakdown || []).map((e) => ({
+          key: `social:${e.key}`,
+          label: e.label,
+          weight: e.weight,
+          effectiveWeight: Math.round(e.weight * (shares.social / 100) * 10) / 10,
+          percent: e.percent,
+          sourceNote: "Profile Governance Social and funding application Social Impact evidence.",
+        })),
+      }
+    );
+    const govBlock = gov?.explorer?.blocks?.[0];
+    if (govBlock) {
+      blocks.push({
+        ...govBlock,
+        key: "governance",
+        label: "Governance Strength",
+        blockWeight: Math.round(shares.governance),
+        elements: govBlock.elements.map((e) => ({
+          ...e,
+          effectiveWeight: Math.round(e.weight * (shares.governance / 100) * 10) / 10,
+        })),
+      });
+    }
 
     if (a.fundingActive) {
       const fundabilityBlock = a.blocks.find((b) => b.key === "fundability");
@@ -1038,7 +1139,7 @@ ${outputFormat}
         percent: 0,
         blockWeight: a.split.fundability,
         inactive: true,
-        note: `${fundabilityStatus.headline}. The application view is Not assessed (not zero). Your Capital Appeal score is Financial Strength alone and is unaffected.`,
+        note: `${fundabilityStatus.headline}. The application view is Not assessed (not zero). Your Capital Appeal score is unaffected.`,
         elements: [],
       });
     }
@@ -1047,7 +1148,7 @@ ${outputFormat}
       b.elements.map((e) => ({
         label: e.label,
         weightLabel: e.excluded ? `out of scope · ${app.instrumentLabel}` : `${e.weight}% of ${b.label}`,
-        detail: ELEMENT_PURPOSE[e.key.split(":")[1]] || "",
+        detail: ELEMENT_PURPOSE[e.key.split(":")[1]] || e.sourceNote || "",
       }))
     );
 
@@ -1063,10 +1164,13 @@ ${outputFormat}
         title: "Your Capital Appeal score",
         firstColumn: "Block",
         rows: [
-          { label: "Financial Strength", weight: "100%", now: `${Math.round(a.financialStrength.percent)}%` },
+          { label: "Financial Strength", weight: `${Math.round(shares.financialStrength)}%`, now: `${Math.round(a.financialStrength.percent)}%` },
+          { label: "Environmental Strength", weight: "—", now: "Not scored yet", excluded: true },
+          { label: "Social Strength", weight: "—", now: "Not scored yet", excluded: true },
+          { label: "Governance Strength", weight: govBlock ? `${Math.round(shares.governance)}%` : "—", now: govBlock ? `${Math.round(govBlock.percent)}%` : "—", excluded: !govBlock },
           { label: "Fundability", weight: "—", now: "—", excluded: true },
         ],
-        note: "Capital Appeal is Financial Strength alone. Fundability belongs to a funding request and never changes this score.",
+        note: "The four components are weighted equally. A component that is not scored yet is left out and the rest share its weight. Fundability belongs to a funding request and never changes this score.",
       },
       {
         title: `With a funding request — ${stageLabel} stage split`,
@@ -1180,7 +1284,7 @@ ${outputFormat}
       attention,
       about: {
         definition:
-          "Capital Appeal measures the financial strength of the business — what your own numbers and records say. Where a funding request is complete, Fundability is scored for that request's instrument and shown beside it as an application view. It never changes the Capital Appeal score itself.",
+          "Capital Appeal measures how financially sound and responsibly managed the business is, independent of any funding application: Financial Strength, Environmental Strength, Social Strength and Governance Strength. Environmental and Social are not scored yet. Where a funding request is complete, Fundability is scored for that request's instrument and shown beside it as an application view. It never changes the Capital Appeal score itself.",
         definitionNotes: [
           {
             title: "The score is calculated in code",
@@ -1188,7 +1292,7 @@ ${outputFormat}
           },
           {
             title: "Two views, kept apart",
-            body: "Your Capital Appeal is Financial Strength alone, so it is the same whichever funder you approach. A funding request adds an application view, which blends Financial Strength with Fundability for that instrument at your stage's split. A score describes the evidence on file; it does not predict approval.",
+            body: "Your Capital Appeal does not depend on any funding request, so it is the same whichever funder you approach. A funding request adds an application view, which blends Financial Strength with Fundability for that instrument at your stage's split. A score describes the evidence on file; it does not predict approval.",
           },
           {
             title: "Points that cannot be claimed back",
@@ -1204,18 +1308,30 @@ ${outputFormat}
           tables: weightingTables,
         },
       },
-      potential: {
-        available: a.availablePoints,
-        locked: a.lockedPoints,
-        current: Math.round(a.totalRaw * 10) / 10,
-        projected: Math.round(a.totalRaw + a.availablePoints),
-        items: a.outstanding,
-        lockedItems: a.locked,
-        footnotes,
-      },
+      potential: (() => {
+        // Governance points are measured on the governance scale; Capital Appeal
+        // holds them at the governance share, so every figure is scaled to match.
+        const gp = gov?.explorer?.potential;
+        const gScale = shares.governance / 100;
+        const scaled = (list) => (list || []).map((i) => ({ ...i, pointValue: (i.pointValue || 0) * gScale, projected: null }));
+        const gItems = scaled(gp?.items).filter((i) => i.pointValue > 0.05);
+        const gLocked = scaled(gp?.lockedItems);
+        const gAvail = gItems.reduce((n, i) => n + i.pointValue, 0);
+        const gLockedPts = (gp?.locked || 0) * gScale;
+        const r1 = (n) => Math.round(n * 10) / 10;
+        return {
+          available: r1(a.availablePoints + gAvail),
+          locked: r1(a.lockedPoints + gLockedPts),
+          current: Math.round(a.totalRaw * 10) / 10,
+          projected: Math.round(a.totalRaw + a.availablePoints + gAvail),
+          items: [...a.outstanding, ...gItems].sort((x, y) => y.pointValue - x.pointValue),
+          lockedItems: [...a.locked, ...gLocked],
+          footnotes,
+        };
+      })(),
       summary: parsed.overall,
     };
-  }, [a, selected, results, parsed, documentFindings, fundabilityStatus, applications, profileData]);
+  }, [a, selected, results, parsed, documentFindings, fundabilityStatus, applications, profileData, gov]);
 
   const applicationPanel =
     results.filter((r) => r.app).length > 1 ? (
@@ -1287,6 +1403,17 @@ ${outputFormat}
 
   return (
     <>
+      {/* Governance Strength: scored and explained by the governance card, rendered here as a Capital Appeal block */}
+      <GovernanceLeadershipScoreCard
+        scope="governance"
+        headless
+        profileData={profileData}
+        userId={profileUid}
+        apiKey={apiKey}
+        onNavigate={onNavigate}
+        wantPotential={showModal}
+        onData={setGov}
+      />
       {/* ── Card ── */}
       <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)", borderRadius: "20px", boxShadow: "0 8px 32px rgba(141,110,99,0.15)", border: "1px solid #e8ddd6", overflow: "hidden", position: "relative", width: "100%", minWidth: "210px" }}>
         <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 30px 20px 30px", color: "white", position: "relative" }}>
@@ -1354,8 +1481,8 @@ ${outputFormat}
                     </div>
                     <div style={{ fontSize: "11.5px", color: "#8d6e63", marginTop: "4px" }}>
                       {a.fundingActive
-                        ? `Capital Appeal is Financial Strength alone · with your request: Financial Strength ${a.split.financialStrength}% + Fundability ${a.split.fundability}%`
-                        : "Capital Appeal is Financial Strength alone"}
+                        ? `Capital Appeal · with your request: Financial Strength ${a.split.financialStrength}% + Fundability ${a.split.fundability}%`
+                        : "Financial, environmental, social and governance strength"}
                     </div>
                   </>
                 }
