@@ -968,7 +968,7 @@ function StepPreviewWithDiagram({ state, diagramData, onDiagramChange }) {
         fontSize: "12.5px", color: T.body, lineHeight: 1.6,
       }}>
         <strong style={{ color: T.accent }}>What happens next:</strong> after
-        creation, you'll see the Operations Command Centre. Add assets and
+        creation, you'll see the Performance dashboard. Add assets and
         capture shift data to start generating KPIs.
       </div>
     </div>

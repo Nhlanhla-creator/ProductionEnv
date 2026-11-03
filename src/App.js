@@ -360,8 +360,6 @@ import RapsOverview from "smses/MyGrowthTools/RapsOverview"
 // ─── Digital Twin — Heavy Industry Module (Phases 1–6 + Option 1A) ──────────
 import DigitalTwinHome from "./digitalTwin/components/DigitalTwinHome"
 import DigitalTwinDashboard from "./digitalTwin/components/DigitalTwinDashboard"
-import CapabilityToTwinConverter from "./digitalTwin/components/CapabilityToTwinConverter"
-import SectorPackLoader from "./digitalTwin/components/SectorPackLoader"
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Funding Application Module (Phases 1–6) ────────────────────────────────
@@ -484,6 +482,9 @@ function DigitalTwinSetupRoute()    { return <DigitalTwinHome initialActive="set
 function DigitalTwinAssetsRoute()   { return <DigitalTwinHome initialActive="assets" /> }
 function DigitalTwinDowntimeRoute() { return <DigitalTwinHome initialActive="downtime" /> }
 function DigitalTwinImportsRoute()  { return <DigitalTwinHome initialActive="import" /> }
+function DigitalTwinPacksRoute() { return <DigitalTwinHome initialActive="packs" /> }
+function DigitalTwinConvertRoute() { return <DigitalTwinHome initialActive="convert" /> }
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Funding request route wrappers ─────────────────────────────────────────
@@ -1228,8 +1229,11 @@ function App() {
         {/* ─── Digital Twin — Heavy Industry Module (Phases 1–6 + Option 1A) ─── */}
         <Route path="/digital-twin" element={withProtection(DigitalTwinHome, {}, renderSMERoute)} />
         <Route path="/digital-twin/dashboard" element={withProtection(DigitalTwinDashboard, {}, renderSMERoute)} />
-        <Route path="/digital-twin/convert" element={withProtection(CapabilityToTwinConverter, {}, renderSMERoute)} />
-        <Route path="/digital-twin/packs" element={withProtection(SectorPackLoader, {}, renderSMERoute)} />
+        <Route path="/digital-twin/convert" element={withProtection(DigitalTwinConvertRoute, {}, renderSMERoute)} />
+        <Route path="/digital-twin/packs" element={withProtection(DigitalTwinPacksRoute, {}, renderSMERoute)} />
+
+        <Route path="/digital-twin/setup/*" element={withProtection(DigitalTwinHome, {}, renderSMERoute)} />
+        <Route path="/digital-twin/operations/*" element={withProtection(DigitalTwinHome, {}, renderSMERoute)} />
 
         {/* Deep-linkable sub-screens — the wizard and the sidebar entries */}
         <Route path="/digital-twin/setup"    element={withProtection(DigitalTwinSetupRoute, {}, renderSMERoute)} />

@@ -10,7 +10,7 @@ const T = {
   green: "#166534", greenBg: "#f0fdf4",
 }
 
-export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, onOpenAssets }) {
+export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, onOpenAssets, onOpenMasterCodes }) {
   return (
     <div style={{
       minHeight: "100vh", padding: "40px 24px",
@@ -40,7 +40,7 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
           marginLeft: "auto", marginRight: "auto",
         }}>
           We've built your operating structure. The next step is adding the
-          equipment and work that fills it — then your command centre starts
+          equipment and work that fills it — then your performance dashboard starts
           producing insights.
         </p>
 
@@ -66,16 +66,16 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
 
           <StepItem
             num={2}
-            title="Record a shift"
-            description="Capture one shift of time and production. Takes about 30 seconds."
-            muted
+            title="Configure Master Codes"
+            description="Assign and publish the downtime codes your team will use during daily capture."
+            action={{ label: "Open Master Codes", onClick: onOpenMasterCodes || (()=>window.location.assign('/digital-twin/setup/master-codes')), icon: Plus }}
           />
 
           <StepItem
             num={3}
-            title="View your command centre"
+            title="View your performance dashboard"
             description="Your KPI tiles will populate as soon as there's data to calculate from."
-            action={{ label: "Open command centre", onClick: onOpenCommandCentre, icon: TrendingUp }}
+            action={{ label: "Open performance dashboard", onClick: onOpenCommandCentre, icon: TrendingUp }}
             noBorder
           />
         </div>

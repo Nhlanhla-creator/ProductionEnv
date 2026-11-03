@@ -70,9 +70,9 @@ export default function DowntimeMasterSetup({ tenantId,onBack,onNavigate }) {
   const types=[...new Set([...assets.map(a=>a.equipmentTypeId).filter(Boolean),...(draft?.assignment.equipmentTypeIds||[])])].sort();
   const tree=n=><details key={n.id} open={n.level<3}><summary onClick={()=>setPath(codePath(draft.nodes,n.id).map(v=>v.id))}>{n.label}<span>Level {n.level} · {DOWNTIME_HEADINGS[n.level-1]}{n.terminal?' · Final selection':''}{!n.active?' · Inactive':''}</span></summary>{childrenOf(draft.nodes,n.id,false).map(tree)}</details>;
   return <section className="dt-workspace">
-    <div className="dt-topline">Operations performance / Downtime configuration</div>
+    <div className="dt-topline">Setup / Master Codes</div>
     <DowntimeFlowNav current="setup" disabled={busy} onNavigate={onNavigate?navigate:key=>key==='assets'&&navigate(key)}/>
-    <div className="dt-heading"><div><h2>One setup. Consistent capture.</h2><p>Build your downtime hierarchy once, assign it to the right equipment and publish it for your team.</p></div><div className="dt-actions">
+    <div className="dt-heading"><div><h2>Master Codes</h2><p>Build your downtime hierarchy once, assign it to the right equipment and publish it for your team.</p></div><div className="dt-actions">
       <button className="dt-button" disabled={busy} onClick={()=>leave(()=>{setReload(x=>x+1);})}>Reload</button>
       <button className="dt-button dt-button-primary" disabled={busy||!tenantId} onClick={()=>leave(()=>setCreateOpen(true))}>+ New master list</button>
     </div></div>

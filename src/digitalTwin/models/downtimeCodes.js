@@ -147,9 +147,20 @@ export function durationOf(startValue,endValue) {
     durationSeconds: (end-start)/1000, durationHours: (end-start)/3600000 };
 }
 export function overlapping(events,startValue,endValue,excludeId = null) {
-  const start = Date.parse(startValue), end = Date.parse(endValue);
+  const start = Date.parse(startValue), end = endValue ? Date.parse(endValue) : Infinity;
   return events.filter(e => e.id !== excludeId && e.eventId !== excludeId && e.validationStatus !== 'void' &&
     start < (e.eventEnd ? Date.parse(e.eventEnd) : Infinity) && end > Date.parse(e.eventStart));
 }
+export function eventTiming(startValue,endValue = null) {
+  if (endValue) {
+    const timing=durationOf(startValue,endValue);
+    if (Date.parse(timing.eventEnd)>Date.now()) throw new Error('The return-online time cannot be in the future.');
+    return timing;
+  }
+  if (typeof startValue !== 'string' || !/(?:Z|[+-]\d\d:\d\d)$/.test(startValue) || !Number.isFinite(Date.parse(startValue))) throw new Error('Enter a valid start date-time with a timezone offset or Z.');
+  if (Date.parse(startValue)>Date.now()) throw new Error('Ongoing downtime cannot start in the future.');
+  return {eventStart:new Date(startValue).toISOString(),eventEnd:null,durationSeconds:null,durationHours:null};
+}
+export const elapsedHours = (event,asOf = Date.now()) => Math.max(0,((event.eventEnd?Date.parse(event.eventEnd):asOf)-Date.parse(event.eventStart))/3600000)||0;
 export const canCaptureAsset = a => a && a.resourceKind === 'asset' &&
   !['retired','disposed','inactive'].includes(a.status);
