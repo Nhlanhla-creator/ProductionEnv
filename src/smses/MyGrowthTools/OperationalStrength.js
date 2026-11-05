@@ -2663,7 +2663,7 @@ const AddChooser = ({ onPick, onClose, prefs, fy, structure }) => {
    ════════════════════════════════════════════════════════════════════════ */
 const PREFS_KEY = "opPerf.addData.prefs.v2";
 
-const OperationalPerformance = () => {
+const OperationalPerformance = ({ categoryId = null, embedded = false }) => {
   const [user, setUser] = useState(null);
   const [fyStartMonth, setFyStartMonth] = useState(0);
   const [structure, setStructure] = useState(null);
@@ -2677,7 +2677,7 @@ const OperationalPerformance = () => {
   const [viewingSMEName, setViewingSMEName] = useState("");
   const [viewOrigin, setViewOrigin] = useState("investor");
 
-  const [activeCategoryId, setActiveCategoryId] = useState(null);
+  const [activeCategoryId, setActiveCategoryId] = useState(categoryId);
   const [period, setPeriod] = useState("this_month");
 
   const [filters, setFilters] = useState({ category: "all", kpi: "all", units: "all", frequency: "all", status: "all" });
@@ -2779,7 +2779,7 @@ const OperationalPerformance = () => {
     notify("success", "KPI deleted.");
   };
 
-  const visibleCategories = useMemo(() => (structure || []).filter((c) => !c.hidden), [structure]);
+  const visibleCategories = useMemo(() => (structure || []).filter((c) => !c.hidden && (!categoryId || c.id === categoryId)), [structure, categoryId]);
 
   useEffect(() => {
     if (!visibleCategories.length) { setActiveCategoryId(null); return; }
@@ -2915,7 +2915,7 @@ const OperationalPerformance = () => {
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexWrap: "wrap", gap: "12px" }}>
-        <h1 style={{ color: T.accent, fontSize: "27px", fontWeight: 650, margin: 0, letterSpacing: "-0.5px" }}>Operational Performance Summary</h1>
+        <h1 style={{ color: T.accent, fontSize: "27px", fontWeight: 650, margin: 0, letterSpacing: "-0.5px" }}>{embedded ? (activeCategory?.name || "Operations Performance") : "Operations Performance"}</h1>
         <button onClick={() => setShowAbout((v) => !v)} style={btnQuiet}>
           {showAbout ? "See less" : "See more"} {showAbout ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </button>
@@ -2949,7 +2949,7 @@ const OperationalPerformance = () => {
       )}
 
       <div style={{ display: "flex", gap: "2px", borderBottom: `1px solid ${T.lineStrong}`, marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
-        {visibleCategories.map((cat) => {
+        {!categoryId && visibleCategories.map((cat) => {
           const on = cat.id === activeCategory?.id;
           const counts = cat.subCategories.flatMap((s) => s.kpis).reduce((acc, k) => {
             const key = getStatus(k, period, fy).key; acc[key] = (acc[key] || 0) + 1; return acc; }, {});

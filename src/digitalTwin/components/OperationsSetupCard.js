@@ -48,8 +48,8 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
 
   const started = !!state.startedAt
   const completed = state.completed
-  const currentStep = state.currentStep || 0
-  const totalSteps = 7
+  const currentStep = Math.min(state.currentStep || 0, 5)
+  const totalSteps = 6
 
   const handleClick = (target) => {
     onNavigate?.(target)
@@ -93,7 +93,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
               </h3>
               <p style={{ margin: 0, fontSize: "14px", color: "#D7CCC8", lineHeight: 1.55, maxWidth: "620px" }}>
                 {completed
-                  ? "Your sites, contracts, services and equipment groups are configured. You can re-run the wizard to add more structure, or jump straight to the performance dashboard."
+                  ? "Your sites, contracts, services and equipment groups are configured. You can re-run the wizard to add more structure, or jump straight to the KPI Summary."
                   : started
                     ? `You're on step ${currentStep + 1} of ${totalSteps}. Nothing is saved until the final step — pick up where you left off.`
                     : "The guided setup takes about 5 minutes and builds your sites, contracts, services and equipment groups. You can pause at any time."}
@@ -155,7 +155,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
                         boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       }}>
                       <TrendingUp size={15} />
-                      Go to performance dashboard
+                      Go to KPI Summary
                     </button>
                     <button
                       type="button"
@@ -222,12 +222,6 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
             />
             <SetupItem
               num={5}
-              title="Reporting period & target"
-              description="The first reporting month and the KPI target the dashboard will compare against."
-              done={completed || currentStep > 5}
-            />
-            <SetupItem
-              num={6}
               title="Review & create"
               description="See the full structure as an interactive flow diagram, add connections, then create everything."
               done={completed}
@@ -264,9 +258,9 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
             />
             <StepItem
               num={3}
-              title="View your performance dashboard"
+              title="View your KPI Summary"
               description="Your KPI tiles will populate as soon as there's data to calculate from."
-              action={{ label: "Open performance dashboard", onClick: () => handleClick("dashboard"), icon: TrendingUp }}
+              action={{ label: "Open KPI Summary", onClick: () => handleClick("dashboard"), icon: TrendingUp }}
               noBorder
             />
           </div>
@@ -485,7 +479,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
           whiteSpace: "nowrap",
         }}>
         <TrendingUp size={14} />
-        Open performance dashboard
+        Open KPI Summary
       </button>
     </div>
   )

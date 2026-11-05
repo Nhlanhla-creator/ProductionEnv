@@ -73,9 +73,9 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
 
           <StepItem
             num={3}
-            title="View your performance dashboard"
+            title="View KPI Summary"
             description="Your KPI tiles will populate as soon as there's data to calculate from."
-            action={{ label: "Open performance dashboard", onClick: onOpenCommandCentre, icon: TrendingUp }}
+            action={{ label: "Open KPI Summary", onClick: onOpenCommandCentre, icon: TrendingUp }}
             noBorder
           />
         </div>

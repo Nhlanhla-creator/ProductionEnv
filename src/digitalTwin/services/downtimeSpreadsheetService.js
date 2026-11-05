@@ -49,13 +49,13 @@ export async function readMasterWorkbook(file,draft,templateId) {
   return { ...draft,nodes };
 }
 export function downloadDowntimeCsv(events) {
-  const headers = ['Asset ID','Asset name','Asset type','Asset group','Site','Start UTC','End UTC','Duration seconds','Duration hours','Hours in selected period','Captured reason (final code)',...DOWNTIME_HEADINGS,'Code ID','Master list','Version','Notes','Event status','Report as of UTC'];
+  const headers = ['Asset ID','Asset name','Asset type','Asset group','Site','Shift at event start','Crew','Start UTC','End UTC','Duration seconds','Duration hours','Hours in selected period','Captured reason (final code)',...DOWNTIME_HEADINGS,'Code ID','Master list','Version','Notes','Event status','Report as of UTC'];
   const safe = v => {
     let s = String(v ?? '');
     if (/^[\s]*[=+@-]/.test(s)) s = "'"+s;
     return '"'+s.replace(/"/g,'""')+'"';
   };
-  const rows = events.map(e => [e.assetNumber || e.assetId,e.assetName || '',e.equipmentTypeId,e.groupName||e.groupId,e.siteName||e.siteId,
+  const rows = events.map(e => [e.assetNumber || e.assetId,e.assetName || '',e.equipmentTypeId,e.groupName||e.groupId,e.siteName||e.siteId,e.shiftName||e.shiftId,e.crew,
     e.eventStart,e.eventEnd,e.durationSeconds ?? (e.durationHours == null ? '' : e.durationHours*3600),e.durationHours,e.periodDurationHours ?? e.durationHours,e.classificationPath?.slice(-1)[0]?.label || e.causeCode || e.failureMode || '',
     ...DOWNTIME_HEADINGS.map((_,i) => e.classificationPath?.[i]?.label || (i === 0 ? e.categoryLevel1 : i === 1 ? e.categoryLevel2 : '')),
     e.selectedCodeId,e.masterListId,e.masterVersion,e.notes,e.eventEnd?'Closed':'Ongoing',e.asOf||'']);

@@ -1,0 +1,10 @@
+"use client"
+import { useState } from 'react';
+import { listCaptureAssets } from '../services/downtimeService';
+import { contextForDowntime,listOperatingSites } from '../services/resourceService';
+import { localDate } from '../models/shiftCapture';
+export default function AssetLocationReview({tenantId,onNavigate}) {
+  const [rows,setRows]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const load=async()=>{setBusy(true);setError('');try{const [assets,sites]=await Promise.all([listCaptureAssets(tenantId,{includeInactive:true}),listOperatingSites(tenantId,{activeOnly:false})]);setRows(await Promise.all(assets.map(async asset=>{try{const context=await contextForDowntime(tenantId,asset.assetId||asset.id,localDate());const site=sites.find(s=>s.id===context.siteId);return {asset,siteId:context.siteId,siteName:site?.name||context.siteId,warning:!context.siteId?'No operating site assigned':!site?'Assigned site is missing from the operating structure':asset.siteId&&asset.siteId!==context.siteId?'Effective assignment differs from the register location':''};}catch(e){return {asset,warning:e.message};}})));}catch(e){setError(e.message);}finally{setBusy(false);}};
+  return <details className="dt-panel" onToggle={e=>{if(e.currentTarget.open&&rows===null&&!busy)load();}}><summary>Review asset-location assignments</summary><p className="dt-muted">Shows the assignment effective today. This review does not move assets or rewrite historical records.</p>{error&&<p role="alert">{error}</p>}{busy?<p>Checking locations…</p>:rows&&<><div className="dt-table-wrap"><table className="dt-table"><thead><tr><th>Machine</th><th>Effective operating site</th><th>Review</th></tr></thead><tbody>{rows.map(r=><tr key={r.asset.assetId||r.asset.id}><td><button className="dt-button dt-button-text" onClick={()=>onNavigate('assets',{assetId:r.asset.assetId||r.asset.id})}>{r.asset.internalNumber} — {r.asset.name}</button></td><td>{r.siteName||'Unassigned'}</td><td>{r.warning||'Assignment found'}</td></tr>)}</tbody></table></div><button className="dt-button" onClick={load}>Refresh review</button></>}</details>;
+}

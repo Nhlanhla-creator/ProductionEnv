@@ -1,0 +1,933 @@
+// File: src/config/menuConfig.js
+import {
+  Home,
+  User,
+  HeartHandshake,
+  MessageSquare,
+  CreditCard,
+  Settings,
+  Calendar,
+  FileText,
+  Lightbulb,
+  BarChart,
+  DollarSign,
+  Repeat,
+  Package,
+  PieChart,
+  Users,
+  Building,
+  CircleDollarSign,
+  HelpCircle,
+  UserCheck,
+  GraduationCap,
+  Wrench,
+  Target,
+  Activity,
+  Globe,
+  PenTool,
+  Heart,
+  Network,
+  Briefcase,
+  TrendingUp,
+  LayoutDashboard,
+  ListChecks,
+  Handshake,
+  // ─── Digital Twin / Operations icons ─────────────────────────────────────
+  Boxes,
+  Rocket,
+  BarChart3,
+  Truck,
+  Upload,
+} from "lucide-react";
+
+export const advisorMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/advisor-profile",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/advisor-documents",
+  },
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/advisor-dashboard",
+  },
+  {
+    id: "cohorts",
+    label: "My Cohorts",
+    icon: <Users size={18} />,
+    route: "/advisor-cohorts",
+  },
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/advisor-insights",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/advisor-messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/advisor-calendar",
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/advisor-settings",
+  },
+];
+
+export const catalystMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/support-profile",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/support-documents",
+  },
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/support-matches",
+  },
+  {
+    id: "cohorts",
+    label: "My Cohorts",
+    icon: <Users size={18} />,
+    route: "/catalyst/cohorts",
+  },
+  {
+    id: "investments",
+    label: "My Portfolio",
+    icon: <PieChart size={18} />,
+    route: "/catalyst/investments",
+  },
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/support-insights",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/support-messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/support-calendar",
+  },
+  {
+    id: "billing",
+    label: "Billing & Payments",
+    icon: <CreditCard size={18} />,
+    route: "/support/billing",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "billing-info",
+        label: "Billing Information",
+        icon: <DollarSign size={16} />,
+        route: "/support/billing/info",
+      },
+      {
+        id: "subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/support/billing/subscriptions",
+      },
+      {
+        id: "transactions",
+        label: "Billing History",
+        icon: <Package size={16} />,
+        route: "/support/billing/history",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/support-settings",
+  },
+];
+
+export const internMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
+  {
+    id: "dashboard",
+    label: "My BIG Score",
+    icon: <BarChart size={18} />,
+    route: "/intern-dashboard",
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/intern-profile",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/intern-documents",
+  },
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/intern-insights",
+  },
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/intern-matches",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/intern-messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/intern-calendar",
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/intern-settings",
+  },
+];
+
+export const investorMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/investor-profile",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/investor-documents",
+  },
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/investor-matches",
+  },
+  {
+    id: "cohorts",
+    label: "My Cohorts",
+    icon: <Users size={18} />,
+    route: "/my-cohorts",
+  },
+  {
+    id: "portfolio",
+    label: "My Portfolio",
+    icon: <PieChart size={18} />,
+    route: "/my-investments",
+  },
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/investor-insights",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/investor-messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/investor-calendar",
+  },
+  {
+    id: "billing",
+    label: "Billing & Payments",
+    icon: <CreditCard size={18} />,
+    route: "/investor/billing",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "billing-info",
+        label: "Billing Information",
+        icon: <DollarSign size={16} />,
+        route: "/investor/billing/info",
+      },
+      {
+        id: "subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/investor/billing/subscriptions",
+      },
+      {
+        id: "transactions",
+        label: "Billing History",
+        icon: <Package size={16} />,
+        route: "/investor/billing/history",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/investor-settings",
+  },
+];
+
+export const programSponsorMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/program-sponsor-profile",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/program-sponsor-documents",
+  },
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/program-sponsor-insights",
+  },
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/program-sponsor-matches",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/program-sponsor-messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/program-sponsor-calendar",
+  },
+  {
+    id: "billing",
+    label: "Billing & Payments",
+    icon: <CreditCard size={18} />,
+    route: "/program-sponsor/billing",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "billing-info",
+        label: "Billing Information",
+        icon: <DollarSign size={16} />,
+        route: "/program-sponsor/billing/info",
+      },
+      {
+        id: "subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/program-sponsor/billing/subscriptions",
+      },
+      {
+        id: "transactions",
+        label: "Billing History",
+        icon: <Package size={16} />,
+        route: "/program-sponsor/billing/history",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/program-sponsor-settings",
+  },
+];
+
+// ─── Associator Menu Items ────────────────────────────────────────────────────
+export const associatorMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/associator-profile",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/associator-documents",
+  },
+  {
+    id: "governance-templates",
+    label: "Governance Templates",
+    icon: <FileText size={16} />,
+    route: "/associator-documents",
+  },
+  {
+    id: "dashboard",
+    label: "Admin Dashboard",
+    icon: <BarChart size={18} />,
+    route: "/associator-dashboard",
+    hasSubmenu: true,
+    defaultOpen: true,
+    subItems: [
+      {
+        id: "dashboard-summary",
+        label: "Summary",
+        icon: <PieChart size={16} />,
+        route: "/associator-dashboard",
+        description: "Overview of all admin metrics",
+      },
+      {
+        id: "dashboard-subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/associator-dashboard/subscriptions",
+        description: "Manage member subscriptions",
+      },
+      {
+        id: "dashboard-pilot",
+        label: "Pilot & Case Studies",
+        icon: <Target size={16} />,
+        route: "/associator-dashboard/pilot",
+        description: "Pilot programs and case studies",
+      },
+      {
+        id: "dashboard-surveys",
+        label: "Surveys",
+        icon: <FileText size={16} />,
+        route: "/associator-dashboard/surveys",
+        description: "Member surveys and feedback",
+      },
+    ],
+  },
+  {
+    id: "ecosystem",
+    label: "Member Ecosystem",
+    icon: <Network size={18} />,
+    route: "/associator-ecosystem",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "smse-ecosystem",
+        label: "Service Firms",
+        icon: <Briefcase size={16} />,
+        route: "/associator-ecosystem/smse",
+        description: "Small and Medium Enterprises",
+      },
+      {
+        id: "catalyst-ecosystem",
+        label: "Catalysts",
+        icon: <TrendingUp size={16} />,
+        route: "/associator-ecosystem/catalyst",
+        description: "Accelerators & Incubators",
+      },
+      {
+        id: "investor-ecosystem",
+        label: "Investors",
+        icon: <CircleDollarSign size={16} />,
+        route: "/associator-ecosystem/investor",
+        description: "Funders & Investment Partners",
+      },
+      {
+        id: "advisor-ecosystem",
+        label: "Advisors",
+        icon: <UserCheck size={16} />,
+        route: "/associator-ecosystem/advisor",
+        description: "Mentors & Industry Experts",
+      },
+    ],
+  },
+  {
+    id: "portfolio",
+    label: "Market Insights",
+    icon: <Briefcase size={18} />,
+    route: "/associator-portfolio",
+  },
+  {
+    id: "messages",
+    label: "Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/associator-messages",
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    icon: <Calendar size={18} />,
+    route: "/associator-calendar",
+  },
+  {
+    id: "billing",
+    label: "Billing & Payments",
+    icon: <CreditCard size={18} />,
+    route: "/associator/billing",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "billing-info",
+        label: "Billing Information",
+        icon: <DollarSign size={16} />,
+        route: "/associator/billing/info",
+      },
+      {
+        id: "subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/associator/billing/subscriptions",
+      },
+      {
+        id: "transactions",
+        label: "Billing History",
+        icon: <Package size={16} />,
+        route: "/associator/billing/history",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/associator-settings",
+  },
+];
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const smeMenuItems = [
+  { id: "home", label: "Home", icon: <Home size={18} />, route: "/" },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/profile",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/my-documents",
+  },
+  {
+    id: "dashboard",
+    label: "My BIG Score",
+    icon: <BarChart size={18} />,
+    route: "/dashboard",
+  },
+  {
+    id: "applications",
+    label: "My Applications",
+    icon: <FileText size={18} />,
+    route: "/applications",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "products-services",
+        label: "Products & Services",
+        icon: <Package size={16} />,
+        route: "/applications/products-services",
+      },
+      {
+        id: "funding-programs",
+        label: "Funding & Support",
+        icon: <CircleDollarSign size={16} />,
+        route: "/applications/funding",
+      },
+      {
+        id: "advisors",
+        label: "Advisors & Board Members",
+        icon: <UserCheck size={16} />,
+        route: "/applications/advisors",
+      },
+      {
+        id: "interns",
+        label: "Interns",
+        icon: <GraduationCap size={16} />,
+        route: "/applications/interns",
+      },
+    ],
+  },
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/matches",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "customer-matches",
+        label: "Customers",
+        icon: <Users size={16} />,
+        route: "/customer-matches",
+      },
+      {
+        id: "supplier-matches",
+        label: "Suppliers",
+        icon: <Building size={16} />,
+        route: "/supplier-matches",
+      },
+      {
+        id: "funder-matches",
+        label: "Funders",
+        icon: <CircleDollarSign size={16} />,
+        route: "/funding-matches",
+      },
+      {
+        id: "support-matches",
+        label: "Catalysts",
+        icon: <HelpCircle size={16} />,
+        route: "/support-program-matches",
+      },
+      {
+        id: "advisor-matches",
+        label: "Advisors",
+        icon: <UserCheck size={16} />,
+        route: "/find-advisors",
+      },
+      {
+        id: "intern-matches",
+        label: "Interns",
+        icon: <GraduationCap size={16} />,
+        route: "/intern-matches-page",
+      },
+    ],
+  },
+  {
+    id: "growth-tools",
+    label: "My Growth Suite",
+    icon: <Wrench size={18} />,
+    route: "/growth",
+    hasSubmenu: true,
+    subItems: [
+      // ─── Overall Company Health (now standalone, outside RAPs) ───────────
+      {
+        id: "overall-health",
+        label: "Overall Company Health",
+        icon: <Heart size={16} />,
+        route: "/overall-company-health",
+      },
+      // Configure once under Setup; run daily work under Operations.
+      {
+        id: "operations-setup", label: "Setup", icon: <Settings size={16} />,
+        route: "/digital-twin/setup", hasSubmenu: true,
+        subItems: [
+          { id: "operations-setup-guide", label: "Operating structure", icon: <Rocket size={16} />, route: "/digital-twin/setup/guide" },
+          { id: "operations-asset-setup", label: "Asset Setup", icon: <Truck size={16} />, route: "/digital-twin/setup/asset-setup" },
+          { id: "operations-shift-setup", label: "Shift Setup", icon: <Calendar size={16} />, route: "/digital-twin/setup/shifts" },
+          { id: "operations-imports", label: "Data imports", icon: <Upload size={16} />, route: "/digital-twin/setup/imports" },
+          { id: "operations-packs", label: "Sector packs", icon: <Package size={16} />, route: "/digital-twin/setup/packs" },
+        ],
+      },
+      // ─── RAPs (Overall Company Health removed) ───────────────────────────
+      {
+        id: "raps",
+        label: "RAPs",
+        icon: <LayoutDashboard size={16} />,
+        route: "#",
+        hasSubmenu: true,
+        subItems: [
+          {
+            id: "raps-calendar",
+            label: "Governance Calendar",
+            icon: <Calendar size={16} />,
+            route: "/governance-calendar",
+          },
+          {
+            id: "raps-actions",
+            label: "Integrated Actions",
+            icon: <ListChecks size={16} />,
+            route: "/raps-actions",
+          },
+        ],
+      },
+      {
+        id: "strategy-execution",
+        label: "Strategy & Execution",
+        icon: <Target size={16} />,
+        route: "/Strategy",
+      },
+      {
+        id: "financial-performance",
+        label: "Financial Performance",
+        icon: <PieChart size={16} />,
+        route: "/FinancialPerformance",
+      },
+      {
+        id: "operational-performance", label: "Operations Performance", icon: <Activity size={16} />,
+        route: "/digital-twin/operations", hasSubmenu: true,
+        subItems: [
+          { id: "operations-kpi-summary", label: "KPI Summary", icon: <LayoutDashboard size={16} />, route: "/digital-twin/operations/kpis" },
+          { id: "operations-supply-chain", label: "Supply Chain", icon: <Boxes size={16} />, route: "/digital-twin/operations/supply-chain" },
+          { id: "operations-delivery", label: "Delivery", icon: <Truck size={16} />, route: "/digital-twin/operations/delivery" },
+          { id: "operations-safety", label: "Safety", icon: <Activity size={16} />, route: "/digital-twin/operations/safety" },
+          { id: "operations-downtime", label: "Downtime", icon: <Wrench size={16} />, route: "/digital-twin/operations/downtime" },
+          { id: "operations-capacity", label: "Capacity", icon: <Boxes size={16} />, route: "/digital-twin/operations/capacity" },
+        ],
+      },
+      // ─── People Performance ─────────────────────────────────────────────
+      {
+        id: "people-performance",
+        label: "People Performance",
+        icon: <Users size={16} />,
+        route: "/People",
+      },
+      // ─── ESG Performance ────────────────────────────────────────────────
+      {
+        id: "esg-performance",
+        label: "ESG Performance",
+        icon: <Globe size={16} />,
+        route: "/SocialImpact",
+      },
+      // ─── Commercial Performance ─────────────────────────────────────────
+      {
+        id: "commercial-performance",
+        label: "Commercial Performance",
+        icon: <BarChart size={16} />,
+        route: "/MarketingSales",
+      },
+    ],
+  },
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/insights",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/calendar",
+  },
+  {
+    id: "billing",
+    label: "Billing & Payments",
+    icon: <CreditCard size={18} />,
+    route: "/billing",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "billing-info",
+        label: "Billing Information",
+        icon: <FileText size={16} />,
+        route: "/billing/info",
+      },
+      {
+        id: "subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/billing/subscriptions",
+      },
+      {
+        id: "tool-orders",
+        label: "Billing History",
+        icon: <PenTool size={16} />,
+        route: "/billing/growth-tools-orders",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/settings",
+  },
+];
+
+// ─── Capital and Market Facilitator Menu Items ────────────────────────────────
+export const capitalMarketFacilitatorMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/",
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/cmf-profile",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/cmf-documents",
+  },
+  {
+    id: "cohorts",
+    label: "My Cohorts",
+    icon: <Users size={18} />,
+    route: "/cmf-cohorts",
+  },
+  {
+    id: "investments",
+    label: "My Portfolio",
+    icon: <PieChart size={18} />,
+    route: "/cmf/investments",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/cmf-messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/cmf-calendar",
+  },
+  {
+    id: "billing",
+    label: "Billing & Payments",
+    icon: <CreditCard size={18} />,
+    route: "/cmf/billing",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "billing-info",
+        label: "Billing Information",
+        icon: <DollarSign size={16} />,
+        route: "/cmf/billing/info",
+      },
+      {
+        id: "subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/cmf/billing/subscriptions",
+      },
+      {
+        id: "transactions",
+        label: "Billing History",
+        icon: <Package size={16} />,
+        route: "/cmf/billing/history",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/cmf-settings",
+  },
+];
+
+export const procurementMenuItems = [
+  {
+    id: "profile",
+    label: "Universal Profile",
+    icon: <User size={18} />,
+    route: "/procurement/profile",
+  },
+  {
+    id: "matches",
+    label: "Preferred Suppliers",
+    icon: <HeartHandshake size={18} />,
+    route: "/procurement/matches",
+  },
+  {
+    id: "procurement",
+    label: "Procurement",
+    icon: <Briefcase size={18} />,
+    route: "/procurement/requests",
+  },
+  {
+    id: "cohorts",
+    label: "ESD Programs",
+    icon: <Users size={18} />,
+    route: "/procurement/cohorts",
+  },
+  {
+    id: "reports",
+    label: "Reports & Audit",
+    icon: <BarChart size={18} />,
+    route: "/procurement/reports",
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/procurement/settings",
+  },
+];
+// ─────────────────────────────────────────────────────────────────────────────

@@ -84,7 +84,6 @@ import SMESidebar from "./smses/Sidebar/Sidebar"
 import InvestorSidebar from "./Investor/Sidebar/InvestorSidebar"
 import SupportProgramSidebar from "./catalyst/CatalystSidebar/AcceleratorSidebar"
 import SMSEHeader from "./smses/DashboardHeader/SMSEHeader"
-import { SMEAccessGate } from "./smses/SMEAccess"
 import InvestorHeader from "./Investor/Header/InvestorHeader"
 import SupportProgramHeader from "./catalyst/CatalystProgramHeader/CatalystHeader"
 import AdvisorHeader from "./advisors/AdvisorHeader/advisorHeader"
@@ -752,7 +751,7 @@ function App() {
         <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <SMSEHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           {renderUniversalViewerBanner("Dashboard")}
-          <div><SMEAccessGate>{children}</SMEAccessGate></div>
+          <div>{children}</div>
         </div>
         <RegistrationSummary data={formData} open={showSummary} onClose={() => setShowSummary(false)} />
       </div>

@@ -10,8 +10,8 @@
 
 import { useEffect, useState } from "react"
 import { Plus, Lock, Unlock, Save } from "lucide-react"
-import { db, auth } from "../../firebaseConfig"
-import { collection, doc, getDocs, setDoc, updateDoc, query, where, limit } from "firebase/firestore"
+import { db } from "../../firebaseConfig"
+import { collection, doc, getDocs, setDoc, updateDoc, query, limit } from "firebase/firestore"
 
 const T = {
   ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", line: "#ded8d4",
@@ -38,6 +38,7 @@ const currentMonthKey = () => {
 export default function ReportingPeriodManager({ tenantId, onBack }) {
   const [periods, setPeriods] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [editing, setEditing] = useState(null)
   const [notification, setNotification] = useState(null)
 
@@ -47,12 +48,16 @@ export default function ReportingPeriodManager({ tenantId, onBack }) {
   }
 
   const reload = async () => {
-    if (!tenantId) return
+    if (!tenantId) { setLoading(false); return }
     setLoading(true)
+    setLoadError(null)
     try {
       const q = query(collection(db, "digitalTwinTenants", tenantId, "reportingPeriods"), limit(500))
       const snap = await getDocs(q)
       setPeriods(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    } catch (err) {
+      setPeriods([])
+      setLoadError(`Could not load reporting periods: ${err.message}`)
     } finally { setLoading(false) }
   }
 
@@ -82,10 +87,15 @@ export default function ReportingPeriodManager({ tenantId, onBack }) {
   const save = async () => {
     if (!editing) return
     try {
-      const id = editing.id || editing.periodKey
+      const id = editing.id || editing.periodKey?.trim()
+      if (!id || id.includes("/")) throw new Error("Enter a valid period key without slashes.")
+      if (!editing.startDate || !editing.endDate || editing.endDate < editing.startDate) {
+        throw new Error("Enter a start date and an end date on or after it.")
+      }
+      const { _new, ...periodData } = editing
       const ref = doc(db, "digitalTwinTenants", tenantId, "reportingPeriods", id)
-      await setDoc(ref, { ...editing, id, updatedAt: new Date().toISOString() }, { merge: true })
-      notify("success", editing._new ? "Period created." : "Period updated.")
+      await setDoc(ref, { ...periodData, periodKey: id, id, updatedAt: new Date().toISOString() }, { merge: true })
+      notify("success", _new ? "Period created." : "Period updated.")
       setEditing(null)
       await reload()
     } catch (err) {
@@ -117,6 +127,8 @@ export default function ReportingPeriodManager({ tenantId, onBack }) {
         </div>
         <button onClick={newPeriod} style={btnPrimary}><Plus size={14} /> New period</button>
       </div>
+
+      {loadError && <div role="alert" style={{ ...cardS, color: T.red, background: T.redBg }}>{loadError}</div>}
 
       {notification && (
         <div style={{ padding: "11px 14px", borderRadius: "10px", margin: "14px 0", fontSize: "13.5px",
@@ -196,7 +208,7 @@ export default function ReportingPeriodManager({ tenantId, onBack }) {
 
       {loading ? (
         <div style={{ padding: "40px", textAlign: "center", color: T.muted, fontSize: "13.5px" }}>Loading periods…</div>
-      ) : periods.length === 0 ? (
+      ) : loadError ? null : periods.length === 0 ? (
         <div style={cardS}>
           <p style={{ margin: 0, fontSize: "13.5px", color: T.muted, fontStyle: "italic" }}>
             No periods yet. Click <strong>New period</strong> to open the first reporting window.

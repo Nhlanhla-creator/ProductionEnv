@@ -16,7 +16,7 @@
 import { useEffect, useState } from "react"
 import { Check, Info, Layers, Package } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { collection, doc, getDocs, setDoc, updateDoc } from "firebase/firestore"
 import { listPacks, getPack } from "../services/taxonomyService"
 
 const T = {
@@ -66,19 +66,25 @@ export default function SectorPackLoader({ tenantId, onBack }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    (async () => {
-      if (!tenantId) return
+    let live = true
+    setActiveKeys(new Set())
+    setError(null)
+    if (!tenantId) { setLoading(false); return }
+    ;(async () => {
       setLoading(true)
       try {
         const listed = listPacks()      // built-in packs from the taxonomy service
-        setPacks(listed)
+        if (live) setPacks(listed)
 
         // Read which are active for this tenant
         const snap = await getDocs(collection(db, "digitalTwinTenants", tenantId, "activePacks"))
-        const actives = new Set(snap.docs.map((d) => d.id))
-        setActiveKeys(actives)
-      } finally { setLoading(false) }
+        const actives = new Set(snap.docs.filter((d) => !d.data().deactivatedAt).map((d) => d.id))
+        if (live) setActiveKeys(actives)
+      } catch (err) {
+        if (live) setError(`Could not load sector packs: ${err.message}`)
+      } finally { if (live) setLoading(false) }
     })()
+    return () => { live = false }
   }, [tenantId])
 
   const activate = async (packKey) => {
@@ -92,6 +98,8 @@ export default function SectorPackLoader({ tenantId, onBack }) {
         version: pack.version,
         activatedAt: new Date().toISOString(),
         activatedBy: auth.currentUser?.uid || null,
+        deactivatedAt: null,
+        deactivatedBy: null,
       }, { merge: true })
       setActiveKeys((prev) => new Set([...prev, packKey]))
     } catch (err) {
@@ -107,9 +115,6 @@ export default function SectorPackLoader({ tenantId, onBack }) {
       await updateDoc(ref, {
         deactivatedAt: new Date().toISOString(),
         deactivatedBy: auth.currentUser?.uid || null,
-      }).catch(async () => {
-        // Fallback: mark as inactive via setDoc with merge
-        await setDoc(ref, { deactivatedAt: new Date().toISOString(), deactivatedBy: auth.currentUser?.uid || null }, { merge: true })
       })
       setActiveKeys((prev) => {
         const next = new Set(prev)

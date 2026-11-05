@@ -17,9 +17,9 @@
 import { useEffect, useState } from "react"
 import { AlertTriangle, CheckCircle2, XCircle, Info, TrendingUp, TrendingDown, ChevronRight } from "lucide-react"
 import {
-  commandCentreTiles, availabilityLossByCategory, attentionRequired, periodToWindow,
+  commandCentreTiles, availabilityLossByCategory, attentionRequired,
 } from "../services/aggregationService"
-import { getAncestryPath, listNodes } from "../services/hierarchyService"
+import { listNodes } from "../services/hierarchyService"
 import { NODE_TYPES } from "../models/enums"
 import KpiLineageModal from "./KpiLineageModal"
 import DrillDownView from "./DrillDownView"
@@ -60,7 +60,7 @@ const CATEGORY_COLORS = {
   commercial_or_strategic_standby: "#57534e",
 }
 
-export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpenLineage, onNavigate }) {
+export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpenLineage, onNavigate, scopeFilters = {} }) {
   const openDowntime=()=>onNavigate?onNavigate('capture'):window.location.assign(twinPath('capture'))
   const [loading, setLoading] = useState(true)
   const [anchor, setAnchor] = useState(null)              // root node for the current view
@@ -71,7 +71,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
   const [lineageKpi, setLineageKpi] = useState(null)
   const [drillKpiId, setDrillKpiId] = useState("kpi.physical_availability")
   const [showDrill, setShowDrill] = useState(false)
-  const [recommendedAction, setRecommendedAction] = useState(null)
+  const [error, setError] = useState("")
 
   // ── Find an anchor node — the first company node, else first site
   useEffect(() => {
@@ -83,7 +83,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
         if (companies.length > 0) { setAnchor(companies[0]); return }
         const sites = await listNodes(tenantId, { nodeType: NODE_TYPES.SITE })
         if (sites.length > 0) setAnchor(sites[0])
-      } finally {
+      } catch (err) { setError(err.message); } finally {
         setLoading(false)
       }
     })()
@@ -94,14 +94,16 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     if (!tenantId || !anchor) return
     loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId, anchor?.id, periodLabel])
+  }, [tenantId, anchor?.id, periodLabel, JSON.stringify(scopeFilters)])
 
   const loadAll = async () => {
     setLoading(true)
+    setError("")
     try {
-      const scope = anchor.nodeType === NODE_TYPES.SITE ? { siteId: anchor.id }
+      const baseScope = anchor.nodeType === NODE_TYPES.SITE ? { siteId: anchor.id }
                    : anchor.nodeType === NODE_TYPES.CONTRACT ? { contractId: anchor.id }
                    : {}
+      const scope = {...baseScope, ...scopeFilters}
       const [t, l, a] = await Promise.all([
         commandCentreTiles(tenantId, { scope, periodLabel }),
         availabilityLossByCategory(tenantId, { scope, periodLabel }),
@@ -110,10 +112,8 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
       setTiles(t)
       setLossByCategory(l)
       setAttention(a)
-      setRecommendedAction(buildRecommendation(l))
-    } catch (err) {
-      console.error(err)
-    } finally {
+
+    } catch (err) { setError(err.message); setTiles([]); setLossByCategory(null); setAttention([]); } finally {
       setLoading(false)
     }
   }
@@ -123,6 +123,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     return <div style={{ padding: "40px", textAlign: "center", color: T.muted }}>Loading performance dashboard…</div>
   }
 
+  if (error) return <div className="dt-notice dt-notice-error" role="alert">{error}<button className="dt-button" onClick={loadAll}>Retry KPI Summary</button></div>;
   if (!anchor) {
     return (
       <div style={{ padding: "24px", maxWidth: "820px", margin: "0 auto" }}>
@@ -152,6 +153,8 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
         kpiId={drillKpiId}
         rootNodeId={anchor.id}
         periodLabel={periodLabel}
+        scopeFilters={scopeFilters}
+        onOpenDowntime={scope=>onNavigate?.('records',scope)}
         onBack={() => setShowDrill(false)}
         onOpenLineage={(k) => setLineageKpi(k)}
       />
@@ -168,7 +171,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     <div>
       {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back</button>}
 
-      <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => openDowntime()}>Asset register · Downtime setup · Capture · Reports</button>
+      <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => openDowntime()}>Open Downtime summary</button>
       {/* ── SETUP GUIDE — SHOWN FIRST ── */}
       <a className="dt-button" href="/digital-twin/setup">Open Setup</a>
 
@@ -176,7 +179,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "14px", marginBottom: "18px", flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 700, color: T.accent, letterSpacing: "-0.4px" }}>
-            KPI dashboards
+            KPI results
           </h2>
           <p style={{ margin: 0, fontSize: "13.5px", color: T.muted }}>
             {anchor.name} · {periodLabel.slice(2)} · every figure recomputed from source records
@@ -202,7 +205,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
       </div>
 
       {/* Two-column: category chart + side panels */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "14px" }}>
+      <div className="dt-drill-layout">
 
         {/* Downtime by type / category */}
         <div style={cardS}>
@@ -219,7 +222,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
 
           {!lossByCategory || lossByCategory.rows.length === 0 ? (
             <div style={{ padding: "40px", textAlign: "center", color: T.muted, fontSize: "13.5px", fontStyle: "italic" }}>
-              No downtime recorded in this period.
+              {lossByCategory?.unavailable ? "Downtime records do not carry the selected product/client/commodity/operating-mode dimension. Clear that filter to view downtime." : "No downtime recorded in this period."}
             </div>
           ) : (
             <CategoryBars rows={lossByCategory.rows} totalHours={lossByCategory.totalHours} />
@@ -241,24 +244,6 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
                       {f.title}. {f.message}
                     </div>
                   ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {recommendedAction && (
-            <div style={{ ...cardS, background: T.accentTint, borderColor: T.lineStrong, marginBottom: "12px" }}>
-              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-                <Info size={17} color={T.accentSoft} style={{ marginTop: "2px", flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 700, color: T.accent, fontSize: "14px", marginBottom: "4px" }}>
-                    Recommended next step
-                  </div>
-                  <div style={{ fontSize: "13px", color: T.body, lineHeight: 1.5 }}>{recommendedAction}</div>
-                  <button onClick={() => { setDrillKpiId("kpi.downtime_hours"); setShowDrill(true) }}
-                    style={{ ...btnGhost, marginTop: "10px", padding: "6px 12px", fontSize: "12.5px" }}>
-                    Review contributors
-                  </button>
                 </div>
               </div>
             </div>
@@ -454,23 +439,3 @@ function CompositionRow({ label, hours, total, color }) {
   )
 }
 
-// ── Recommendation builder ────────────────────────────────────────────────
-const buildRecommendation = (lossByCategory) => {
-  if (!lossByCategory || lossByCategory.rows.length === 0) return null
-  const top = lossByCategory.rows[0]
-  const topShare = lossByCategory.totalHours > 0 ? (top.hours / lossByCategory.totalHours) * 100 : 0
-
-  if (top.category === "unplanned_mechanical") {
-    return `Review the assets causing mechanical downtime — it accounts for ${Math.round(topShare)}% of recorded downtime this period (${Math.round(top.hours)} h across ${top.eventCount} events).`
-  }
-  if (top.category === "operational_delay") {
-    return `Operational delay is the largest contributor at ${Math.round(topShare)}%. Investigate queueing, shift handovers and scheduling.`
-  }
-  if (top.category === "supply_dependency") {
-    return `Supply dependency is dominating at ${Math.round(topShare)}%. Review parts, fuel and consumable availability.`
-  }
-  if (top.category === "planned_maintenance") {
-    return `Planned maintenance is the largest block at ${Math.round(topShare)}%. This is expected — the opportunity is reducing duration without dropping scope.`
-  }
-  return `${top.label} accounts for ${Math.round(topShare)}% of recorded downtime. Review the contributing assets.`
-}

@@ -15,7 +15,8 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { ArrowLeft, ChevronRight, ChevronDown, Info, AlertTriangle } from "lucide-react"
-import { drillDown, periodToWindow } from "../services/aggregationService"
+import { drillDown, dimensionDrillDown, periodToWindow } from "../services/aggregationService"
+import { periodSeconds } from "../models/downtimeReporting"
 import { listDowntimeEvents, DOWNTIME_TAXONOMY } from "../services/downtimeService"
 
 const T = {
@@ -48,6 +49,7 @@ const NODE_TYPE_LABEL = {
   equipment_family: "Equipment family",
   equipment_type: "Equipment type",
   asset: "Asset",
+  shift: "Shift", crew: "Crew", group: "Equipment group", product: "Product", client: "Client", commodity: "Commodity", operatingMode: "Operating mode",
 }
 
 export default function DrillDownView({
@@ -57,7 +59,11 @@ export default function DrillDownView({
   periodLabel,
   onBack,
   onOpenLineage,
+  scopeFilters = {},
+  onOpenDowntime,
 }) {
+  const [dimension,setDimension] = useState("hierarchy")
+  const [error,setError] = useState("")
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
   const [expanded, setExpanded] = useState({})
@@ -70,7 +76,10 @@ export default function DrillDownView({
       if (!tenantId || !rootNodeId) return
       setLoading(true)
       try {
-        const { rows: drillRows } = await drillDown(tenantId, { kpiId, rootNodeId, periodLabel, maxDepth: 8 })
+        setError(""); setSelectedNode(null); setSelectedDowntime([])
+        const { rows: drillRows } = dimension === "hierarchy"
+          ? await drillDown(tenantId, { kpiId, rootNodeId, periodLabel, maxDepth: 8, scope:scopeFilters })
+          : await dimensionDrillDown(tenantId, { kpiId, periodLabel, dimension, scope:scopeFilters })
         setRows(drillRows)
         // Expand all by default
         const e = {}
@@ -80,27 +89,29 @@ export default function DrillDownView({
         const deepest = [...drillRows].reverse().find((r) => r.kpiResult?.value !== null)
         if (deepest) handleSelectNode(deepest)
       } catch (err) {
-        console.error("Drill-down failed:", err)
+        setError(err.message); setRows([])
       } finally { setLoading(false) }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId, kpiId, rootNodeId, periodLabel])
+  }, [tenantId, kpiId, rootNodeId, periodLabel, dimension, JSON.stringify(scopeFilters)])
 
   const handleSelectNode = async (row) => {
     setSelectedNode(row)
     // If it's a leaf asset, load its downtime events for the explanation panel
-    if (row.nodeType === "asset") {
+    if (!["commodity","product","client","operatingMode"].some(k=>row.scope?.[k])) {
       setLoadingDowntime(true)
       try {
         const period = periodToWindow(periodLabel)
         const events = await listDowntimeEvents(tenantId, {
-          assetId: row.nodeId,
+          ...scopeFilters, ...row.scope,
+          assetId: row.scope?.assetId || (row.nodeType === 'asset' ? row.nodeId : null),
           startFrom: period.startFrom,
           endTo: period.endTo,
           pageSize: 100,
         })
         // Sort by duration desc, take top 5
-        const sorted = [...events].sort((a, b) => (Number(b.durationHours) || 0) - (Number(a.durationHours) || 0)).slice(0, 5)
+        const window={start:period.startFrom?Date.parse(period.startFrom):-Infinity,end:period.endTo?Date.parse(period.endTo)+1000:Infinity};
+        const sorted = events.map(e=>({...e,periodDurationHours:periodSeconds(e,window)/3600})).filter(e=>e.periodDurationHours>0).sort((a,b)=>b.periodDurationHours-a.periodDurationHours).slice(0,5)
         setSelectedDowntime(sorted)
       } catch { setSelectedDowntime([]) }
       finally { setLoadingDowntime(false) }
@@ -111,16 +122,11 @@ export default function DrillDownView({
 
   // Visible rows — ancestor must be expanded
   const visibleRows = useMemo(() => {
-    const out = []
-    const ancestorPath = {}
+    const out = [], ancestors = []
     for (const row of rows) {
-      const parentDepth = row.depth - 1
-      const parentKey = Object.keys(ancestorPath).filter((k) => ancestorPath[k] === parentDepth).pop()
-      const parentExpanded = row.depth === 0 || (parentKey ? expanded[parentKey] !== false : true)
-      if (parentExpanded) {
-        out.push(row)
-        ancestorPath[row.nodeId] = row.depth
-      }
+      ancestors.length = row.depth
+      if (!ancestors.some(node=>expanded[node.nodeId]===false)) out.push(row)
+      ancestors[row.depth] = row
     }
     return out
   }, [rows, expanded])
@@ -133,7 +139,7 @@ export default function DrillDownView({
 
   return (
     <div>
-      {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back to command centre</button>}
+      {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back to KPI Summary</button>}
 
       <div style={{ marginBottom: "18px" }}>
         <h2 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 700, color: T.accent, letterSpacing: "-0.4px" }}>
@@ -144,7 +150,9 @@ export default function DrillDownView({
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "14px" }}>
+      {error && <div role="alert" className="dt-notice dt-notice-error">{error}</div>}
+      <label className="dt-field" style={{maxWidth:320,marginBottom:18}}><span>Break down the selected total by</span><select value={dimension} onChange={e=>setDimension(e.target.value)}>{[['hierarchy','Operating hierarchy'],['siteId','Operating site'],['shiftId','Shift'],['groupId','Equipment group'],['crew','Crew'],['commodity','Commodity'],['product','Product'],['client','Client'],['operatingMode','Operating mode']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+      <div className="dt-drill-layout">
         {/* Main drill-down table */}
         <div style={cardS}>
           {loading ? (
@@ -258,7 +266,7 @@ export default function DrillDownView({
                 </div>
               )}
 
-              {selectedNode.nodeType === "asset" && (
+              {!["commodity","product","client","operatingMode"].some(k=>selectedNode.scope?.[k]) && (
                 <>
                   {loadingDowntime ? (
                     <div style={{ fontSize: "12.5px", color: T.muted, padding: "10px 0" }}>Loading events…</div>
@@ -281,6 +289,7 @@ export default function DrillDownView({
                 </>
               )}
 
+              {onOpenDowntime && !['commodity','product','client','operatingMode'].some(k=>selectedNode.scope?.[k]) && <button className="dt-button" onClick={()=>onOpenDowntime({siteId:selectedNode.scope?.siteId||'',shiftId:selectedNode.scope?.shiftId||'',groupId:selectedNode.scope?.groupId||'',contractId:selectedNode.scope?.contractId||'',activityId:selectedNode.scope?.activityId||'',serviceId:selectedNode.scope?.serviceId||'',crew:selectedNode.scope?.crew||'',assetId:selectedNode.scope?.assetId||'',from:periodToWindow(periodLabel).startFrom?.slice(0,10),to:periodToWindow(periodLabel).endTo?.slice(0,10)})}>View downtime records for this selection</button>}
               <button
                 onClick={() => onOpenLineage?.(selectedNode.kpiResult)}
                 style={{ ...btnGhost, marginTop: "14px", width: "100%", justifyContent: "center" }}>
@@ -300,8 +309,8 @@ export default function DrillDownView({
 
 // ── Event row in the explanation panel ────────────────────────────────────
 function EventRow({ event }) {
-  const label = DOWNTIME_TAXONOMY[event.categoryLevel1]?.label || event.categoryLevel1?.replace(/_/g, " ")
-  const hours = Number(event.durationHours) || 0
+  const label = event.classificationPath?.slice(-1)[0]?.label || DOWNTIME_TAXONOMY[event.categoryLevel1]?.label || event.categoryLevel1?.replace(/_/g, " ")
+  const hours = Number(event.periodDurationHours ?? event.durationHours) || 0
   const hh = Math.floor(hours)
   const mm = Math.round((hours - hh) * 60)
   const durationLabel = hh > 0 ? `${hh} h ${mm} min` : `${mm} min`

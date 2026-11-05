@@ -77,12 +77,12 @@ export async function getDowntimeEvent(tenantId,eventId) {
 }
 export async function listDowntimeEvents(tenantId,options = {}) {
   if (!tenantId) return [];
-  const keys = ['assetId','groupId','activityId','serviceId','contractId','siteId','categoryLevel1'];
+  const keys = ['assetId','groupId','activityId','serviceId','contractId','siteId','shiftId','crew','categoryLevel1'];
   // One indexed equality, then filter locally: no new composite index required.
-  const key = keys.find(k => options[k]);
+  const key = keys.find(k => options[k] && options[k] !== '__none__');
   const snap = await getDocs(key ? query(eventsCol(tenantId),where(key,'==',options[key])) : eventsCol(tenantId));
   return snap.docs.map(d => ({ ...d.data(),id:d.id })).filter(e =>
-    e.validationStatus !== 'void' && keys.every(k => !options[k] || e[k] === options[k]) &&
+    e.validationStatus !== 'void' && keys.every(k => !options[k] || (options[k] === '__none__' ? !e[k] : e[k] === options[k])) &&
     (options.planned == null || e.planned === options.planned) &&
     (!options.startFrom || !e.eventEnd || Date.parse(e.eventEnd) > Date.parse(options.startFrom)) &&
     (!options.endTo || Date.parse(e.eventStart) <= Date.parse(options.endTo)))
@@ -176,6 +176,7 @@ async function mutateEvent(tenantId,input,{ eventId = null,reason = '',legacyClo
           groupId:old ? (old.groupId ?? null) : (input.groupId || asset.equipmentGroupId || null),equipmentTypeId:old ? (old.equipmentTypeId ?? null) : (asset.equipmentTypeId || null),
           siteId:old ? (old.siteId ?? null) : (input.siteId || asset.siteId || null),contractId:old ? (old.contractId ?? null) : (input.contractId || null),
           activityId:old ? (old.activityId ?? null) : (input.activityId || null),serviceId:old ? (old.serviceId ?? null) : (input.serviceId || null),
+          ...(old?{}:{shiftId:input.shiftId||null,crew:input.crew||null}),
           notes,timezone:input.timezone || old?.timezone || 'Africa/Johannesburg',
           lostOperatingHours:timing.durationHours,confidence:old?.confidence || input.confidence || DATA_CONFIDENCE.MANUAL_ACTUAL,
           source:old?.source || input.source || 'manual',ingestionBatchId:old?.ingestionBatchId || input.ingestionBatchId || null,
