@@ -132,11 +132,19 @@ const resolveComponent = async (tenantId, component, scope, period, options = {}
     contractId: scope.contractId || null,
     siteId: scope.siteId || null,
     processAreaId: scope.processAreaId || null,
+    facilityId: scope.facilityId || null,
+    shiftId: scope.shiftId || null,
+    commodity: scope.commodity || null,
+    product: scope.product || null,
+    client: scope.client || null,
+    operatingMode: scope.operatingMode || null,
+    crew: scope.crew || null,
     state: "approved",
   });
 
   // Period filter
   const periodRows = rows.filter((r) => {
+    if (['corrected', 'voided', 'returned', 'void', 'rejected'].includes(r.state)) return false;
     if (period.startFrom && r.startTimestamp < period.startFrom) return false;
     if (period.endTo   && r.startTimestamp > period.endTo)   return false;
     return true;

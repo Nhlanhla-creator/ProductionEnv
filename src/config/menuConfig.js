@@ -685,21 +685,10 @@ export const smeMenuItems = [
         route: "/digital-twin/setup", hasSubmenu: true,
         subItems: [
           { id: "operations-setup-guide", label: "Operating structure", icon: <Rocket size={16} />, route: "/digital-twin/setup/guide" },
-          { id: "operations-assets", label: "Asset register", icon: <Truck size={16} />, route: "/digital-twin/setup/assets" },
-          { id: "operations-groups", label: "Equipment groups", icon: <Boxes size={16} />, route: "/digital-twin/setup/groups" },
-          { id: "operations-master-codes", label: "Master Codes", icon: <ListChecks size={16} />, route: "/digital-twin/setup/master-codes" },
-          { id: "operations-periods", label: "Reporting periods", icon: <Calendar size={16} />, route: "/digital-twin/setup/periods" },
+          { id: "operations-asset-setup", label: "Asset Setup", icon: <Truck size={16} />, route: "/digital-twin/setup/asset-setup" },
+          { id: "operations-shift-setup", label: "Shift Setup", icon: <Calendar size={16} />, route: "/digital-twin/setup/shifts" },
           { id: "operations-imports", label: "Data imports", icon: <Upload size={16} />, route: "/digital-twin/setup/imports" },
           { id: "operations-packs", label: "Sector packs", icon: <Package size={16} />, route: "/digital-twin/setup/packs" },
-          { id: "operations-convert", label: "Capacity configuration", icon: <Network size={16} />, route: "/digital-twin/setup/convert" },
-        ],
-      },
-      {
-        id: "operations", label: "Operations", icon: <Boxes size={16} />,
-        route: "/digital-twin/operations/performance", hasSubmenu: true,
-        subItems: [
-          { id: "operations-downtime", label: "Downtime", icon: <Wrench size={16} />, route: "/digital-twin/operations/downtime" },
-          { id: "operational-performance", label: "Performance", icon: <Activity size={16} />, route: "/digital-twin/operations/performance" },
         ],
       },
       // ─── RAPs (Overall Company Health removed) ───────────────────────────
@@ -735,6 +724,18 @@ export const smeMenuItems = [
         label: "Financial Performance",
         icon: <PieChart size={16} />,
         route: "/FinancialPerformance",
+      },
+      {
+        id: "operational-performance", label: "Operations Performance", icon: <Activity size={16} />,
+        route: "/digital-twin/operations", hasSubmenu: true,
+        subItems: [
+          { id: "operations-kpi-summary", label: "KPI Summary", icon: <LayoutDashboard size={16} />, route: "/digital-twin/operations/kpis" },
+          { id: "operations-supply-chain", label: "Supply Chain", icon: <Boxes size={16} />, route: "/digital-twin/operations/supply-chain" },
+          { id: "operations-delivery", label: "Delivery", icon: <Truck size={16} />, route: "/digital-twin/operations/delivery" },
+          { id: "operations-safety", label: "Safety", icon: <Activity size={16} />, route: "/digital-twin/operations/safety" },
+          { id: "operations-downtime", label: "Downtime", icon: <Wrench size={16} />, route: "/digital-twin/operations/downtime" },
+          { id: "operations-capacity", label: "Capacity", icon: <Boxes size={16} />, route: "/digital-twin/operations/capacity" },
+        ],
       },
       // ─── People Performance ─────────────────────────────────────────────
       {

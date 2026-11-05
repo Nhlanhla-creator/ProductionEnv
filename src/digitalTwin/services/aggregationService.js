@@ -19,7 +19,10 @@
  *     child scope, not derived from sibling values
  */
 
-import { calculateKpi, periodKeyOf, statusFromThresholds } from "./kpiEngine";
+import { calculateKpi, periodKeyOf } from "./kpiEngine";
+import { listMeasurements } from "./measurementService";
+import { listShifts } from "./shiftCaptureService";
+import { listGroups } from "./resourceService";
 import { KPI_BY_ID } from "../models/kpiSchema";
 import { listRelations, getNode, listNodes } from "./hierarchyService";
 import { NODE_TYPES } from "../models/enums";
@@ -94,6 +97,7 @@ export const drillDown = async (tenantId, {
   periodLabel,
   maxDepth = 6,
   includeTypes = null,
+  scope = {},
 } = {}) => {
   const kpi = KPI_BY_ID[kpiId];
   if (!kpi) throw new Error(`Unknown KPI: ${kpiId}`);
@@ -105,7 +109,7 @@ export const drillDown = async (tenantId, {
   // Calculate KPI at the root
   const rootKpi = await calculateKpi(tenantId, {
     kpiId,
-    scope: scopeFromNode(root),
+    scope: {...scope, ...scopeFromNode(root)},
     period,
     periodLabel,
   });
@@ -114,11 +118,13 @@ export const drillDown = async (tenantId, {
     nodeId: root.id,
     nodeName: root.name,
     nodeType: root.nodeType,
+    scope: {...scope, ...scopeFromNode(root)},
     depth: 0,
     kpiResult: rootKpi,
   }];
 
-  const walk = async (node, depth) => {
+  const visited = new Set([root.id]);
+  const walk = async (node, depth, inheritedScope = {...scope, ...scopeFromNode(root)}) => {
     if (depth >= maxDepth) return;
     const relTypes = DRILL_RELATION_TYPES[node.nodeType];
     if (!relTypes) return;
@@ -128,14 +134,17 @@ export const drillDown = async (tenantId, {
 
     for (const rel of filtered) {
       const child = await getNode(tenantId, rel.toId);
-      if (!child) continue;
+      if (!child || visited.has(child.id)) continue;
+      const childScope = {...inheritedScope, ...scopeFromNode(child)};
+      if (scope.siteId && child.nodeType === NODE_TYPES.SITE && child.id !== scope.siteId) continue;
+      visited.add(child.id);
       if (includeTypes && !includeTypes.includes(child.nodeType)) continue;
 
       let kpiResult;
       try {
         kpiResult = await calculateKpi(tenantId, {
           kpiId,
-          scope: scopeFromNode(child),
+          scope: childScope,
           period,
           periodLabel,
         });
@@ -147,11 +156,12 @@ export const drillDown = async (tenantId, {
         nodeId: child.id,
         nodeName: child.name,
         nodeType: child.nodeType,
+        scope: childScope,
         depth: depth + 1,
         kpiResult,
       });
 
-      await walk(child, depth + 1);
+      await walk(child, depth + 1, childScope);
     }
   };
 
@@ -240,6 +250,7 @@ const formatPeriodLabel = (label) => {
  * Powers the "Availability loss by category" panel in Screen 4.
  */
 export const availabilityLossByCategory = async (tenantId, { scope = {}, periodLabel }) => {
+  if (['commodity','product','client','operatingMode'].some(k=>scope[k])) return {rows:[],totalHours:0,plannedHours:0,unplannedHours:0,unavailable:true};
   const { listDowntimeEvents, DOWNTIME_TAXONOMY } = await import("./downtimeService");
   const period = periodToWindow(periodLabel);
   const events = await listDowntimeEvents(tenantId, {
@@ -249,6 +260,8 @@ export const availabilityLossByCategory = async (tenantId, { scope = {}, periodL
     serviceId: scope.serviceId || null,
     contractId: scope.contractId || null,
     siteId: scope.siteId || null,
+    shiftId: scope.shiftId || null,
+    crew: scope.crew || null,
     startFrom: period.startFrom,
     endTo: period.endTo,
     pageSize: 5000,
@@ -407,3 +420,19 @@ export default {
   attentionRequired,
   commandCentreTiles,
 };
+/** Recompute dimension totals from raw components using each KPI's existing formula. */
+export async function dimensionDrillDown(tenantId, {kpiId, periodLabel, dimension='siteId', scope={}}) {
+  const allowed=['siteId','shiftId','groupId','commodity','product','client','operatingMode','crew'];
+  if(!allowed.includes(dimension))throw new Error('Choose a supported breakdown dimension.');
+  const period=periodToWindow(periodLabel);
+  const measurements=await listMeasurements(tenantId,{...scope,...period});
+  const value=m=>dimension==='crew'?m.tags?.crew:m[dimension];
+  const values=[...new Set(measurements.filter(m=>!['void','corrected','rejected'].includes(m.state)).map(m=>value(m)||'__none__'))].sort();
+  const labels=new Map();
+  const definitions=dimension==='siteId'?await listNodes(tenantId,{nodeType:NODE_TYPES.SITE}):dimension==='shiftId'?await listShifts(tenantId):dimension==='groupId'?await listGroups(tenantId,{status:null}):[];
+  definitions.forEach(d=>labels.set(d.id||d.groupId,d.name));
+  const rootKpi=await calculateKpi(tenantId,{kpiId,scope,period,periodLabel});
+  const rows=[{nodeId:'total',nodeName:'Selected total',nodeType:'company',depth:0,scope,kpiResult:rootKpi}];
+  for(const key of values){const childScope={...scope,[dimension]:key};rows.push({nodeId:dimension+':'+key,nodeName:key==='__none__'?'Not recorded':labels.get(key)||key,nodeType:dimension.replace(/Id$/, ''),depth:1,scope:childScope,kpiResult:await calculateKpi(tenantId,{kpiId,scope:childScope,period,periodLabel})});}
+  return {rows,rootKpi};
+}

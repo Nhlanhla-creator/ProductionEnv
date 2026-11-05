@@ -53,7 +53,6 @@ const STEPS = [
   { id: "delivery",  title: "Where is the work delivered?", icon: MapPin },
   { id: "service",   title: "What work is performed?", icon: Wrench },
   { id: "resources", title: "What resources deliver the work?", icon: Boxes },
-  { id: "period",    title: "How will you measure success?", icon: Calendar },
   { id: "preview",   title: "Review and create", icon: Eye },
 ]
 
@@ -86,9 +85,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
     activityName: "",
     equipmentGroupName: "",
     equipmentGroupCapacity: "",
-    reportingPeriod: currentMonth(),
-    targetKpiId: "kpi.physical_availability",
-    targetValue: "90",
   })
   const [diagramData, setDiagramData] = useState(null)
   const [creating, setCreating] = useState(false)
@@ -99,20 +95,20 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
     (async () => {
       const saved = await getOnboardingState(tenantId)
       if (saved?.objective) setState((p) => ({ ...p, ...saved }))
-      if (typeof saved.currentStep === "number" && saved.currentStep > 0) setStep(saved.currentStep)
+      if (typeof saved?.currentStep === "number" && saved?.currentStep > 0) setStep(Math.min(saved.currentStep, STEPS.length - 1))
       setResumeChecked(true)
     })()
   }, [tenantId])
 
   useEffect(() => {
     if (!resumeChecked) return
-    saveOnboardingState(tenantId, { ...state, currentStep: step })
+    saveOnboardingState(tenantId, { ...state, currentStep: step }).catch(err=>setError(err.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, state, resumeChecked])
 
   // Build the flow diagram when entering the preview step
   useEffect(() => {
-    if (step === 6 && !diagramData) {
+    if (STEPS[step]?.id === "preview" && !diagramData) {
       setDiagramData(buildDiagramFromState(state))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,20 +241,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
         })
       }
 
-      const { setDoc: fsSetDoc, doc: fsDoc } = await import("firebase/firestore")
-      await fsSetDoc(
-        fsDoc(db, "digitalTwinTenants", tenantId, "reportingPeriods", state.reportingPeriod),
-        {
-          periodKey: state.reportingPeriod,
-          periodType: "month",
-          status: "open",
-          targetKpiId: state.targetKpiId,
-          targetValue: state.targetValue ? Number(state.targetValue) : null,
-          createdAt: new Date().toISOString(),
-        },
-        { merge: true }
-      )
-
       await completeOnboarding(tenantId, {
         objective: state.objective,
         sectorPack: state.sectorPack,
@@ -362,14 +344,6 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
             serviceId={state.serviceId}
             equipmentGroupName={state.equipmentGroupName}
             equipmentGroupCapacity={state.equipmentGroupCapacity}
-            onChange={(patch) => setState({ ...state, ...patch })}
-          />
-        )}
-        {STEPS[step].id === "period" && (
-          <StepPeriod
-            reportingPeriod={state.reportingPeriod}
-            targetKpiId={state.targetKpiId}
-            targetValue={state.targetValue}
             onChange={(patch) => setState({ ...state, ...patch })}
           />
         )}
@@ -949,17 +923,6 @@ function StepPreviewWithDiagram({ state, diagramData, onDiagramChange }) {
         onChange={onDiagramChange}
       />
 
-      {state.reportingPeriod && (
-        <div style={{
-          marginTop: "16px", padding: "12px 14px",
-          background: T.panel, borderRadius: "8px",
-          border: `1px solid ${T.lineSoft}`,
-          fontSize: "13px", color: T.body,
-        }}>
-          <strong style={{ color: T.accent }}>Reporting period:</strong>{" "}
-          {state.reportingPeriod} — {state.targetValue}% on {state.targetKpiId?.split(".").pop()}
-        </div>
-      )}
 
       <div style={{
         marginTop: "16px", padding: "14px 16px",
@@ -968,7 +931,7 @@ function StepPreviewWithDiagram({ state, diagramData, onDiagramChange }) {
         fontSize: "12.5px", color: T.body, lineHeight: 1.6,
       }}>
         <strong style={{ color: T.accent }}>What happens next:</strong> after
-        creation, you'll see the Performance dashboard. Add assets and
+        creation, open KPI Summary under Operations Performance. Add assets and
         capture shift data to start generating KPIs.
       </div>
     </div>

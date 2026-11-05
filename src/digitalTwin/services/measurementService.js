@@ -20,10 +20,10 @@
 import { db, auth } from "../../firebaseConfig";
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, query,
-  where, orderBy, limit, serverTimestamp, writeBatch,
+  where, orderBy, limit, writeBatch, documentId, startAfter,
 } from "firebase/firestore";
 import { DATA_CONFIDENCE, CONFIDENCE_PRECEDENCE, MEASUREMENT_STATE } from "../models/enums";
-import { toCanonical, UNITS, quantityTypeOf } from "../models/units";
+import { toCanonical, convert, quantityTypeOf } from "../models/units";
 import { COMPONENT_CATALOGUE } from "../models/kpiSchema";
 
 // ── Utilities ─────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ const naturalKeyOf = (row) => [
 ].join("::");
 
 // ── Create one measurement ────────────────────────────────────────────────
-export const createMeasurement = async (tenantId, input) => {
+export const buildMeasurement = (tenantId, input, measurementId) => {
   if (!tenantId) throw new Error("tenantId is required");
   if (!input.component) throw new Error("component is required");
   if (!input.startTimestamp) throw new Error("startTimestamp is required");
@@ -86,7 +86,9 @@ export const createMeasurement = async (tenantId, input) => {
     throw new Error(`Unit mismatch — cannot record "${input.component}" (${targetQty}) in "${inputUnit}" (${inputQty}).`);
   }
 
-  const canonicalValue = toCanonical(inputValue, inputUnit);
+  const conversion = convert(inputValue, inputUnit, componentDef.unit);
+  if (!conversion.ok) throw new Error(conversion.reason);
+  const canonicalValue = conversion.value;
 
   // Plausibility (Section 8.4)
   const range = PLAUSIBILITY[input.component];
@@ -100,15 +102,9 @@ export const createMeasurement = async (tenantId, input) => {
     validationErrors.push("endTimestamp cannot precede startTimestamp.");
   }
 
-  // Duplicate check via natural key
-  const dupe = await findNaturalKey(tenantId, input);
-  if (dupe) {
-    throw new Error(`Duplicate measurement — an active record already exists for this source and interval (${dupe.id}).`);
-  }
-
-  const docRef = doc(measurementsCol(tenantId));
+  const stamp = nowIso();
   const payload = {
-    measurementId: docRef.id,
+    measurementId,
     tenantId,
 
     // Scope (Section 8.3)
@@ -171,9 +167,9 @@ export const createMeasurement = async (tenantId, input) => {
 
     // Audit
     createdBy: actor(),
-    createdAt: nowIso(),
+    createdAt: stamp,
     updatedBy: actor(),
-    updatedAt: nowIso(),
+    updatedAt: stamp,
     approvedBy: null,
     approvedAt: null,
     correctionReason: null,
@@ -183,7 +179,15 @@ export const createMeasurement = async (tenantId, input) => {
     idempotencyKey: input.idempotencyKey || naturalKeyOf(input),
   };
 
-  await setDoc(docRef, payload);
+  return payload;
+};
+
+export const createMeasurement = async (tenantId, input) => {
+  const dupe = await findNaturalKey(tenantId, input);
+  if (dupe) throw new Error(`Duplicate measurement — an active record already exists (${dupe.id}).`);
+  const ref = doc(measurementsCol(tenantId));
+  const payload = buildMeasurement(tenantId, input, ref.id);
+  await setDoc(ref, payload);
   return payload;
 };
 
@@ -213,44 +217,26 @@ export const getMeasurement = async (tenantId, measurementId) => {
  * Every scope field is optional — the query adds only supplied filters,
  * matching the KPI engine's "any grain, any level" behaviour.
  */
-export const listMeasurements = async (tenantId, {
-  component = null,
-  kpiId = null,
-  assetId = null,
-  groupId = null,
-  activityId = null,
-  serviceId = null,
-  contractId = null,
-  siteId = null,
-  processAreaId = null,
-  startFrom = null,
-  endTo = null,
-  state = null,
-  pageSize = 2000,
-} = {}) => {
+export const listMeasurements = async (tenantId, options = {}) => {
   if (!tenantId) return [];
-  const filters = [];
-  if (component)      filters.push(where("component", "==", component));
-  if (kpiId)          filters.push(where("kpiId", "==", kpiId));
-  if (assetId)        filters.push(where("assetId", "==", assetId));
-  if (groupId)        filters.push(where("groupId", "==", groupId));
-  if (activityId)     filters.push(where("activityId", "==", activityId));
-  if (serviceId)      filters.push(where("serviceId", "==", serviceId));
-  if (contractId)     filters.push(where("contractId", "==", contractId));
-  if (siteId)         filters.push(where("siteId", "==", siteId));
-  if (processAreaId)  filters.push(where("processAreaId", "==", processAreaId));
-  if (state)          filters.push(where("state", "==", state));
-
-  const q = filters.length
-    ? query(measurementsCol(tenantId), ...filters, limit(pageSize))
-    : query(measurementsCol(tenantId), limit(pageSize));
-
-  const snap = await getDocs(q);
-  let rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-  if (startFrom) rows = rows.filter((r) => r.startTimestamp >= startFrom);
-  if (endTo)     rows = rows.filter((r) => r.startTimestamp <= endTo);
-  return rows;
+  const batchSize = Math.min(2000, Math.max(1, Number(options.pageSize) || 2000));
+  const rows = [];
+  let cursor = null;
+  // Page the collection by document ID: all scope filtering happens before totals,
+  // without silently truncating at 2,000 records or requiring composite indexes.
+  while (true) {
+    const parts = [orderBy(documentId()), limit(batchSize)];
+    if (cursor) parts.push(startAfter(cursor));
+    const snap = await getDocs(query(measurementsCol(tenantId), ...parts));
+    rows.push(...snap.docs.map(d => ({ ...d.data(), id:d.id })));
+    if (snap.docs.length < batchSize) break;
+    cursor = snap.docs[snap.docs.length - 1];
+  }
+  const keys = ['component','kpiId','assetId','groupId','activityId','serviceId','contractId','siteId','processAreaId','facilityId','shiftId','commodity','product','client','operatingMode','state'];
+  return rows.filter(r => keys.every(k => !options[k] || (options[k] === '__none__' ? !r[k] : r[k] === options[k]))
+    && (!options.crew || r.tags?.crew === options.crew)
+    && (!options.startFrom || r.startTimestamp >= options.startFrom)
+    && (!options.endTo || r.startTimestamp <= options.endTo));
 };
 
 // ── Correction workflow (Section 9.8) ─────────────────────────────────────
@@ -356,7 +342,9 @@ export const importMeasurements = async (tenantId, rows = [], { dryRun = false, 
       const inputValue = Number(row.numericValue);
       if (!Number.isFinite(inputValue)) throw new Error("numericValue must be a number");
 
-      const canonicalValue = toCanonical(inputValue, inputUnit);
+      const conversion = convert(inputValue, inputUnit, componentDef.unit);
+  if (!conversion.ok) throw new Error(conversion.reason);
+  const canonicalValue = conversion.value;
 
       const range = PLAUSIBILITY[row.component];
       if (range && (canonicalValue < range.min || canonicalValue > range.max)) {
@@ -383,6 +371,7 @@ export const importMeasurements = async (tenantId, rows = [], { dryRun = false, 
     const batch = writeBatch(db);
     chunk.forEach((r) => {
       const ref = doc(measurementsCol(tenantId));
+      const stamp = nowIso();
       batch.set(ref, {
         measurementId: ref.id,
         tenantId,
@@ -391,8 +380,11 @@ export const importMeasurements = async (tenantId, rows = [], { dryRun = false, 
         state: r.state || MEASUREMENT_STATE.DRAFT,
         confidence: r.confidence || DATA_CONFIDENCE.MANUAL_ACTUAL,
         createdBy: actor(),
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
+        createdAt: stamp,
+        updatedBy: actor(),
+        updatedAt: stamp,
+        approvedBy: null,
+        approvedAt: null,
       });
       results.previewIds.push(ref.id);
     });

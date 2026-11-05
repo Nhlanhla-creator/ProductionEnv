@@ -11,10 +11,13 @@ export function periodSeconds(e,window={start:-Infinity,end:Infinity},asOf=Date.
   const a=Date.parse(e.eventStart),b=e.eventEnd?Date.parse(e.eventEnd):asOf;
   return Number.isFinite(a)&&Number.isFinite(b)&&b>a?Math.max(0,Math.min(b,window.end)-Math.max(a,window.start))/1000:0;
 }
-export function filterReport(events,{assetId='',groupId='',siteId='',type='',from='',to='',path=[],asOf=Date.now()}={}) {
+export function filterReport(events,{assetId='',groupId='',siteId='',contractId='',activityId='',serviceId='',shiftId='',crew='',status='',search='',type='',from='',to='',path=[],asOf=Date.now()}={}) {
   const window=reportWindow(from,to);
   return events.filter(e=>e.validationStatus!=='void'&&(!assetId||e.assetId===assetId)&&(!groupId||(groupId==='__none__'?!e.groupId:e.groupId===groupId))&&(!siteId||(siteId==='__none__'?!e.siteId:e.siteId===siteId))&&
-    (!type||(type==='planned'?e.planned===true:e.planned===false))&&path.every((key,i)=>classificationKey(e,i)===key))
+    [
+      ['contractId',contractId],['activityId',activityId],['serviceId',serviceId]
+    ].every(([key,value])=>!value||(value==='__none__'?!e[key]:e[key]===value))&&(!shiftId||(shiftId==='__none__'?!e.shiftId:e.shiftId===shiftId))&&(!crew||(crew==='__none__'?!e.crew:e.crew===crew))&&(!status||(status==='open'?!e.eventEnd:!!e.eventEnd))&&
+    (!search||[e.assetName,e.assetNumber,e.assetId,e.notes,e.categoryLevel2,...(e.classificationPath||[]).map(p=>p.label)].some(v=>String(v||'').toLowerCase().includes(search.toLowerCase())))&&(!type||(type==='planned'?e.planned===true:e.planned===false))&&path.every((key,i)=>classificationKey(e,i)===key))
     .map(e=>({...e,asOf:new Date(asOf).toISOString(),periodDurationSeconds:periodSeconds(e,window,asOf),periodDurationHours:periodSeconds(e,window,asOf)/3600}))
     .filter(e=>e.periodDurationSeconds>0);
 }
@@ -31,9 +34,12 @@ export function aggregateReport(events,dimension='asset') {
   const groups=new Map();
   events.forEach(e=>{
     let key,label;
-    if(/^level[1-5]$/.test(dimension)){const i=Number(dimension.slice(-1))-1;key=classificationKey(e,i);label=classificationLabel(e,i);if(e.classificationPath&&e.classificationPath.length<=i){key=`ended:${i}`;label='Branch ends before this level';}}
+    if(dimension==='reason'){const i=(e.classificationPath?.length||0)-1;key=i>=0?classificationKey(e,i):`legacy:reason:${e.categoryLevel5||e.categoryLevel2||'Unclassified'}`;label=i>=0?classificationLabel(e,i):e.categoryLevel5||e.categoryLevel2||'Unclassified';}
+    else if(/^level[1-5]$/.test(dimension)){const i=Number(dimension.slice(-1))-1;key=classificationKey(e,i);label=classificationLabel(e,i);if(e.classificationPath&&e.classificationPath.length<=i){key=`ended:${i}`;label='Branch ends before this level';}}
     else if(dimension==='asset'){key=e.assetId||'unknown';label=e.assetNumber||e.assetName||e.assetId||'Unknown asset';}
     else if(dimension==='group'){key=e.groupId||'unassigned';label=e.groupName||e.groupId||'No group assigned';}
+    else if(dimension==='shift'){key=e.shiftId||'unassigned';label=e.shiftName||e.shiftId||'No shift recorded';}
+    else if(dimension==='crew'){key=e.crew||'unassigned';label=e.crew||'No crew recorded';}
     else {key=e.siteId||'unassigned';label=e.siteName||e.siteId||'No site assigned';}
     if(!groups.has(key))groups.set(key,{key,label,seconds:0,hours:0,eventCount:0,assets:new Set()});
     const row=groups.get(key);row.seconds+=e.periodDurationSeconds??periodSeconds(e);row.eventCount++;row.assets.add(e.assetId);
