@@ -117,7 +117,7 @@ export const headerProfiles = {
   },
   procurement: {
     collection: "universalProfiles",
-    nameField: "entityOverview.registeredName",
+    nameField: "contactDetails.contactName",
     logoField: "entityOverview.companyLogo",
     portalName: "Procurement Portal",
     fallbackName: "Procurement Lead",
@@ -134,7 +134,7 @@ export const getRoleRoute = (role) =>
 
 const CANONICAL_ALIASES = {
   admin: "admin", administrator: "admin", superadmin: "admin",
-  sme: "sme", smes: "sme", smse: "sme", smses: "sme", business: "sme", businesses: "sme", npo: "sme", npos: "sme", corporate: "sme", corporates: "sme", smsedashboard: "sme",
+  sme: "sme", smes: "sme", smse: "sme", smses: "sme", business: "sme", businesses: "sme", npo: "sme", npos: "sme", corporate: "procurement", corporates: "procurement", smsedashboard: "sme",
   investor: "investor", investors: "investor", funder: "investor", funders: "investor", investorportal: "investor",
   catalyst: "catalyst", catalysts: "catalyst", support: "catalyst", supportprogram: "catalyst", accelerator: "catalyst", accelerators: "catalyst", incubator: "catalyst", catalystdashboard: "catalyst",
   advisor: "advisor", advisors: "advisor", adviser: "advisor", advisers: "advisor", mentor: "advisor", mentors: "advisor", advisorportal: "advisor",

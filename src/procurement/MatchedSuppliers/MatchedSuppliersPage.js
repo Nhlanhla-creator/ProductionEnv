@@ -21,6 +21,8 @@ import MatchedSuppliersTable from "./MatchedSuppliersTable"
 import MatchReasonDrawer from "./MatchReasonDrawer"
 import SupplierCompareModal from "./SupplierCompareModal"
 import ProcurementSupplierModal from "../SupplierDetail/ProcurementSupplierModal"
+import PassportBreakdownModal from "./PassportBreakdownModal"
+import BigScoreBreakdownModal from "./BigScoreBreakdownModal"
 import RFIDialogModal from "../Interactions/RFIDialogModal"
 import PortalRegistrationModal from "../StageGate/PortalRegistrationModal"
 import StageDecisionModal from "../StageGate/StageDecisionModal"
@@ -44,11 +46,19 @@ export default function MatchedSuppliersPage() {
   // Modals & Drawers state
   const [selectedSupplierForReason, setSelectedSupplierForReason] = useState(null)
   const [selectedSupplierForDetail, setSelectedSupplierForDetail] = useState(null)
+  const [detailInitialTab, setDetailInitialTab] = useState("score")
+  const [selectedSupplierForPassport, setSelectedSupplierForPassport] = useState(null)
+  const [selectedSupplierForBigScore, setSelectedSupplierForBigScore] = useState(null)
   const [selectedSupplierForRFI, setSelectedSupplierForRFI] = useState(null)
   const [selectedSupplierForDecision, setSelectedSupplierForDecision] = useState(null)
   const [selectedSupplierForHandoff, setSelectedSupplierForHandoff] = useState(null)
   const [suppliersToCompare, setSuppliersToCompare] = useState([])
   const [notification, setNotification] = useState(null)
+
+  const handleInspectSupplier = (supplier, initialTab = "score") => {
+    setSelectedSupplierForDetail(supplier)
+    setDetailInitialTab(initialTab)
+  }
 
   // Preferred suppliers filter (Green Passport active)
   const preferredSuppliers = suppliers.filter((s) => s.passportStatus === "Active")
@@ -300,8 +310,10 @@ export default function MatchedSuppliersPage() {
         suppliers={displayedSuppliers}
         loading={loading}
         error={error}
-        onInspectSupplier={(supplier) => setSelectedSupplierForDetail(supplier.raw || supplier)}
+        onInspectSupplier={handleInspectSupplier}
         onOpenMatchReason={(supplier) => setSelectedSupplierForReason(supplier)}
+        onOpenBigScore={(supplier) => setSelectedSupplierForBigScore(supplier)}
+        onOpenPassportReview={(supplier) => setSelectedSupplierForPassport(supplier)}
         onOpenCompare={(suppliersList) => setSuppliersToCompare(suppliersList)}
         onOpenRFI={handleOpenRFI}
         onShortlist={handleToggleShortlist}
@@ -318,7 +330,7 @@ export default function MatchedSuppliersPage() {
         demandContext={demandContext}
         onOpenSupplierDetail={(supplier) => {
           setSelectedSupplierForReason(null)
-          setSelectedSupplierForDetail(supplier.raw || supplier)
+          handleInspectSupplier(supplier)
         }}
         onOpenRFI={(supplier) => {
           setSelectedSupplierForReason(null)
@@ -337,7 +349,7 @@ export default function MatchedSuppliersPage() {
           onClose={() => setSuppliersToCompare([])}
           onInspect={(supplier) => {
             setSuppliersToCompare([])
-            setSelectedSupplierForDetail(supplier.raw || supplier)
+            handleInspectSupplier(supplier)
           }}
         />
       )}
@@ -346,6 +358,8 @@ export default function MatchedSuppliersPage() {
       {selectedSupplierForDetail && (
         <ProcurementSupplierModal
           supplier={selectedSupplierForDetail}
+          isOpen={!!selectedSupplierForDetail}
+          initialTab={detailInitialTab}
           onClose={() => setSelectedSupplierForDetail(null)}
           onOpenRFI={(supplier) => {
             setSelectedSupplierForDetail(null)
@@ -361,6 +375,20 @@ export default function MatchedSuppliersPage() {
           }}
         />
       )}
+
+      {/* Passport Compliance Pass/Fail Modal */}
+      <PassportBreakdownModal
+        isOpen={!!selectedSupplierForPassport}
+        onClose={() => setSelectedSupplierForPassport(null)}
+        supplier={selectedSupplierForPassport}
+      />
+
+      {/* BIG Score 5-Pillar Breakdown Modal */}
+      <BigScoreBreakdownModal
+        isOpen={!!selectedSupplierForBigScore}
+        onClose={() => setSelectedSupplierForBigScore(null)}
+        supplier={selectedSupplierForBigScore}
+      />
 
       {/* RFI Clarification Dialog */}
       {selectedSupplierForRFI && (

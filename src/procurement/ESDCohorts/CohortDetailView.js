@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import {
   Users,
   Award,
@@ -19,8 +20,13 @@ import {
   DollarSign,
   User,
   Wrench,
+  CheckSquare,
+  MessageSquare,
   Trash2,
   FileSpreadsheet,
+  Lock,
+  Info,
+  X,
 } from "lucide-react"
 
 const STAGES = [
@@ -42,6 +48,7 @@ const NO_PROGRESSION_REASONS = [
 ]
 
 export default function CohortDetailView({
+
   cohort,
   onBack,
   onOpenAddMember,
@@ -51,11 +58,14 @@ export default function CohortDetailView({
   onRemoveMember,
   onSelectSupplier,
 }) {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState("members") // members | interventions | progression
   const [interventionStatusFilter, setInterventionStatusFilter] = useState("all")
   const [selectedMemberFilter, setSelectedMemberFilter] = useState("all")
   const [noProgressionModal, setNoProgressionModal] = useState({ isOpen: false, supplierId: null, supplierName: "" })
   const [noProgressionReason, setNoProgressionReason] = useState(NO_PROGRESSION_REASONS[0])
+  const [selectedMemberForInterventions, setSelectedMemberForInterventions] = useState(null)
+  const [selectedMemberForConstraint, setSelectedMemberForConstraint] = useState(null)
 
   if (!cohort) return null
 
@@ -368,7 +378,7 @@ export default function CohortDetailView({
               gap: "8px",
             }}
           >
-            <Users size={16} /> Members & 5C Baselines ({members.length})
+            <Users size={16} /> Cohort Summary ({members.length})
           </button>
 
           <button
@@ -460,17 +470,20 @@ export default function CohortDetailView({
                     <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#4A352F" }}>
                       Location
                     </th>
-                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#4A352F" }}>
-                      Primary 5C Bottleneck
-                    </th>
                     <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#4A352F", textAlign: "center" }}>
                       Baseline Score
                     </th>
                     <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#4A352F", textAlign: "center" }}>
-                      Current BIG Score
+                      Current Score
+                    </th>
+                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#4A352F", textAlign: "center" }}>
+                      Improvement
                     </th>
                     <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#4A352F" }}>
-                      Active Intervention
+                      Active Interventions
+                    </th>
+                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#4A352F" }}>
+                      Primary 5C Bottleneck
                     </th>
                     <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#4A352F" }}>
                       Commercial Stage
@@ -518,64 +531,105 @@ export default function CohortDetailView({
                           {m.location}
                         </td>
 
-                        <td style={{ padding: "14px 16px" }}>
+                        {/* Baseline Score (Locked) */}
+                        <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", fontWeight: 700, color: "#6D4C41" }}>
+                            <Lock size={12} color="#8D6E63" title="Locked baseline score upon cohort enrollment" />
+                            <span>{m.baselineScore}%</span>
+                          </div>
+                          <div style={{ fontSize: "0.7rem", color: "#8D6E63" }}>
+                            {m.baselineCoverage || 60}% cov
+                          </div>
+                        </td>
+
+                        {/* Current Score */}
+                        <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                          <div style={{ fontSize: "0.925rem", fontWeight: 800, color: "#4A352F" }}>
+                            {m.currentScore}%
+                          </div>
+                          <div style={{ fontSize: "0.7rem", color: "#2E7D32" }}>
+                            {m.currentCoverage || 80}% cov
+                          </div>
+                        </td>
+
+                        {/* Improvement Score */}
+                        <td style={{ padding: "14px 16px", textAlign: "center" }}>
                           <span
                             style={{
                               display: "inline-block",
                               padding: "3px 8px",
+                              borderRadius: "12px",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              background: delta >= 0 ? "rgba(46, 125, 50, 0.12)" : "rgba(198, 40, 40, 0.1)",
+                              color: delta >= 0 ? "#2E7D32" : "#C62828",
+                            }}
+                          >
+                            {delta >= 0 ? `+${delta}%` : `${delta}%`}
+                          </span>
+                        </td>
+
+                        {/* Active Interventions (Clickable) */}
+                        <td style={{ padding: "14px 16px", maxWidth: "230px" }}>
+                          <div
+                            onClick={() => setSelectedMemberForInterventions(m)}
+                            role="button"
+                            tabIndex={0}
+                            title="Click to view all interventions and action items for this supplier"
+                            style={{
+                              cursor: "pointer",
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              background: "#FAF7F2",
+                              border: "1px solid #E6D7C3",
+                              transition: "all 0.15s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = "#7D5A50"
+                              e.currentTarget.style.background = "#F2EAE1"
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = "#E6D7C3"
+                              e.currentTarget.style.background = "#FAF7F2"
+                            }}
+                          >
+                            <div style={{ fontSize: "0.775rem", color: "#4A352F", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {m.activeIntervention || "Incubation & Diagnostic Audit"}
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "#8D6E63", marginTop: "2px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <span>{(m.interventions || []).length} active</span>
+                              <span style={{ color: "#2E7D32", fontWeight: 600 }}>Inspect →</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Primary 5C Bottleneck (Clickable) */}
+                        <td style={{ padding: "14px 16px" }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMemberForConstraint(m)}
+                            title="Click to inspect 5C diagnostic constraint & gap closure plan"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              padding: "4px 8px",
                               borderRadius: "4px",
                               fontSize: "0.72rem",
                               fontWeight: 600,
                               background: "rgba(141, 110, 99, 0.1)",
                               color: "#5D4037",
                               border: "1px solid #D7CCC8",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              transition: "all 0.15s ease",
                             }}
+                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(141, 110, 99, 0.2)" }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgba(141, 110, 99, 0.1)" }}
                           >
-                            {m.primaryConstraint}
-                          </span>
-                        </td>
-
-                        <td style={{ padding: "14px 16px", textAlign: "center" }}>
-                          <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#6D4C41" }}>
-                            {m.baselineScore} / 100
-                          </div>
-                          <div style={{ fontSize: "0.7rem", color: "#8D6E63" }}>
-                            {m.baselineCoverage}% cov
-                          </div>
-                        </td>
-
-                        <td style={{ padding: "14px 16px", textAlign: "center" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
-                            <span style={{ fontSize: "0.925rem", fontWeight: 800, color: "#4A352F" }}>
-                              {m.currentScore} / 100
-                            </span>
-                            {delta > 0 && (
-                              <span
-                                style={{
-                                  background: "rgba(46, 125, 50, 0.1)",
-                                  color: "#2E7D32",
-                                  fontSize: "0.7rem",
-                                  fontWeight: 700,
-                                  padding: "2px 6px",
-                                  borderRadius: "10px",
-                                }}
-                              >
-                                +{delta}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: "0.7rem", color: "#2E7D32" }}>
-                            {m.currentCoverage}% cov
-                          </div>
-                        </td>
-
-                        <td style={{ padding: "14px 16px", maxWidth: "240px" }}>
-                          <div style={{ fontSize: "0.8rem", color: "#4A352F", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {m.activeIntervention}
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "#8D6E63", marginTop: "2px" }}>
-                            {(m.interventions || []).length} intervention(s) tracked
-                          </div>
+                            <span>{m.primaryConstraint}</span>
+                            <Info size={11} color="#8D6E63" />
+                          </button>
                         </td>
 
                         <td style={{ padding: "14px 16px" }}>
@@ -1182,6 +1236,262 @@ export default function CohortDetailView({
                 }}
               >
                 Confirm Discontinuation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Active Interventions Details Modal ─── */}
+      {selectedMemberForInterventions && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1300,
+            background: "rgba(30, 20, 15, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => setSelectedMemberForInterventions(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "640px",
+              maxHeight: "85vh",
+              background: "#FAF7F2",
+              borderRadius: "12px",
+              boxShadow: "0 20px 48px rgba(0,0,0,0.25)",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: "16px 20px",
+                background: "#4A352F",
+                color: "#FAF7F2",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#FAF7F2" }}>
+                  Active Interventions: {selectedMemberForInterventions.supplierName}
+                </h3>
+                <div style={{ fontSize: "0.75rem", color: "#D7CCC8", marginTop: "2px" }}>
+                  {selectedMemberForInterventions.category} • Current Score: {selectedMemberForInterventions.currentScore}%
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMemberForInterventions(null)}
+                style={{ background: "none", border: "none", color: "#FAF7F2", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ padding: "20px", overflowY: "auto", flex: 1 }}>
+              {(selectedMemberForInterventions.interventions || []).length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px 20px", color: "#8D6E63", fontSize: "0.85rem" }}>
+                  No individual interventions logged yet. Click below to assign the first gap closure plan.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {selectedMemberForInterventions.interventions.map((it, idx) => (
+                    <div
+                      key={it.id || idx}
+                      style={{
+                        background: "#FFFFFF",
+                        border: "1px solid #E6D7C3",
+                        borderRadius: "8px",
+                        padding: "14px 16px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
+                        <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#4A352F" }}>
+                          {it.intervention}
+                        </span>
+                        <span
+                          style={{
+                            padding: "2px 8px",
+                            borderRadius: "10px",
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            background: it.status === "Completed" ? "#E8F5E9" : "#FFF3E0",
+                            color: it.status === "Completed" ? "#2E7D32" : "#E65100",
+                          }}
+                        >
+                          {it.status || "In Progress"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.775rem", color: "#6D4C41", marginBottom: "6px" }}>
+                        <strong>Diagnostic Gap:</strong> {it.gap}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "0.725rem", color: "#8D6E63" }}>
+                        <div>Provider: <strong>{it.provider || "ESD Advisory"}</strong></div>
+                        <div>Target Due: <strong>{it.dueDate || "Ongoing"}</strong></div>
+                        <div>Funding: <strong>{it.fundingSource || "Grant"}</strong></div>
+                        <div>Deliverable: <strong>{it.evidenceRequired || "Audit Clearance"}</strong></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: "12px 20px", borderTop: "1px solid #E6D7C3", background: "#FFFFFF", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <button
+                onClick={() => {
+                  const target = selectedMemberForInterventions
+                  setSelectedMemberForInterventions(null)
+                  onOpenAddIntervention?.(target)
+                }}
+                style={{
+                  padding: "7px 14px",
+                  background: "#4A352F",
+                  border: "none",
+                  borderRadius: "6px",
+                  color: "#FAF7F2",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <Plus size={14} /> Add New Intervention
+              </button>
+              <button
+                onClick={() => setSelectedMemberForInterventions(null)}
+                style={{
+                  padding: "7px 14px",
+                  background: "transparent",
+                  border: "1px solid #C8B6A6",
+                  borderRadius: "6px",
+                  color: "#4A352F",
+                  fontSize: "0.8rem",
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 5C Constraint Diagnostic Breakdown Modal ─── */}
+      {selectedMemberForConstraint && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1300,
+            background: "rgba(30, 20, 15, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          onClick={() => setSelectedMemberForConstraint(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "540px",
+              background: "#FAF7F2",
+              borderRadius: "12px",
+              boxShadow: "0 20px 48px rgba(0,0,0,0.25)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: "16px 20px",
+                background: "#4A352F",
+                color: "#FAF7F2",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#FAF7F2" }}>
+                  5C Bottleneck Diagnostic
+                </h3>
+                <div style={{ fontSize: "0.75rem", color: "#D7CCC8", marginTop: "2px" }}>
+                  {selectedMemberForConstraint.supplierName}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMemberForConstraint(null)}
+                style={{ background: "none", border: "none", color: "#FAF7F2", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ padding: "20px" }}>
+              <div
+                style={{
+                  background: "#FFFFFF",
+                  border: "1px solid #E6D7C3",
+                  borderRadius: "8px",
+                  padding: "16px",
+                  marginBottom: "14px",
+                }}
+              >
+                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#8D6E63", textTransform: "uppercase" }}>
+                  Primary Constraint Detected
+                </div>
+                <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#4A352F", marginTop: "4px" }}>
+                  {selectedMemberForConstraint.primaryConstraint}
+                </div>
+                <p style={{ margin: "8px 0 0", fontSize: "0.8rem", color: "#5D4037", lineHeight: "1.4" }}>
+                  This constraint was derived from the supplier's initial BIG Score diagnostics and statutory gate evaluation. Addressing this bottleneck directly increases tender qualification probability.
+                </p>
+              </div>
+
+              <div style={{ background: "#FFFFFF", border: "1px solid #E6D7C3", borderRadius: "8px", padding: "16px" }}>
+                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#8D6E63", textTransform: "uppercase", marginBottom: "8px" }}>
+                  Remediation Action Plan
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.825rem", color: "#4A352F", fontWeight: 600 }}>
+                  <CheckCircle2 size={16} color="#2E7D32" />
+                  {selectedMemberForConstraint.activeIntervention || "Incubation & Diagnostic Audit"}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#8D6E63", marginTop: "6px" }}>
+                  Progression Stage: <strong>{selectedMemberForConstraint.commercialStage || "Matched"}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: "12px 20px", borderTop: "1px solid #E6D7C3", background: "#FFFFFF", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setSelectedMemberForConstraint(null)}
+                style={{
+                  padding: "7px 16px",
+                  background: "#4A352F",
+                  border: "none",
+                  borderRadius: "6px",
+                  color: "#FAF7F2",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Understood
               </button>
             </div>
           </div>

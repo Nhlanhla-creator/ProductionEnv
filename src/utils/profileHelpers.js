@@ -26,36 +26,41 @@ export function getDisplayName(data, currentUser, nameField, fallback = "User") 
   let candidates = [];
   
   if (isRequestingEntityName) {
-    // Entity Mode: tradingName -> registeredName -> contact person
+    // Entity Mode: tradingName -> registeredName -> organization name
     candidates = [
+      getField('procurementProfile.organisation.tradingName'),
+      getField('procurementProfile.organisation.registeredName'),
+      getField('entityOverview.tradingName'),
+      getField('organisation.tradingName'),
+      getField('entityOverview.registeredName'),
+      getField('organisation.registeredName'),
+      getField('organisation.name'),
       getField('fundManageOverview.tradingName'),
       getField('fundManageOverview.registeredName'),
-      getField('entityOverview.tradingName'),
-      getField('entityOverview.registeredName'),
       nameFromPath,
-      getField('contactDetails.contactName'),
-      getField('contactDetails.primaryContactName'),
-      getField('contactDetails.name'),
-      getField('personalOverview.fullName'),
       data?.registeredName,
+      data?.companyName,
       currentUser?.displayName,
       currentUser?.email?.split("@")[0]
     ];
   } else {
-    // Human Mode (Welcome header): contact person -> tradingName -> registeredName
+    // Human Mode (Welcome header): contact person -> display name
     candidates = [
+      getField('procurementProfile.organisation.primaryContact.name'),
+      getField('procurementProfile.primaryContact.name'),
+      getField('organisation.primaryContact.name'),
+      getField('primaryContact.name'),
       getField('contactDetails.contactName'),
       getField('contactDetails.primaryContactName'),
       getField('contactDetails.name'),
+      getField('entityOverview.contactPerson'),
       getField('personalOverview.fullName'),
       nameFromPath,
-      getField('fundManageOverview.tradingName'),
-      getField('fundManageOverview.registeredName'),
+      currentUser?.displayName,
+      currentUser?.email?.split("@")[0],
       getField('entityOverview.tradingName'),
       getField('entityOverview.registeredName'),
-      data?.registeredName,
-      currentUser?.displayName,
-      currentUser?.email?.split("@")[0]
+      data?.registeredName
     ];
   }
 
@@ -116,7 +121,7 @@ function mapRoleName(role) {
   if (/investor/i.test(normalized)) return 'Investor'
   if (/intern/i.test(normalized)) return 'Interns'
   if (/sme/i.test(normalized) || /small and medium/i.test(normalized) || /sme\/business/i.test(normalized)) return 'SMSEs'
-  if (/procurement/i.test(normalized) || /buyer/i.test(normalized)) return 'Procurement'
+  if (/procurement/i.test(normalized) || /buyer/i.test(normalized) || /corporate/i.test(normalized)) return 'Procurement'
   if (/capital.*facilitator|cmf/i.test(normalized)) return 'CapitalMarketFacilitators'
   if (/program.*sponsor/i.test(normalized)) return 'Program Sponsor'
   if (/associat/i.test(normalized)) return 'Associator'

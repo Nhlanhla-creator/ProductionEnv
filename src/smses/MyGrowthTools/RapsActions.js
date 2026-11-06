@@ -153,7 +153,7 @@ const EMPTY_FILTERS = {
   assignedTo: "all", dueDate: "all", revisedDate: "all", status: "all",
 };
 
-const RapsActions = () => {
+const RapsActions = ({ isInvestorView, targetUid }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -162,6 +162,35 @@ const RapsActions = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [notification, setNotification] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [smeInfo, setSmeInfo] = useState(null);
+
+  const querySmeId = useMemo(
+    () => new URLSearchParams(location.search).get("smeId"),
+    [location.search]
+  );
+  const sessionSmeId = typeof window !== "undefined" ? sessionStorage.getItem("viewingSMEId") : null;
+  const effectiveUid = targetUid || querySmeId || (isInvestorView ? sessionSmeId : null) || currentUser?.uid;
+
+  useEffect(() => {
+    if (!effectiveUid || (currentUser && effectiveUid === currentUser.uid)) {
+      setSmeInfo(null);
+      return;
+    }
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "universalProfiles", effectiveUid));
+        if (snap.exists()) {
+          const d = snap.data();
+          const name = d.entityOverview?.registeredName || d.entityOverview?.tradingName || d.businessName || "SME";
+          setSmeInfo({ id: effectiveUid, name });
+        } else {
+          setSmeInfo({ id: effectiveUid, name: "Cohort SME" });
+        }
+      } catch (err) {
+        console.warn("Could not load SME profile:", err);
+      }
+    })();
+  }, [effectiveUid, currentUser]);
 
   /* One of: "active" | "done" | "overdue" | "archived".
      Driven by the stat chips, which are buttons rather than labels — the
@@ -207,11 +236,11 @@ const RapsActions = () => {
   }, []);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!effectiveUid) return;
     const load = async () => {
       setLoading(true);
       try {
-        const snap = await getDoc(doc(db, "governanceCalendar", currentUser.uid));
+        const snap = await getDoc(doc(db, "governanceCalendar", effectiveUid));
         setMeetings(snap.exists() ? snap.data().meetings || [] : []);
       } catch (error) {
         console.error("Error loading meetings:", error);
@@ -221,13 +250,14 @@ const RapsActions = () => {
       }
     };
     load();
-  }, [currentUser]);
+  }, [effectiveUid]);
 
   const saveMeetings = async (updated) => {
+    if (!effectiveUid || !currentUser) return false;
     try {
       await setDoc(
-        doc(db, "governanceCalendar", currentUser.uid),
-        { meetings: updated, updatedAt: new Date().toISOString(), userId: currentUser.uid },
+        doc(db, "governanceCalendar", effectiveUid),
+        { meetings: updated, updatedAt: new Date().toISOString(), userId: effectiveUid, lastModifiedBy: currentUser.uid },
         { merge: true }
       );
       setMeetings(updated);
@@ -646,6 +676,41 @@ const RapsActions = () => {
         </div>
       )}
 
+      {smeInfo && (
+        <div style={{
+          backgroundColor: "#F5EBE1",
+          border: "1px solid #D7CCC8",
+          borderRadius: "8px",
+          padding: "10px 16px",
+          marginBottom: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#4A352F", fontSize: "0.88rem", fontWeight: 600 }}>
+            <FaUsers size={16} color="#7D5A50" />
+            <span>Viewing Integrated Actions for: <strong>{smeInfo.name}</strong></span>
+          </div>
+          <button
+            onClick={() => {
+              if (typeof window !== "undefined") sessionStorage.removeItem("viewingSMEId");
+              navigate(location.pathname);
+            }}
+            style={{
+              padding: "4px 10px",
+              background: "#7D5A50",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: "4px",
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            Switch to My Actions
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap", marginBottom: "18px", paddingBottom: "18px", borderBottom: "2px solid #e8ddd4" }}>
         <div>

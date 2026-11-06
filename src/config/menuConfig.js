@@ -38,6 +38,7 @@ import {
   BarChart3,
   Truck,
   Upload,
+  CheckSquare,
 } from "lucide-react";
 
 export const advisorMenuItems = [
@@ -151,6 +152,12 @@ export const catalystMenuItems = [
     label: "My Calendar",
     icon: <Calendar size={18} />,
     route: "/support-calendar",
+  },
+  {
+    id: "actions",
+    label: "Integrated Actions",
+    icon: <CheckSquare size={18} />,
+    route: "/support-actions",
   },
   {
     id: "billing",
@@ -916,6 +923,24 @@ export const procurementMenuItems = [
     label: "ESD Programs",
     icon: <Users size={18} />,
     route: "/procurement/cohorts",
+  },
+  {
+    id: "calendar",
+    label: "Governance Calendar",
+    icon: <Calendar size={18} />,
+    route: "/procurement/calendar",
+  },
+  {
+    id: "actions",
+    label: "Integrated Actions",
+    icon: <CheckSquare size={18} />,
+    route: "/procurement/actions",
+  },
+  {
+    id: "messages",
+    label: "Team Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/procurement/messages",
   },
   {
     id: "reports",

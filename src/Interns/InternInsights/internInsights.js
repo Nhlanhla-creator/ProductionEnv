@@ -97,19 +97,26 @@ export function Insights() {
         });
         setInternsData(interns);
 
-        const internApplicationsQuery = query(collection(db, "internApplications"));
-        const internApplicationsSnapshot = await getDocs(internApplicationsQuery);
+        const [v2ApplicationsSnapshot, legacyApplicationsSnapshot] = await Promise.all([
+          getDocs(query(collection(db, "internApplicationsV2"))).catch(() => ({ forEach: () => {} })),
+          getDocs(query(collection(db, "internApplications"))).catch(() => ({ forEach: () => {} })),
+        ]);
         const applications = [];
-        internApplicationsSnapshot.forEach((doc) => {
-          const data = doc.data();
-          let submittedAt = data.submittedAt;
-          let updatedAt = data.updatedAt;
+        const seenAppIds = new Set();
+        const pushAppDoc = (docSnap) => {
+          if (seenAppIds.has(docSnap.id)) return;
+          seenAppIds.add(docSnap.id);
+          const data = docSnap.data();
+          let submittedAt = data.submittedAt || data.createdAt;
+          let updatedAt = data.updatedAt || data.lastUpdated;
           if (submittedAt && typeof submittedAt.toDate === 'function') submittedAt = submittedAt.toDate();
           else if (submittedAt && typeof submittedAt === 'string') submittedAt = new Date(submittedAt);
           if (updatedAt && typeof updatedAt.toDate === 'function') updatedAt = updatedAt.toDate();
           else if (updatedAt && typeof updatedAt === 'string') updatedAt = new Date(updatedAt);
-          applications.push({ id: doc.id, ...data, submittedAt: submittedAt, updatedAt: updatedAt });
-        });
+          applications.push({ id: docSnap.id, ...data, submittedAt: submittedAt, updatedAt: updatedAt });
+        };
+        v2ApplicationsSnapshot.forEach(pushAppDoc);
+        legacyApplicationsSnapshot.forEach(pushAppDoc);
         setInternApplicationsData(applications);
 
         const internshipRequestsQuery = query(collection(db, "internshipRequest"));

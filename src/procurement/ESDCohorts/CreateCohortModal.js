@@ -5,6 +5,7 @@ import { X, Users, Layers, Calendar, DollarSign, UserCheck, Plus } from "lucide-
 
 export default function CreateCohortModal({ isOpen, onClose, onCreateCohort }) {
   const [name, setName] = useState("")
+  const [programType, setProgramType] = useState("ESD") // ED | SD | ESD
   const [sponsor, setSponsor] = useState("Corporate Enterprise Development Fund")
   const [objective, setObjective] = useState("")
   const [category, setCategory] = useState("Mining & Industrial Equipment")
@@ -24,6 +25,7 @@ export default function CreateCohortModal({ isOpen, onClose, onCreateCohort }) {
 
     onCreateCohort({
       name: name.trim(),
+      programType,
       sponsor: sponsor.trim(),
       objective: objective.trim() || "Accelerate local Black-owned SMMEs into procurement tender readiness.",
       category: category.trim(),
@@ -134,9 +136,40 @@ export default function CreateCohortModal({ isOpen, onClose, onCreateCohort }) {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} style={{ padding: "20px 24px", overflowY: "auto" }}>
+          {/* Program Type Selection */}
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelStyle}>Program Development Type *</label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+              {[
+                { id: "ED", label: "Enterprise Dev (ED)", desc: "Exempt & qualifying micro SMMEs" },
+                { id: "SD", label: "Supplier Dev (SD)", desc: "Active supply chain vendors" },
+                { id: "ESD", label: "Combined (ESD)", desc: "Full lifecycle enterprise & supplier dev" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setProgramType(t.id)}
+                  style={{
+                    padding: "10px",
+                    borderRadius: "8px",
+                    border: programType === t.id ? "2px solid #4A352F" : "1px solid #C8B6A6",
+                    background: programType === t.id ? "#FAF7F2" : "#FFFFFF",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#4A352F" }}>{t.id}</div>
+                  <div style={{ fontSize: "0.725rem", fontWeight: 600, color: "#6D4C41", marginTop: "2px" }}>{t.label}</div>
+                  <div style={{ fontSize: "0.68rem", color: "#8D6E63", marginTop: "4px", lineHeight: "1.2" }}>{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Cohort Name */}
           <div style={{ marginBottom: "14px" }}>
-            <label style={labelStyle}>Cohort Name & Title *</label>
+            <label style={labelStyle}>Program / Cohort Title *</label>
             <input
               type="text"
               value={name}

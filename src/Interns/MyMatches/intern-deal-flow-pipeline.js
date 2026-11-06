@@ -45,20 +45,32 @@ export const INTERN_ROWS_EVENT = "intern-rows"
 export const INTERN_ROWS_REQUEST_EVENT = "intern-rows-request"
 
 // Copied verbatim from InternTable.jsx so status resolution is identical.
-const checkApplicationStatus = async (userId, sponsorId) => {
+const checkApplicationStatus = async (userId, sponsorId, applicationId = null) => {
   try {
-    const docId = `${sponsorId}_${userId}`
-    const applicationDoc = await getDoc(doc(db, "internshipApplications", docId))
+    const candidateDocIds = []
+    if (applicationId && applicationId !== sponsorId) {
+      candidateDocIds.push(`${applicationId}_${userId}`)
+    }
+    candidateDocIds.push(`${sponsorId}_${userId}`)
 
-    if (applicationDoc.exists()) {
-      const appData = applicationDoc.data()
-      const status = appData.status || "Applied"
+    for (const docId of candidateDocIds) {
+      const applicationDoc = await getDoc(doc(db, "internshipApplications", docId))
+      if (applicationDoc.exists()) {
+        const appData = applicationDoc.data()
+        if (
+          docId === `${sponsorId}_${userId}` &&
+          applicationId &&
+          appData.smeApplicationId &&
+          appData.smeApplicationId !== applicationId
+        ) {
+          continue
+        }
+        const status = appData.status || "Applied"
+        const normalizedStatus =
+          status === "Applied" ? "Applied" : status === "Requested" ? "Requested" : status
 
-      // Normalize status - treat both "Applied" and "Requested" as applied
-      const normalizedStatus =
-        status === "Applied" ? "Applied" : status === "Requested" ? "Requested" : status
-
-      return { status: normalizedStatus, exists: true, data: appData }
+        return { status: normalizedStatus, exists: true, data: appData }
+      }
     }
     return { status: "New Match", exists: false, data: null }
   } catch (error) {
@@ -194,47 +206,60 @@ export function InternDealflow({ matches: matchesProp, onStageClick, className =
 
     const fetchDealflowData = async () => {
       try {
-        // Same source of truth as InternTable.jsx: iterate every
-        // universalProfiles doc (a potential sponsor) and only keep the
-        // ones that actually published an internApplications doc.
-        const snapshot = await getDocs(collection(db, "universalProfiles"))
+        const [profilesSnap, v2AppsSnap, legacyAppsSnap] = await Promise.all([
+          getDocs(collection(db, "universalProfiles")),
+          getDocs(collection(db, "internApplicationsV2")).catch(() => ({ docs: [] })),
+          getDocs(collection(db, "internApplications")).catch(() => ({ docs: [] })),
+        ])
 
-        const statusLists = await Promise.all(
-          snapshot.docs.map(async (docSnap) => {
+        const profilesByUid = {}
+        profilesSnap.docs.forEach((d) => {
+          profilesByUid[d.id] = d.data() || {}
+        })
+
+        const v2SmeIds = new Set()
+
+        const v2Statuses = await Promise.all(
+          v2AppsSnap.docs.map(async (appDocSnap) => {
             try {
-              const sponsorId = docSnap.id
-              if (sponsorId === internId) return []
+              const appId = appDocSnap.id
+              const AppData = appDocSnap.data() || {}
+              const sponsorId = AppData.userId || AppData.smeId || appId
+              if (!sponsorId || sponsorId === internId) return []
+              if (AppData.status && AppData.status.toLowerCase() === "draft") return []
 
-              const data = docSnap.data()
-              if (!data) return []
+              v2SmeIds.add(sponsorId)
+              const { status } = await checkApplicationStatus(internId, sponsorId, appId)
+              return [status]
+            } catch {
+              return []
+            }
+          }),
+        )
 
-              try {
-                const appDoc = await getDoc(doc(db, "internApplications", sponsorId))
-                if (!appDoc.exists()) return [] // same gate as InternTable.jsx
-              } catch {
-                return []
-              }
+        const legacyStatuses = await Promise.all(
+          legacyAppsSnap.docs.map(async (appDocSnap) => {
+            try {
+              const sponsorId = appDocSnap.id
+              if (sponsorId === internId || v2SmeIds.has(sponsorId)) return []
 
-              const formData = data || {}
+              const formData = profilesByUid[sponsorId] || {}
               const overview = formData.entityOverview || {}
               const programs = formData?.programDetails?.programs || []
               const matchPrefs = formData.generalMatchingPreference || {}
+              const AppData = appDocSnap.data() || {}
 
               const hasRelevantData =
                 overview.registeredName ||
                 overview.organizationName ||
+                AppData?.internshipRequest?.internRolesText ||
+                AppData?.jobOverview?.internshipTitle ||
                 programs.length > 0 ||
                 Object.keys(matchPrefs).length > 0
 
               if (!hasRelevantData) return []
 
-              // One status lookup per sponsor — the application doc id is
-              // `${sponsorId}_${internId}` regardless of which program a row
-              // represents, exactly like InternTable.jsx.
-              const { status } = await checkApplicationStatus(internId, sponsorId)
-
-              // InternTable.jsx renders one row per program (or 1 row if there
-              // are no programs) — mirror that so the counts match.
+              const { status } = await checkApplicationStatus(internId, sponsorId, sponsorId)
               const rowCount = programs.length > 0 ? programs.length : 1
               return Array(rowCount).fill(status)
             } catch {
@@ -243,7 +268,9 @@ export function InternDealflow({ matches: matchesProp, onStageClick, className =
           }),
         )
 
-        if (!cancelled) setFetchedRows(statusLists.flat().map((status) => ({ status })))
+        if (!cancelled) {
+          setFetchedRows([...v2Statuses.flat(), ...legacyStatuses.flat()].map((status) => ({ status })))
+        }
       } catch (error) {
         console.error("Error fetching pipeline data:", error)
       } finally {

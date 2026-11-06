@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from "react"
 import { onAuthStateChanged } from "firebase/auth"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, onSnapshot } from "firebase/firestore"
 import { auth, db } from "../firebaseConfig"
 import { getDisplayName, getLogoFromData } from "../utils/profileHelpers"
 
 /**
- * Custom hook to fetch header-specific user profile data
+ * Custom hook to fetch header-specific user profile data with real-time updates
  * @param {string} collection - Firestore collection name
  * @param {string} nameField - Path to name field in document
  * @param {string} logoField - Path to logo/image field in document
@@ -25,55 +25,77 @@ export function useHeaderProfile(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const fetchProfileData = useCallback(async (currentUser) => {
-    if (!currentUser) return
-    try {
-      const userDocRef = doc(db, collection, customDocId || currentUser.uid)
-      let userDocSnap = await getDoc(userDocRef)
-      if (!userDocSnap.exists() && collection === "MyuniversalProfiles") {
-        userDocSnap = await getDoc(doc(db, "universalProfiles", customDocId || currentUser.uid))
-      }
-      if (userDocSnap.exists()) {
-        const data = userDocSnap.data()
-        setProfileData(data)
-        setUserName(getDisplayName(data, customDocId ? null : currentUser, nameField, fallbackName))
-        setProfileLogo(getLogoFromData(data, logoField))
-      } else {
-        setProfileData({})
-        setUserName(fallbackName || getDisplayName(null, currentUser, nameField, fallbackName))
-        setProfileLogo(null)
-      }
-    } catch (err) {
-      console.error("Error fetching header profile:", err)
-      setError(err)
-      setUserName(fallbackName || getDisplayName(null, currentUser, nameField, fallbackName))
-    }
-  }, [collection, nameField, logoField, fallbackName, customDocId])
-
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let docUnsub = null
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (docUnsub) {
+        docUnsub()
+        docUnsub = null
+      }
+
       if (currentUser) {
         setUser(currentUser)
-        await fetchProfileData(currentUser)
+        setLoading(true)
+
+        const targetId = customDocId || currentUser.uid
+        const userDocRef = doc(db, collection, targetId)
+
+        docUnsub = onSnapshot(
+          userDocRef,
+          (snap) => {
+            if (snap.exists()) {
+              const data = snap.data()
+              setProfileData(data)
+              setUserName(getDisplayName(data, customDocId ? null : currentUser, nameField, fallbackName))
+              setProfileLogo(getLogoFromData(data, logoField))
+            } else {
+              setProfileData({})
+              setUserName(fallbackName || getDisplayName(null, currentUser, nameField, fallbackName))
+              setProfileLogo(null)
+            }
+            setLoading(false)
+          },
+          (err) => {
+            console.error("Error listening to header profile:", err)
+            setError(err)
+            setUserName(fallbackName || getDisplayName(null, currentUser, nameField, fallbackName))
+            setLoading(false)
+          }
+        )
       } else {
         setUser(null)
         setUserName(fallbackName)
         setProfileLogo(null)
         setProfileData({})
+        setLoading(false)
       }
-      setLoading(false)
     })
 
-    return () => unsubscribe()
-  }, [fetchProfileData, fallbackName])
+    return () => {
+      if (docUnsub) docUnsub()
+      unsubscribe()
+    }
+  }, [collection, nameField, logoField, fallbackName, customDocId])
 
   const refreshProfile = useCallback(async () => {
     const currentUser = auth.currentUser
     if (!currentUser) return
     setLoading(true)
-    await fetchProfileData(currentUser)
-    setLoading(false)
-  }, [fetchProfileData])
+    try {
+      const snap = await getDoc(doc(db, collection, customDocId || currentUser.uid))
+      if (snap.exists()) {
+        const data = snap.data()
+        setProfileData(data)
+        setUserName(getDisplayName(data, customDocId ? null : currentUser, nameField, fallbackName))
+        setProfileLogo(getLogoFromData(data, logoField))
+      }
+    } catch (e) {
+      console.warn("refreshProfile warning:", e)
+    } finally {
+      setLoading(false)
+    }
+  }, [collection, nameField, logoField, fallbackName, customDocId])
 
   return { user, userName, profileLogo, profileData, loading, error, refreshProfile }
 }

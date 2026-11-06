@@ -142,13 +142,16 @@ const [internData, setInternData] = useState([]);
         
         // Get academic data
         const academicOverview = formData.academicOverview || {};
-        
         const personalOverview = formData.personalOverview || {};
+        const programAffiliation = formData.programAffiliation || {};
+        const requiredDocs = data.requiredDocuments || formData.requiredDocuments || {};
+        const getDocUrl = (key) => (Array.isArray(requiredDocs[key]) && requiredDocs[key][0]?.url) || requiredDocs[`${key}Url`] || null;
+
         return {
           id: index + 1,
           firestoreId: doc.id, 
           username: fullName.toLowerCase().replace(/\s+/g, '_') + "_2024" || `intern_${index + 1}`,
-          email: data.userEmail || formData.email || 'N/A', 
+          email: data.userEmail || formData.email || personalOverview.email || 'N/A', 
           fullName: fullName,
           created: formatFirestoreDate(data.createdAt) || "2024-01-01",
           lastEdited: formatFirestoreDate(data.lastEdited) || formatFirestoreDate(data.createdAt) || "2024-01-01",
@@ -170,6 +173,7 @@ const [internData, setInternData] = useState([]);
                         formData.yearOfStudy || 
                         "Not Specified",
             expectedGraduation: academicOverview.expectedGraduation || 
+                               academicOverview.graduationYear ||
                                formData.expectedGraduation || 
                                "2025-06",
             phone: personalOverview.phone || 
@@ -177,11 +181,22 @@ const [internData, setInternData] = useState([]);
                    formData.contactNumber || 
                    "+27 XX XXX XXXX",
             location: formData.location || 
+                     (Array.isArray(personalOverview.provinces) && personalOverview.provinces.join(", ")) ||
                      formData.city || 
                      formData.address || 
                      "South Africa",
-            skills: formData.skills || "Not Specified",
+            skills: (Array.isArray(formData.skillsInterests?.technicalSkills) && formData.skillsInterests.technicalSkills.join(", ")) || formData.skills || "Not Specified",
           },
+          banking: {
+            bankName: programAffiliation.bankName === "Other" ? (programAffiliation.customBankName || "Other") : (programAffiliation.bankName || "Not Provided"),
+            accountHolderName: programAffiliation.accountHolderName || "Not Provided",
+            accountType: programAffiliation.accountType || "Not Provided",
+            accountNumber: programAffiliation.accountNumber || "Not Provided",
+            branchCode: programAffiliation.branchCode || "Not Provided",
+            verificationStatus: programAffiliation.beneficiaryVerificationStatus || "Pending Verification",
+            proofOfBankAccountUrl: getDocUrl("proofOfBankAccount"),
+          },
+          rawDocuments: requiredDocs,
           internship: {
             department: formData.department || 
                        academicOverview.department || 
@@ -807,6 +822,52 @@ const handleBlock = async (intern) => {
                   <Award size={16} />
                   <span>Skills:</span>
                   <span>{intern.profile.skills}</span>
+                </div>
+              </div>
+
+              <h3 style={{marginTop: '24px'}}>Stipend Payout & Banking Details</h3>
+              <div className={styles.profileGrid}>
+                <div className={styles.profileItem}>
+                  <FileText size={16} />
+                  <span>Bank Name:</span>
+                  <span>{intern.banking?.bankName || "Not Provided"}</span>
+                </div>
+                <div className={styles.profileItem}>
+                  <User size={16} />
+                  <span>Account Holder:</span>
+                  <span>{intern.banking?.accountHolderName || "Not Provided"}</span>
+                </div>
+                <div className={styles.profileItem}>
+                  <FileText size={16} />
+                  <span>Account Type:</span>
+                  <span>{intern.banking?.accountType || "Not Provided"}</span>
+                </div>
+                <div className={styles.profileItem}>
+                  <FileText size={16} />
+                  <span>Account Number:</span>
+                  <span>{intern.banking?.accountNumber || "Not Provided"}</span>
+                </div>
+                <div className={styles.profileItem}>
+                  <FileText size={16} />
+                  <span>Branch Code:</span>
+                  <span>{intern.banking?.branchCode || "Not Provided"}</span>
+                </div>
+                <div className={styles.profileItem}>
+                  <Award size={16} />
+                  <span>Verification:</span>
+                  <span>
+                    {intern.banking?.verificationStatus || "Pending Verification"}
+                    {intern.banking?.proofOfBankAccountUrl && (
+                      <a
+                        href={intern.banking.proofOfBankAccountUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ marginLeft: "8px", color: "#8d6e63", textDecoration: "underline", fontSize: "12px" }}
+                      >
+                        (View Proof)
+                      </a>
+                    )}
+                  </span>
                 </div>
               </div>
             </div>

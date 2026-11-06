@@ -4,11 +4,9 @@ import {
   Sparkles,
   X,
   Building2,
-  TrendingUp,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Zap,
   Calendar,
   Layers,
   ChevronDown,
@@ -18,7 +16,9 @@ import {
   SCENARIOS,
   extractProfileContext,
   getBaseEditableKpis,
+  buildPeriodsByFrequency,
   generateRealisticKpiData,
+  resolveOpenAiKey,
 } from "./aiDataGenUtils";
 
 const T = {
@@ -57,7 +57,9 @@ const AiDataGenModal = ({
   tabs = [],
   activeSection = "monthly",
   activeKpiRows = [],
+  sectionKpiRows = null,
   periods = [],
+  dateRange = null,
   onApplyData,
   isApplying = false,
 }) => {
@@ -65,23 +67,34 @@ const AiDataGenModal = ({
   const [scopeMode, setScopeMode] = useState("current"); // "current" | "all_kpis"
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [customRevenue, setCustomRevenue] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError] = useState(null);
   const [genResult, setGenResult] = useState(null);
   const [showAllRows, setShowAllRows] = useState(false);
 
   const profileContext = extractProfileContext(profileData);
+  const hasLocalKey = Boolean(resolveOpenAiKey());
+
+  // Use all KPIs in the current section (Monthly + Weekly + Daily) so one click fills everything in the section
+  const currentTabRows = useMemo(() => {
+    if (Array.isArray(sectionKpiRows) && sectionKpiRows.length > 0) {
+      return sectionKpiRows;
+    }
+    return activeKpiRows;
+  }, [sectionKpiRows, activeKpiRows]);
 
   // Available unique categories in this section
   const availableCategories = useMemo(() => {
     const set = new Set();
-    activeKpiRows.forEach((r) => {
+    currentTabRows.forEach((r) => {
       if (r.category) set.add(r.category);
     });
     return ["all", ...Array.from(set)];
-  }, [activeKpiRows]);
+  }, [currentTabRows]);
 
-  // Base rows across ALL core KPI tabs (Profit & Costs, Cash & Liquidity, Financial Strength)
+  // All editable KPI rows across ALL core KPI tabs (including Monthly, Weekly, Daily)
   const allCoreKpiRows = useMemo(() => {
     const list = [];
     (tabs || []).forEach((t) => {
@@ -89,7 +102,8 @@ const AiDataGenModal = ({
       (t.categories || []).forEach((cat) => {
         if (cat.custom === "loans") return;
         (cat.kpis || []).forEach((k) => {
-          if (!k.field && !k.custom) return;
+          const freq = k.frequency || "Monthly";
+          if (!k.field && !k.custom && freq === "Monthly") return;
           list.push({ kpi: k, category: `${t.name} • ${cat.name}` });
         });
       });
@@ -100,13 +114,27 @@ const AiDataGenModal = ({
   // Target rows based on scope mode
   const targetKpiRows = useMemo(() => {
     if (scopeMode === "all_kpis") return allCoreKpiRows;
-    if (selectedCategory === "all") return activeKpiRows;
-    return activeKpiRows.filter((r) => r.category === selectedCategory);
-  }, [scopeMode, allCoreKpiRows, activeKpiRows, selectedCategory]);
+    if (selectedCategory === "all") return currentTabRows;
+    return currentTabRows.filter((r) => r.category === selectedCategory);
+  }, [scopeMode, allCoreKpiRows, currentTabRows, selectedCategory]);
 
   const editableKpis = useMemo(() => {
     return getBaseEditableKpis(targetKpiRows);
   }, [targetKpiRows]);
+
+  // Compute period counts across frequencies for the active From -> To range
+  const rangeSummary = useMemo(() => {
+    if (!fromDate || !toDate || fromDate > toDate) return null;
+    const byFreq = buildPeriodsByFrequency(fromDate, toDate);
+    const hasMonthly = editableKpis.some((r) => (r.kpi.frequency || "Monthly") === "Monthly");
+    const hasWeekly = editableKpis.some((r) => r.kpi.frequency === "Weekly");
+    const hasDaily = editableKpis.some((r) => r.kpi.frequency === "Daily");
+    const parts = [];
+    if (hasMonthly && byFreq.monthly.length) parts.push(`${byFreq.monthly.length} mo`);
+    if (hasWeekly && byFreq.weekly.length) parts.push(`${byFreq.weekly.length} wk`);
+    if (hasDaily && byFreq.daily.length) parts.push(`${byFreq.daily.length} days`);
+    return parts.length ? parts.join(" • ") : `${byFreq.monthly.length} mo`;
+  }, [fromDate, toDate, editableKpis]);
 
   useEffect(() => {
     if (isOpen) {
@@ -120,23 +148,42 @@ const AiDataGenModal = ({
       if (profileContext?.anchorMonthlyRevenue) {
         setCustomRevenue(String(profileContext.anchorMonthlyRevenue));
       }
+      const nowYear = new Date().getFullYear();
+      setFromDate(dateRange?.from || `${nowYear}-01-01`);
+      setToDate(dateRange?.to || `${nowYear}-12-31`);
     }
-  }, [isOpen, profileData]);
+  }, [isOpen, profileData, dateRange?.from, dateRange?.to]);
 
   if (!isOpen) return null;
 
   const handleGenerate = async () => {
+    if (fromDate && toDate && fromDate > toDate) {
+      setGenError("'From' date cannot be after 'To' date.");
+      return;
+    }
     setIsGenerating(true);
     setGenError(null);
     try {
-      const revenueNum = Number(customRevenue.replace(/[^0-9.]/g, "")) || profileContext.anchorMonthlyRevenue;
+      const revenueNum =
+        Number(String(customRevenue).replace(/[^0-9.]/g, "")) ||
+        profileContext.anchorMonthlyRevenue;
+      const activeRange = fromDate && toDate ? { from: fromDate, to: toDate } : dateRange;
       const res = await generateRealisticKpiData({
         profileData,
-        tabName: scopeMode === "all_kpis" ? "All Financial Sections (Profit & Costs, Cash & Liquidity, Financial Strength)" : tabName,
-        categoryName: scopeMode === "all_kpis" ? "All Financial Categories" : (selectedCategory === "all" ? "All Categories" : selectedCategory),
+        tabName:
+          scopeMode === "all_kpis"
+            ? "All Financial Sections (Profit & Costs, Cash & Liquidity, Financial Strength)"
+            : tabName,
+        categoryName:
+          scopeMode === "all_kpis"
+            ? "All Financial Categories"
+            : selectedCategory === "all"
+            ? "All Categories"
+            : selectedCategory,
         activeSection,
         activeKpiRows: editableKpis,
         periods,
+        dateRange: activeRange,
         scenarioId: selectedScenario,
         customMonthlyRevenue: revenueNum,
       });
@@ -151,7 +198,8 @@ const AiDataGenModal = ({
 
   const handleConfirm = () => {
     if (!genResult?.updates?.length || !onApplyData) return;
-    onApplyData(genResult.updates);
+    const activeRange = fromDate && toDate ? { from: fromDate, to: toDate } : dateRange;
+    onApplyData(genResult.updates, activeRange);
   };
 
   const displayedUpdates = genResult?.updates
@@ -218,7 +266,7 @@ const AiDataGenModal = ({
               <Sparkles size={20} />
             </div>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <h3
                   style={{
                     margin: 0,
@@ -242,11 +290,11 @@ const AiDataGenModal = ({
                     border: `1px solid ${T.amberBorder}`,
                   }}
                 >
-                  Demo / Test Mode
+                  {hasLocalKey ? "Local API Key Active" : "Demo / Test Mode"}
                 </span>
               </div>
               <p style={{ margin: "2px 0 0", fontSize: "12.5px", color: T.muted }}>
-                Synthesizes realistic SME figures conditioned on industry, company scale, and business scenario.
+                Automatically fills all KPIs (Monthly, Weekly & Daily) across your selected date range in one click.
               </p>
             </div>
           </div>
@@ -350,19 +398,6 @@ const AiDataGenModal = ({
                 <div style={{ fontSize: "11px", color: T.muted }}>{profileContext.employeeCount}</div>
               </div>
             </div>
-
-            {profileContext.offerings && (
-              <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: `1px dashed ${T.line}`, fontSize: "12px" }}>
-                <span style={{ color: T.muted, fontWeight: 600 }}>Core Offerings: </span>
-                <span style={{ color: T.ink, fontWeight: 500 }}>{profileContext.offerings}</span>
-              </div>
-            )}
-
-            {profileContext.description && !profileContext.offerings && (
-              <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: `1px dashed ${T.line}`, fontSize: "11.5px", color: T.muted, fontStyle: "italic" }}>
-                "{profileContext.description.slice(0, 140)}{profileContext.description.length > 140 ? "..." : ""}"
-              </div>
-            )}
           </div>
 
           {/* Scenario Selection */}
@@ -456,7 +491,7 @@ const AiDataGenModal = ({
                     fontWeight: 700,
                   }}
                 >
-                  {getBaseEditableKpis(activeKpiRows).length} KPIs
+                  {getBaseEditableKpis(currentTabRows).length} KPIs
                 </span>
               </button>
 
@@ -496,11 +531,11 @@ const AiDataGenModal = ({
             </div>
           </div>
 
-          {/* Target Parameters */}
+          {/* Target Parameters & Date Range */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(195px, 1fr))",
               gap: "14px",
               padding: "14px",
               background: T.panel,
@@ -511,10 +546,53 @@ const AiDataGenModal = ({
           >
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: T.ink, marginBottom: "4px" }}>
-                Target Monthly Revenue Anchor (ZAR)
+                Date Range to Populate
+              </label>
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    borderRadius: "6px",
+                    border: `1px solid ${T.lineStrong}`,
+                    fontSize: "12px",
+                    fontFamily: "inherit",
+                    color: T.ink,
+                    background: T.bg,
+                  }}
+                />
+                <span style={{ color: T.muted, fontSize: "12px" }}>→</span>
+                <input
+                  type="date"
+                  min={fromDate}
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    borderRadius: "6px",
+                    border: `1px solid ${T.lineStrong}`,
+                    fontSize: "12px",
+                    fontFamily: "inherit",
+                    color: T.ink,
+                    background: T.bg,
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: "11px", color: T.muted }}>
+                Synced with your selected dashboard dates.
+              </span>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: T.ink, marginBottom: "4px" }}>
+                Target Monthly Revenue (ZAR)
               </label>
               <div style={{ position: "relative" }}>
-                <span style={{ position: "absolute", left: "10px", top: "8px", fontSize: "13px", color: T.muted, fontWeight: 600 }}>
+                <span style={{ position: "absolute", left: "10px", top: "7px", fontSize: "13px", color: T.muted, fontWeight: 600 }}>
                   R
                 </span>
                 <input
@@ -524,18 +602,19 @@ const AiDataGenModal = ({
                   placeholder="e.g. 250000"
                   style={{
                     width: "100%",
-                    padding: "7px 10px 7px 28px",
+                    padding: "6px 10px 6px 26px",
                     borderRadius: "6px",
                     border: `1px solid ${T.lineStrong}`,
                     fontSize: "13px",
                     fontFamily: "inherit",
                     fontWeight: 600,
                     color: T.ink,
+                    boxSizing: "border-box",
                   }}
                 />
               </div>
               <span style={{ fontSize: "11px", color: T.muted }}>
-                Auto-derived from profile turnover bracket.
+                Auto-derived from profile turnover.
               </span>
             </div>
 
@@ -544,8 +623,8 @@ const AiDataGenModal = ({
                 {scopeMode === "all_kpis" ? "Module Scope" : `Category Filter (${tabName})`}
               </label>
               {scopeMode === "all_kpis" ? (
-                <div style={{ height: "34px", display: "flex", alignItems: "center", fontSize: "12.5px", fontWeight: 600, color: T.accent }}>
-                  All Sections (P&L • Cash & Liquidity • Strength)
+                <div style={{ height: "32px", display: "flex", alignItems: "center", fontSize: "12px", fontWeight: 600, color: T.accent }}>
+                  All Sections (P&L • Cash • Strength)
                 </div>
               ) : (
                 <select
@@ -553,7 +632,7 @@ const AiDataGenModal = ({
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   style={{
                     width: "100%",
-                    padding: "7px 10px",
+                    padding: "6px 10px",
                     borderRadius: "6px",
                     border: `1px solid ${T.lineStrong}`,
                     fontSize: "12.5px",
@@ -575,28 +654,7 @@ const AiDataGenModal = ({
                 </select>
               )}
               <span style={{ fontSize: "11px", color: T.muted }}>
-                {scopeMode === "all_kpis"
-                  ? "Generates an interconnected model across all three core modules."
-                  : "Isolate an individual category or generate across the section."}
-              </span>
-            </div>
-
-            <div>
-              <span style={{ display: "block", fontSize: "12px", fontWeight: 600, color: T.ink, marginBottom: "4px" }}>
-                Target Metrics
-              </span>
-              <div style={{ display: "flex", gap: "10px", alignItems: "center", height: "34px", fontSize: "12.5px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "5px", color: T.body }}>
-                  <Layers size={14} color={T.accent} />
-                  <span><strong>{editableKpis.length}</strong> input KPIs</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "5px", color: T.body }}>
-                  <Calendar size={14} color={T.accent} />
-                  <span><strong>{periods.length}</strong> periods ({activeSection})</span>
-                </div>
-              </div>
-              <span style={{ fontSize: "11px", color: T.muted }}>
-                Auto-calculated formulas (EBITDA, etc.) excluded.
+                { editableKpis.length } KPIs ({rangeSummary || `${periods.length} periods`})
               </span>
             </div>
           </div>
@@ -647,7 +705,7 @@ const AiDataGenModal = ({
               {isGenerating ? (
                 <>
                   <RefreshCw size={15} className="spin" style={{ animation: "spin 1s linear infinite" }} />
-                  Synthesizing Accounting Figures...
+                  Synthesizing Figures for Date Range...
                 </>
               ) : (
                 <>
@@ -681,7 +739,7 @@ const AiDataGenModal = ({
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", color: T.green }}>
                   <CheckCircle2 size={16} />
                   <strong style={{ fontSize: "13px" }}>
-                    Successfully Generated {genResult.validCount} Values for {editableKpis.length} KPIs
+                    Successfully Generated {genResult.validCount} Values across {editableKpis.length} KPIs
                   </strong>
                 </div>
                 <span style={{ fontSize: "12px", color: T.green, fontWeight: 600 }}>
@@ -769,7 +827,7 @@ const AiDataGenModal = ({
           }}
         >
           <span style={{ fontSize: "12px", color: T.muted }}>
-            Populates live draft and updates Firestore in test mode.
+            Populates live draft and updates Firestore across the selected date range.
           </span>
           <div style={{ display: "flex", gap: "10px" }}>
             <button
@@ -798,25 +856,14 @@ const AiDataGenModal = ({
                 background: !genResult?.updates?.length || isApplying ? T.lineStrong : T.green,
                 color: "#fff",
                 fontSize: "13px",
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: !genResult?.updates?.length || isApplying ? "not-allowed" : "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "8px",
-                boxShadow: genResult?.updates?.length ? "0 2px 6px rgba(22, 101, 52, 0.25)" : "none",
+                gap: "6px",
               }}
             >
-              {isApplying ? (
-                <>
-                  <RefreshCw size={14} className="spin" style={{ animation: "spin 1s linear infinite" }} />
-                  Saving Figures...
-                </>
-              ) : (
-                <>
-                  <Zap size={14} />
-                  Apply to Table & Save
-                </>
-              )}
+              {isApplying ? "Applying Overrides..." : `Apply & Save ${genResult?.validCount || 0} Values`}
             </button>
           </div>
         </div>

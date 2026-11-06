@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Target,
@@ -43,6 +43,7 @@ export default function BuyerUniversalProfile() {
   const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState("objectives")
   const [showSummary, setShowSummary] = useState(false)
+  const [initialViewChecked, setInitialViewChecked] = useState(false)
 
   const {
     profile,
@@ -54,6 +55,16 @@ export default function BuyerUniversalProfile() {
     saveProfile,
     seedCompleteProfile,
   } = useBuyerProfile()
+
+  // Default to summary view if profile is 100% complete; else show edit view
+  useEffect(() => {
+    if (!loading && !initialViewChecked) {
+      if (stateInfo?.completionPercentage === 100) {
+        setShowSummary(true)
+      }
+      setInitialViewChecked(true)
+    }
+  }, [loading, stateInfo?.completionPercentage, initialViewChecked])
 
   const currentSectionIndex = SECTIONS.findIndex((s) => s.id === activeSection)
 

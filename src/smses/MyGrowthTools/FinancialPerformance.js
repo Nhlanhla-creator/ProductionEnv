@@ -4203,6 +4203,20 @@ const AddDataWizard = ({
     return [];
   }, [activeSection, kpiRows]);
 
+  const tabKpiRows = useMemo(
+    () => [...kpiRows.monthly, ...kpiRows.weekly, ...kpiRows.daily],
+    [kpiRows]
+  );
+
+  const effectiveEntryRange = useMemo(
+    () =>
+      entryRange || {
+        from: dayKeyOf(new Date(startYear, fy.startMonth, 1)).slice(2),
+        to: dayKeyOf(monthEnd(startYear, fy.startMonth + 11)).slice(2),
+      },
+    [entryRange, startYear, fy.startMonth]
+  );
+
   const allSectionKpis = useMemo(() => {
     if (!tab) return [];
     return tab.categories.flatMap((c) => c.kpis || []);
@@ -4267,9 +4281,12 @@ const AddDataWizard = ({
     }
   };
 
-  const handleApplyAiGeneratedData = async (updates) => {
+  const handleApplyAiGeneratedData = async (updates, appliedRange) => {
     setIsApplyingAi(true);
     try {
+      if (appliedRange?.from && appliedRange?.to) {
+        await changeEntryRange(appliedRange);
+      }
       const nextDraft = { ...draftRef.current };
       updates.forEach((u) => {
         nextDraft[draftKey(u.kpi.id, u.periodKey, u.which)] = u.raw;
@@ -4886,7 +4903,7 @@ const AddDataWizard = ({
         </>
       }>
 
-      <DateRangeControls fy={fy} onChange={changeEntryRange}/>
+      <DateRangeControls fy={{ ...fy, period: entryRange ? "custom" : fy.period, range: entryRange || fy.range }} onChange={changeEntryRange}/>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px", alignItems: "end" }}>
         <div>
           <label style={labelS}>Financial year</label>
@@ -5048,7 +5065,9 @@ const AddDataWizard = ({
         tabs={editableTabs}
         activeSection={activeSection}
         activeKpiRows={activeKpiRows}
+        sectionKpiRows={tabKpiRows}
         periods={activeColumns}
+        dateRange={effectiveEntryRange}
         onApplyData={handleApplyAiGeneratedData}
         isApplying={isApplyingAi}
       />
