@@ -14,7 +14,7 @@ import { httpsCallable } from "firebase/functions";
 // When set, AI generation runs directly in the browser without needing Cloud Function deploy.
 // Clear back to "" before pushing to git so production uses the Cloud Function.
 // ============================================================================
-export const LOCAL_OPENAI_API_KEY = "...";
+export const LOCAL_OPENAI_API_KEY = "";
 
 export const SCENARIOS = [
   {
@@ -49,12 +49,11 @@ const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
  * Resolve OpenAI API key from LOCAL_OPENAI_API_KEY or environment bindings.
  */
 export const resolveOpenAiKey = () => {
-  return (
-    LOCAL_OPENAI_API_KEY ||
-    process.env.REACT_APP_OPENAI ||
-    process.env.REACT_APP_OPENAI_API_KEY ||
-    ""
-  ).trim();
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const key = String(LOCAL_OPENAI_API_KEY || "").trim();
+  return isLocalhost && key.startsWith("sk-") && key.length > 20 ? key : "";
 };
 
 /**
