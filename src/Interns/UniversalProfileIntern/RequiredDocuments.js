@@ -2,9 +2,9 @@
 import { useState, useEffect } from "react"
 import { CheckCircle, XCircle, Upload, FileText, Loader2 } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
-import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { storage } from "../../firebaseConfig" // ensure this is imported
+import { storage } from "../../firebaseConfig"
 
 export const documentsList = [
   {
@@ -56,6 +56,14 @@ export const documentsList = [
     description: "Student card or enrollment letter",
   },
   {
+    id: "proofOfBankAccount",
+    label: "Proof of Bank Account",
+    accept: ".pdf,.jpg,.jpeg,.png",
+    required: true,
+    multiple: false,
+    description: "Official bank confirmation letter or statement for stipend payout",
+  },
+  {
     id: "motivationLetter",
     label: "Motivation Letter",
     accept: ".pdf,.doc,.docx",
@@ -89,112 +97,126 @@ export default function RequiredDocuments({ data = {}, updateData }) {
           setIsLoading(false)
           return
         }
-        // Load from the universalProfiles collection
         const docRef = doc(db, "internProfiles", userId)
         const docSnap = await getDoc(docRef)
         if (docSnap.exists()) {
           const profileData = docSnap.data()
-          const documentsData = profileData.requiredDocuments || {}
+          const documentsData = {
+            ...(profileData.formData?.requiredDocuments || {}),
+            ...(profileData.requiredDocuments || {}),
+          }
           setFormData(documentsData)
           updateData(documentsData) // Sync with parent
-          // Update upload status
           const status = {}
-          documentsList.forEach((doc) => {
-            const files = documentsData[doc.id] || []
-            status[doc.id] = files.length > 0 ? "success" : "pending"
+          documentsList.forEach((docItem) => {
+            const files = documentsData[docItem.id] || []
+            status[docItem.id] = files.length > 0 ? "success" : "pending"
           })
           setUploadStatus(status)
         } else {
-          // Initialize with passed data if no saved data
           setFormData(data)
           const status = {}
-          documentsList.forEach((doc) => {
-            const files = data[doc.id] || []
-            status[doc.id] = files.length > 0 ? "success" : "pending"
+          documentsList.forEach((docItem) => {
+            const files = data[docItem.id] || []
+            status[docItem.id] = files.length > 0 ? "success" : "pending"
           })
           setUploadStatus(status)
         }
       } catch (error) {
         console.error("Error loading documents:", error)
-        setFormData(data) // Fallback to initial data prop
+        setFormData(data)
       } finally {
         setIsLoading(false)
       }
     }
     loadDocuments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync formData with external data prop
   useEffect(() => {
     if (data && Object.keys(data).length > 0) {
-      setFormData(data)
-      const status = {}
-      documentsList.forEach((doc) => {
-        const files = data[doc.id] || []
-        status[doc.id] = files.length > 0 ? "success" : "pending"
+      setFormData((prev) => {
+        const merged = { ...prev, ...data }
+        const status = {}
+        documentsList.forEach((docItem) => {
+          const files = merged[docItem.id] || []
+          status[docItem.id] = files.length > 0 ? "success" : "pending"
+        })
+        setUploadStatus(status)
+        return merged
       })
-      setUploadStatus(status)
     }
   }, [data])
 
   const handleFileChange = async (documentId, fileList) => {
-  const userId = auth.currentUser?.uid
-  if (!userId || !fileList || fileList.length === 0) return
+    const userId = auth.currentUser?.uid
+    if (!userId || !fileList || fileList.length === 0) return
 
-  setUploadingFiles((prev) => ({ ...prev, [documentId]: true }))
+    setUploadingFiles((prev) => ({ ...prev, [documentId]: true }))
 
-  try {
-    const uploadedFiles = []
+    try {
+      const uploadedFiles = []
+      const nowIso = new Date().toISOString()
 
-    for (const file of fileList) {
-      const fileRef = ref(storage, `internDocuments/${userId}/${documentId}/${file.name}`)
-      await uploadBytes(fileRef, file)
-      const downloadURL = await getDownloadURL(fileRef)
+      for (const file of fileList) {
+        const fileRef = ref(storage, `internProfiles/${userId}/documents/${documentId}/${file.name}`)
+        await uploadBytes(fileRef, file)
+        const downloadURL = await getDownloadURL(fileRef)
 
-      uploadedFiles.push({
-        name: file.name,
-        type: file.type,
-        url: downloadURL,
-        uploadedAt: new Date().toISOString(),
-      })
-    }
-
-    // If multiple not allowed, only keep the last uploaded file
-    const finalFiles = documentsList.find((doc) => doc.id === documentId)?.multiple
-      ? uploadedFiles
-      : [uploadedFiles[uploadedFiles.length - 1]]
-
-    const updatedData = { ...formData, [documentId]: finalFiles }
-    setFormData(updatedData)
-
-    const docRef = doc(db, "internProfiles", userId)
-    await updateDoc(docRef, {
-      requiredDocuments: updatedData,
-      lastUpdated: new Date(),
-    }).catch(async (err) => {
-      if (err.code === "not-found") {
-        await setDoc(docRef, {
-          requiredDocuments: updatedData,
-          createdAt: new Date(),
-          lastUpdated: new Date(),
-          userId,
+        uploadedFiles.push({
+          name: file.name,
+          type: file.type,
+          url: downloadURL,
+          uploadedAt: nowIso,
         })
-      } else throw err
-    })
+      }
 
-    await updateData(updatedData)
+      const isMultiple = documentsList.find((docItem) => docItem.id === documentId)?.multiple
+      const existingFiles = formData[documentId] || []
+      const finalFiles = isMultiple
+        ? [...existingFiles, ...uploadedFiles]
+        : [uploadedFiles[uploadedFiles.length - 1]]
 
-    setUploadStatus((prev) => ({
-      ...prev,
-      [documentId]: finalFiles.length > 0 ? "success" : "pending",
-    }))
+      const primaryUrl = finalFiles[0]?.url || null
+      const updatedData = {
+        ...formData,
+        [documentId]: finalFiles,
+        [`${documentId}Url`]: primaryUrl,
+      }
+      setFormData(updatedData)
 
-  } catch (error) {
-    console.error("Error uploading file:", error)
-  } finally {
-    setUploadingFiles((prev) => ({ ...prev, [documentId]: false }))
+      const docRef = doc(db, "internProfiles", userId)
+      await updateDoc(docRef, {
+        requiredDocuments: updatedData,
+        "formData.requiredDocuments": updatedData,
+        [`documents.${documentId}UpdatedAt`]: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+      }).catch(async (err) => {
+        if (err.code === "not-found") {
+          await setDoc(docRef, {
+            requiredDocuments: updatedData,
+            formData: { requiredDocuments: updatedData },
+            documents: { [`${documentId}UpdatedAt`]: serverTimestamp() },
+            createdAt: serverTimestamp(),
+            lastUpdated: serverTimestamp(),
+            userId,
+          })
+        } else throw err
+      })
+
+      await updateData(updatedData)
+
+      setUploadStatus((prev) => ({
+        ...prev,
+        [documentId]: finalFiles.length > 0 ? "success" : "pending",
+      }))
+    } catch (error) {
+      console.error("Error uploading file:", error)
+    } finally {
+      setUploadingFiles((prev) => ({ ...prev, [documentId]: false }))
+    }
   }
-}
 
   const getStatusBadge = (documentId, document) => {
     const isUploading = uploadingFiles[documentId]
@@ -265,13 +287,26 @@ export default function RequiredDocuments({ data = {}, updateData }) {
   const handleDeleteFile = async (documentId, fileIndex) => {
     const currentFiles = formData[documentId] || []
     const updatedFiles = currentFiles.filter((_, index) => index !== fileIndex)
+    const primaryUrl = updatedFiles[0]?.url || null
 
-    // Update local state
-    const updatedData = { ...formData, [documentId]: updatedFiles }
+    const updatedData = {
+      ...formData,
+      [documentId]: updatedFiles,
+      [`${documentId}Url`]: primaryUrl,
+    }
     setFormData(updatedData)
-    await updateData(updatedData) // Sync with parent
+    await updateData(updatedData)
 
-    // Update upload status
+    const userId = auth.currentUser?.uid
+    if (userId) {
+      const docRef = doc(db, "internProfiles", userId)
+      await updateDoc(docRef, {
+        requiredDocuments: updatedData,
+        "formData.requiredDocuments": updatedData,
+        lastUpdated: serverTimestamp(),
+      }).catch((err) => console.warn("Could not sync document deletion:", err))
+    }
+
     setUploadStatus((prev) => ({
       ...prev,
       [documentId]: updatedFiles.length > 0 ? "success" : "pending",
@@ -279,15 +314,15 @@ export default function RequiredDocuments({ data = {}, updateData }) {
   }
 
   const getProgressStats = () => {
-    const required = documentsList.filter((doc) => doc.required)
-    const optional = documentsList.filter((doc) => !doc.required)
+    const required = documentsList.filter((docItem) => docItem.required)
+    const optional = documentsList.filter((docItem) => !docItem.required)
 
-    const requiredUploaded = required.filter((doc) => {
-      const files = formData[doc.id] || []
+    const requiredUploaded = required.filter((docItem) => {
+      const files = formData[docItem.id] || []
       return files.length > 0
     }).length
-    const optionalUploaded = optional.filter((doc) => {
-      const files = formData[doc.id] || []
+    const optionalUploaded = optional.filter((docItem) => {
+      const files = formData[docItem.id] || []
       return files.length > 0
     }).length
 
@@ -389,7 +424,7 @@ export default function RequiredDocuments({ data = {}, updateData }) {
           }}
         >
           Upload your documents to complete your student profile verification. This helps employers verify your
-          credentials and qualifications.
+          credentials, qualifications, and stipend payout banking details.
         </p>
         <div
           style={{
@@ -675,10 +710,14 @@ export default function RequiredDocuments({ data = {}, updateData }) {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                             <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>
-  {file.name || `File ${fileIndex + 1}`}
-</a>
-
+                              <a
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ textDecoration: "underline" }}
+                              >
+                                {file.name || `File ${fileIndex + 1}`}
+                              </a>
                             </span>
                             <button
                               onClick={() => handleDeleteFile(document.id, fileIndex)}

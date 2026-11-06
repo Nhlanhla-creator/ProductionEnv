@@ -1,3 +1,6 @@
+import React, { useEffect } from "react"
+import { doc, updateDoc } from "firebase/firestore"
+import { db } from "../../firebaseConfig"
 import Header from "../../components/profile/header/Header"
 import { useHeaderProfile } from "../../hooks/useHeaderProfile"
 import { useMessages } from "../../hooks/useMessages"
@@ -7,7 +10,7 @@ import { headerProfiles, profileRoleOptions } from "../../config/headerConfig"
 function ProcurementHeader() {
   const config = headerProfiles.procurement || {
     collection: "universalProfiles",
-    nameField: "entityOverview.registeredName",
+    nameField: "contactDetails.contactName",
     logoField: "entityOverview.companyLogo",
     portalName: "Procurement Portal",
     fallbackName: "Procurement Lead",
@@ -21,7 +24,21 @@ function ProcurementHeader() {
   )
 
   const { unreadCount } = useMessages(user)
-  const { availableRoles, selectedRole, addRole } = useRoles()
+  const { availableRoles, selectedRole, addRole, removeRole } = useRoles()
+
+  // Auto-prune accidental legacy roles for dedicated Procurement users
+  useEffect(() => {
+    if (user && availableRoles.includes("Procurement") && (availableRoles.includes("SMSEs") || availableRoles.includes("Corporate"))) {
+      const cleaned = availableRoles.filter((r) => r !== "SMSEs" && r !== "Corporate")
+      if (cleaned.length > 0) {
+        updateDoc(doc(db, "users", user.uid), {
+          role: cleaned.join(","),
+          roleArray: cleaned,
+          currentRole: "Procurement",
+        }).catch((e) => console.warn("Role cleanup error:", e))
+      }
+    }
+  }, [user, availableRoles])
 
   return (
     <Header

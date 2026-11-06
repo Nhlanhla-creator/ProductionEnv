@@ -60,7 +60,7 @@ function Header({
   const [imageUploading, setImageUploading] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const roleFromLocalStorage = localStorage.getItem("selectedRole") || null
-  const { availableRoles, selectedRole, addRole, switchRole } = useRoles()
+  const { availableRoles, selectedRole, addRole, switchRole, removeRole } = useRoles()
   const [newRoleInput, setNewRoleInput] = useState("")
 
   // Determine active role based on portalName, pathname, or explicit selectedRole
@@ -633,24 +633,61 @@ const getAvailableRoleOptions = () =>
                   {/* Scrollable roles list */}
                   <div className={styles.rolesList}>
                     {availableRoles.map((role, idx) => {
-  const isCurrent = isSameRole(activeRole, role)
-  return (
-    <button
-      key={idx}
-      className={`${styles.dropdownItem} ${isCurrent ? styles.activeRole : ""}`}
-      onClick={() => {
-        setShowProfileMenu(false)
-        if (!isCurrent) handleRoleSwitch(role)
-      }}
-      disabled={isCurrent}
-      aria-current={isCurrent ? "true" : undefined}
-      title={isCurrent ? "Currently selected" : undefined}
-    >
-      <User size={16} />
-      <span>{role}</span>
-    </button>
-  )
-})}
+                      const isCurrent = isSameRole(activeRole, role)
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            width: "100%",
+                          }}
+                        >
+                          <button
+                            className={`${styles.dropdownItem} ${isCurrent ? styles.activeRole : ""}`}
+                            onClick={() => {
+                              setShowProfileMenu(false)
+                              if (!isCurrent) handleRoleSwitch(role)
+                            }}
+                            disabled={isCurrent}
+                            aria-current={isCurrent ? "true" : undefined}
+                            title={isCurrent ? "Currently selected" : undefined}
+                            style={{ flex: 1 }}
+                          >
+                            <User size={16} />
+                            <span>{role}</span>
+                          </button>
+                          {!isCurrent && removeRole && (
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                if (window.confirm(`Remove ${role} profile from this account?`)) {
+                                  try {
+                                    await removeRole(role)
+                                  } catch (err) {
+                                    console.error("Could not remove role:", err)
+                                  }
+                                }
+                              }}
+                              title={`Remove ${role} role`}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "#A1887F",
+                                cursor: "pointer",
+                                padding: "4px 8px",
+                                fontSize: "14px",
+                                lineHeight: 1,
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </>
               )}

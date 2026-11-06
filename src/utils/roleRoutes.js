@@ -26,6 +26,7 @@ export const DASHBOARD_ROUTES = {
   programsponsor: "/program-sponsor-profile",
   advisor: "/advisor-profile",
   intern: "/intern-profile",
+  procurement: "/procurement/profile",
   sme: "/profile",
 };
 
@@ -38,6 +39,7 @@ const ROLE_PRIORITY = [
   "catalyst",
   "programsponsor",
   "advisor",
+  "procurement",
   "intern",
   "sme",
 ];
@@ -60,8 +62,12 @@ const ROLE_ALIASES = {
   businesses: "sme",
   npo: "sme",
   npos: "sme",
-  corporate: "sme",
-  corporates: "sme",
+  corporate: "procurement",
+  corporates: "procurement",
+  procurement: "procurement",
+  procurements: "procurement",
+  buyer: "procurement",
+  buyers: "procurement",
 
   investor: "investor",
   investors: "investor",

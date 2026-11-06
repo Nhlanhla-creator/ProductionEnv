@@ -104,8 +104,8 @@ import { InternTable } from "./Interns/MyMatches/intern-table"
 import Instructions from "./Interns/UniversalProfileIntern/Instructions"
 // Intern Universal Profile Components
 import InternUniversalProfile from "./Interns/UniversalProfileIntern/universalProfile"
-import InternPersonalOverview from "./Interns/UniversalProfileIntern/PersonalOverview​"
-import InternAcademicOverview from "./Interns/UniversalProfileIntern/AcademicOverview​"
+import InternPersonalOverview from "./Interns/UniversalProfileIntern/PersonalOverview"
+import InternAcademicOverview from "./Interns/UniversalProfileIntern/AcademicOverview"
 import InternExperienceTrack from "./Interns/UniversalProfileIntern/Experience&TrackRecord"
 import InternSkillsInterests from "./Interns/UniversalProfileIntern/Skills&Interests"
 import InternProgramAffiliation from "./Interns/UniversalProfileIntern/ProgramAffiliation"
@@ -205,6 +205,7 @@ import ESDCohortWorkspace from "./procurement/ESDCohorts/ESDCohortWorkspace"
 import AuditReportsPage from "./procurement/Reports/AuditReportsPage"
 import ProcurementSettingsPage from "./procurement/Settings/ProcurementSettingsPage"
 import ProcurementRequestsPage from "./procurement/ProcurementWorkflow/ProcurementRequestsPage"
+import ProcurementMessages from "./procurement/Messages/ProcurementMessages"
 
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
@@ -302,11 +303,11 @@ import InvestorUniversalProfile from "./Investor/InvestorUniversalProfile/Invest
 import InvestorProfileTracker from "./Investor/InvestorUniversalProfile/ProfileTracker"
 import InvestorInstructions from "./Investor/InvestorUniversalProfile/Instructions"
 import InvestorEntityOverview from "./Investor/InvestorUniversalProfile/FundManageOverview"
-import InvestorOwnershipManagement from "./Investor/InvestorUniversalProfile/GeneralInvestmentPreference​"
+import InvestorOwnershipManagement from "./Investor/InvestorUniversalProfile/GeneralInvestmentPreference"
 import InvestorContactDetails from "./Investor/InvestorUniversalProfile/ContactDetails"
 import InvestorLegalCompliance from "./Investor/InvestorUniversalProfile/LegalCompliance"
-import InvestorProductsServices from "./Investor/InvestorUniversalProfile/FundDetails​"
-import InvestorHowDidYouHear from "./Investor/InvestorUniversalProfile/ApplicationBrief​"
+import InvestorProductsServices from "./Investor/InvestorUniversalProfile/FundDetails"
+import InvestorHowDidYouHear from "./Investor/InvestorUniversalProfile/ApplicationBrief"
 import InvestorDeclarationConsent from "./Investor/InvestorUniversalProfile/DeclarationConsent"
 import InvestorMessages from "./Investor/InvestorMessages/Messages"
 import InvestorCalendar from "./Investor/Calender/InvestorCalendar"
@@ -1317,6 +1318,9 @@ function App() {
         <Route path="/procurement/interactions/preview" element={renderProcurementRoute(InteractionsPage)} />
         <Route path="/procurement/cohorts" element={withProtection(ESDCohortWorkspace, {}, renderProcurementRoute)} />
         <Route path="/procurement/cohorts/preview" element={renderProcurementRoute(ESDCohortWorkspace)} />
+        <Route path="/procurement/calendar" element={withProtection(GovernanceCalendar, {}, renderProcurementRoute)} />
+        <Route path="/procurement/actions" element={withProtection(RapsActions, {}, renderProcurementRoute)} />
+        <Route path="/procurement/messages" element={withProtection(ProcurementMessages, {}, renderProcurementRoute)} />
         <Route path="/procurement/reports" element={withProtection(AuditReportsPage, {}, renderProcurementRoute)} />
         <Route path="/procurement/reports/preview" element={renderProcurementRoute(AuditReportsPage)} />
         <Route path="/procurement/settings" element={withProtection(ProcurementSettingsPage, {}, renderProcurementRoute)} />
@@ -1333,7 +1337,9 @@ function App() {
         <Route path="/support-matches" element={withProtection(SupportMatchesPage, {}, renderSupportProgramRoute)} />
         <Route path="/support-documents" element={withProtection(CatalystDocuments, {}, renderSupportProgramRoute)} />
         <Route path="/support-messages" element={withProtection(CatalystMessages, {}, renderSupportProgramRoute)} />
-        <Route path="/support-calendar" element={withProtection(Calendar, { role: "support" }, renderSupportProgramRoute)} />
+        <Route path="/support-calendar" element={withProtection(GovernanceCalendar, {}, renderSupportProgramRoute)} />
+        <Route path="/support-actions" element={withProtection(RapsActions, {}, renderSupportProgramRoute)} />
+        <Route path="/catalyst/actions" element={withProtection(RapsActions, {}, renderSupportProgramRoute)} />
         <Route path="/support-analytics" element={withProtection(GrowthEnabler, {}, renderSupportProgramRoute)} />
         <Route path="/support-settings" element={withProtection(CatalystSettings, {}, renderSupportProgramRoute)} />
         <Route path="/catalyst/cohorts" element={withProtection(CatalystCohorts, {}, renderSupportProgramRoute)} />

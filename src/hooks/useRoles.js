@@ -117,5 +117,31 @@ export function useRoles() {
     }
   }
 
-  return { availableRoles, selectedRole, loading, addRole, switchRole }
+  const removeRole = async (roleToRemove) => {
+    const user = auth.currentUser
+    if (!user || !roleToRemove) return false
+    if (loading) throw new Error("Roles still loading")
+
+    const updated = availableRoles.filter(
+      (r) => !isSameRole(r, roleToRemove) && r !== roleToRemove
+    )
+    if (updated.length === availableRoles.length) return false
+
+    const newCurrent = isSameRole(selectedRole, roleToRemove)
+      ? updated[0] || ""
+      : selectedRole
+
+    await updateDoc(doc(db, "users", user.uid), {
+      role: updated.join(","),
+      roleArray: updated,
+      currentRole: newCurrent,
+    })
+
+    writeStored(newCurrent)
+    setAvailableRoles(updated)
+    setSelectedRole(newCurrent)
+    return true
+  }
+
+  return { availableRoles, selectedRole, loading, addRole, switchRole, removeRole }
 }

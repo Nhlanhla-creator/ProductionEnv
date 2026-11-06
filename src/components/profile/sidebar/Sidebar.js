@@ -16,7 +16,7 @@ import { auth } from "../../../firebaseConfig"
 
 function Sidebar({ 
   menuItems, 
-  userName: propUserName = "User", 
+  userName: propUserName = null, 
   portalTitle = "Dashboard",
   userCollection = "universalProfiles",
   userNameField = "contactDetails.contactName",
@@ -39,7 +39,7 @@ function Sidebar({
     customDocId
   )
 
-  const effectiveUserName = propUserName || hookUserName || "User"
+  const effectiveUserName = (propUserName && propUserName !== "User") ? propUserName : (hookUserName || propUserName || "User")
 
   // Memoize menuItems to prevent unnecessary re-renders
   const memoizedMenuItems = useMemo(() => menuItems, [JSON.stringify(menuItems)])

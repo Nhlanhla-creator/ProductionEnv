@@ -308,14 +308,14 @@ export default function ProcurementProfileSummary({
             flexWrap: "wrap",
           }}
         >
-          {/* Centered Title with Underline */}
-          <div style={{ flex: 1, minWidth: "250px", textAlign: "center" }}>
+          {/* Left-Aligned Title */}
+          <div style={{ flex: 1, minWidth: "250px", textAlign: "left" }}>
             <h1
               style={{
                 color: "#4A352F",
                 fontSize: "clamp(24px, 3.5vw, 34px)",
                 fontWeight: 800,
-                margin: "0 0 8px 0",
+                margin: "0 0 6px 0",
                 letterSpacing: "-0.5px",
               }}
             >
@@ -323,13 +323,23 @@ export default function ProcurementProfileSummary({
             </h1>
             <div
               style={{
-                width: "80px",
+                width: "60px",
                 height: "3px",
                 background: "#8D6E63",
-                margin: "0 auto",
+                margin: "0 0 8px 0",
                 borderRadius: "2px",
               }}
             />
+            <p
+              style={{
+                color: "#7D5A50",
+                fontSize: "14px",
+                margin: 0,
+                fontWeight: 500,
+              }}
+            >
+              Complete Business Overview
+            </p>
           </div>
 
           {/* Action CTAs */}
@@ -380,16 +390,7 @@ export default function ProcurementProfileSummary({
           </div>
         </div>
 
-        <p
-          style={{
-            color: "#7D5A50",
-            fontSize: "14px",
-            margin: "12px 0 0 0",
-            fontWeight: 500,
-          }}
-        >
-          Complete Business Overview
-        </p>
+
       </div>
 
       {/* 6 Collapsible Legacy Accordion Sections */}

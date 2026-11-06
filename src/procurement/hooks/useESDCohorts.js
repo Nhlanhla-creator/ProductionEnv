@@ -9,6 +9,7 @@ const LOCAL_STORAGE_COHORTS_KEY = "procurement_esd_cohorts_v1"
 const INITIAL_COHORTS = [
   {
     id: "cohort_mining_2026",
+    programType: "ESD", // ED | SD | ESD
     name: "2026 Host Community Mining Consumables Accelerator",
     sponsor: "Anglo American Enterprise Development Fund",
     objective: "Develop local Black-owned manufacturers and safety equipment suppliers to achieve Tier 1 commercial readiness for mine shutdown tenders.",
@@ -116,6 +117,7 @@ const INITIAL_COHORTS = [
   },
   {
     id: "cohort_digital_2026",
+    programType: "ED",
     name: "2026 Women-in-Tech & Digital Services Pipeline",
     sponsor: "Anglo Digital Innovation Hub",
     objective: "Scale Black women-owned IT and cybersecurity firms to deliver on corporate software and cloud maintenance contracts.",
@@ -171,6 +173,7 @@ export function useESDCohorts() {
   const addCohort = useCallback((cohortData) => {
     const newCohort = {
       id: `cohort_${Date.now()}`,
+      programType: cohortData.programType || "ESD",
       ...cohortData,
       status: cohortData.status || "Active",
       members: [],

@@ -78,17 +78,35 @@ const StudentProfileSummary = ({ formData, onEdit }) => {
       coverLetter: formData?.professionalPresentation?.coverLetter,
       caseStudyResponse: formData?.professionalPresentation?.caseStudyResponse,
 
-      // Program Affiliation
-      sponsorName: formData?.programAffiliation?.sponsorName,
-      programType: formData?.programAffiliation?.programType,
+      // Program Affiliation & Stipend Payout
+      sponsorName:
+        formData?.programAffiliation?.sponsorName === "Other"
+          ? formData?.programAffiliation?.customSponsorName || "Other"
+          : formData?.programAffiliation?.sponsorName,
+      programType:
+        formData?.programAffiliation?.programType === "Other"
+          ? formData?.programAffiliation?.customProgramType || "Other"
+          : formData?.programAffiliation?.programType,
       referenceCode: formData?.programAffiliation?.referenceCode,
       fundingStatus: formData?.programAffiliation?.fundingStatus,
       stipendAmount: formData?.programAffiliation?.stipendAmount,
       sponsorContactName: formData?.programAffiliation?.sponsorContactName,
       sponsorContactEmail: formData?.programAffiliation?.sponsorContactEmail,
-      requiresLogbook: formData?.programAffiliation?.requiresLogbook,
+      requiresLogbook: formData?.programAffiliation?.requiresLogbook ? "Yes" : "No",
       duration: formData?.programAffiliation?.duration,
       locationLimit: formData?.programAffiliation?.locationLimit,
+      bankName:
+        formData?.programAffiliation?.bankName === "Other"
+          ? formData?.programAffiliation?.customBankName || "Other"
+          : formData?.programAffiliation?.bankName,
+      accountHolderName: formData?.programAffiliation?.accountHolderName,
+      accountType: formData?.programAffiliation?.accountType,
+      accountNumber: formData?.programAffiliation?.accountNumber
+        ? `****${String(formData.programAffiliation.accountNumber).replace(/\s+/g, "").slice(-4)}`
+        : undefined,
+      branchCode: formData?.programAffiliation?.branchCode,
+      beneficiaryVerificationStatus:
+        formData?.programAffiliation?.beneficiaryVerificationStatus || "Pending Verification",
 
       // Skills & Interests
       technicalSkills: formData?.skillsInterests?.technicalSkills,
@@ -106,6 +124,7 @@ const StudentProfileSummary = ({ formData, onEdit }) => {
       portfolioFile: formData?.requiredDocuments?.portfolioFile,
       idDocument: formData?.requiredDocuments?.idDocument,
       proofOfStudy: formData?.requiredDocuments?.proofOfStudy,
+      proofOfBankAccount: formData?.requiredDocuments?.proofOfBankAccount,
       motivationLetter: formData?.requiredDocuments?.motivationLetter,
       references: formData?.requiredDocuments?.references,
 
@@ -723,6 +742,12 @@ const StudentProfileSummary = ({ formData, onEdit }) => {
                       { label: "Sponsor Contact Email", value: summaryData?.sponsorContactEmail },
                       { label: "Requires Logbook", value: summaryData?.requiresLogbook },
                       { label: "Location Limit", value: summaryData?.locationLimit },
+                      { label: "Bank Name", value: summaryData?.bankName },
+                      { label: "Account Holder Name", value: summaryData?.accountHolderName },
+                      { label: "Account Type", value: summaryData?.accountType },
+                      { label: "Account Number", value: summaryData?.accountNumber },
+                      { label: "Branch Code", value: summaryData?.branchCode },
+                      { label: "Payout Verification Status", value: summaryData?.beneficiaryVerificationStatus },
                     ].map((item, i) => (
                       <div
                         key={i}
@@ -1068,43 +1093,48 @@ const StudentProfileSummary = ({ formData, onEdit }) => {
                     {[
                       {
                         label: "Profile Photo",
-                        value: summaryData?.profilePhoto ? "Uploaded" : "Not uploaded",
-                        status: summaryData?.profilePhoto ? "complete" : "pending",
+                        value: Array.isArray(summaryData?.profilePhoto) ? (summaryData.profilePhoto.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.profilePhoto ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.profilePhoto) ? summaryData.profilePhoto.length > 0 : Boolean(summaryData?.profilePhoto)) ? "complete" : "pending",
                       },
                       {
                         label: "Academic Transcript",
-                        value: summaryData?.transcriptFile ? "Uploaded" : "Not uploaded",
-                        status: summaryData?.transcriptFile ? "complete" : "pending",
+                        value: Array.isArray(summaryData?.transcriptFile) ? (summaryData.transcriptFile.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.transcriptFile ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.transcriptFile) ? summaryData.transcriptFile.length > 0 : Boolean(summaryData?.transcriptFile)) ? "complete" : "pending",
                       },
                       {
                         label: "CV/Resume",
-                        value: summaryData?.cvFile ? "Uploaded" : "Not uploaded",
-                        status: summaryData?.cvFile ? "complete" : "pending",
+                        value: Array.isArray(summaryData?.cvFile) ? (summaryData.cvFile.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.cvFile ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.cvFile) ? summaryData.cvFile.length > 0 : Boolean(summaryData?.cvFile)) ? "complete" : "pending",
                       },
                       {
                         label: "Portfolio or Sample Work",
-                        value: summaryData?.portfolioFile ? "Uploaded" : "Not uploaded",
-                        status: summaryData?.portfolioFile ? "complete" : "pending",
+                        value: Array.isArray(summaryData?.portfolioFile) ? (summaryData.portfolioFile.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.portfolioFile ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.portfolioFile) ? summaryData.portfolioFile.length > 0 : Boolean(summaryData?.portfolioFile)) ? "complete" : "pending",
                       },
                       {
                         label: "ID Document",
-                        value: summaryData?.idDocument ? "Uploaded" : "Not uploaded",
-                        status: summaryData?.idDocument ? "complete" : "pending",
+                        value: Array.isArray(summaryData?.idDocument) ? (summaryData.idDocument.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.idDocument ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.idDocument) ? summaryData.idDocument.length > 0 : Boolean(summaryData?.idDocument)) ? "complete" : "pending",
                       },
                       {
                         label: "Proof of Study",
-                        value: summaryData?.proofOfStudy ? "Uploaded" : "Not uploaded",
-                        status: summaryData?.proofOfStudy ? "complete" : "pending",
+                        value: Array.isArray(summaryData?.proofOfStudy) ? (summaryData.proofOfStudy.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.proofOfStudy ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.proofOfStudy) ? summaryData.proofOfStudy.length > 0 : Boolean(summaryData?.proofOfStudy)) ? "complete" : "pending",
+                      },
+                      {
+                        label: "Proof of Bank Account",
+                        value: Array.isArray(summaryData?.proofOfBankAccount) ? (summaryData.proofOfBankAccount.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.proofOfBankAccount ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.proofOfBankAccount) ? summaryData.proofOfBankAccount.length > 0 : Boolean(summaryData?.proofOfBankAccount)) ? "complete" : "pending",
                       },
                       {
                         label: "Motivation Letter",
-                        value: summaryData?.motivationLetter ? "Uploaded" : "Not uploaded",
-                        status: summaryData?.motivationLetter ? "complete" : "pending",
+                        value: Array.isArray(summaryData?.motivationLetter) ? (summaryData.motivationLetter.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.motivationLetter ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.motivationLetter) ? summaryData.motivationLetter.length > 0 : Boolean(summaryData?.motivationLetter)) ? "complete" : "pending",
                       },
                       {
                         label: "Reference Letters",
-                        value: summaryData?.references ? "Uploaded" : "Not uploaded",
-                        status: summaryData?.references ? "complete" : "pending",
+                        value: Array.isArray(summaryData?.references) ? (summaryData.references.length > 0 ? "Uploaded" : "Not uploaded") : (summaryData?.references ? "Uploaded" : "Not uploaded"),
+                        status: (Array.isArray(summaryData?.references) ? summaryData.references.length > 0 : Boolean(summaryData?.references)) ? "complete" : "pending",
                       },
                     ].map((item, i) => (
                       <div

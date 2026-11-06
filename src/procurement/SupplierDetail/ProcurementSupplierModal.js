@@ -29,6 +29,7 @@ export default function ProcurementSupplierModal({
   supplier,
   isOpen,
   onClose,
+  initialTab = "score",
   onOpenRFI,
   onOpenPortalHandoff,
   onOpenStageDecision,
@@ -36,7 +37,11 @@ export default function ProcurementSupplierModal({
   isShortlisted = false,
   supplierInteractions = [],
 }) {
-  const [activeTab, setActiveTab] = useState("score")
+  const [activeTab, setActiveTab] = useState(initialTab || "score")
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab)
+  }, [initialTab, isOpen])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -48,15 +53,27 @@ export default function ProcurementSupplierModal({
 
   if (!isOpen || !supplier) return null
 
-  const raw = supplier.raw || supplier
-  const entity = raw.entityOverview || {}
-  const ps = raw.productsServices || {}
-  const legal = raw.legalCompliance || {}
-  const finance = raw.financialOverview || {}
-  const docs = raw.documents || {}
+  const raw = supplier.raw || supplier || {}
+  const entity = raw.entityOverview || supplier.entityOverview || {}
+  const ps = raw.productsServices || supplier.productsServices || {}
+  const legal = raw.legalCompliance || supplier.legalCompliance || {}
+  const finance = raw.financialOverview || supplier.financialOverview || {}
+  const docs = raw.documents || supplier.documents || {}
 
+  const supplierName = supplier.name || entity.tradingName || entity.registeredName || raw.name || "Supplier Organization"
+  const offeringCategory = supplier.offeringCategory || ps.offeringCategory || "Industrial Services"
+  const location = supplier.location || entity.location || "Not specified"
+  const bbbeeLevel = supplier.bbbeeLevel || legal.bbbeeLevel || "Level 1"
+  const passportLabel = supplier.passportLabel || supplier.passportStatus || "In Review"
+  const isVerified = supplier.verified === true || legal.verified === true
   const bigScore = supplier.bigScore ?? raw.bigScore ?? raw.scores?.bigScore ?? 75
-  const verifiedCoverage = supplier.verifiedCoverage || 80
+  const verifiedCoverage = supplier.verifiedCoverage ?? 80
+  const documentCount = supplier.documentCount ?? 5
+  const allCategories = Array.isArray(supplier.allCategories) && supplier.allCategories.length > 0
+    ? supplier.allCategories
+    : Array.isArray(ps.productCategories) && ps.productCategories.length > 0
+    ? ps.productCategories
+    : [offeringCategory]
 
   const tabs = [
     { id: "score", label: "BIG Score & 5 Pillars", icon: Award },
@@ -112,9 +129,9 @@ export default function ProcurementSupplierModal({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
               <h2 style={{ margin: 0, fontSize: "1.35rem", fontWeight: 700, color: "#FAF7F2" }}>
-                {supplier.name}
+                {supplierName}
               </h2>
-              {supplier.verified && (
+              {isVerified && (
                 <span
                   style={{
                     background: "#2E7D32",
@@ -134,10 +151,10 @@ export default function ProcurementSupplierModal({
             </div>
 
             <div style={{ fontSize: "0.825rem", color: "#D7CCC8", display: "flex", gap: "14px", flexWrap: "wrap" }}>
-              <span>Category: <strong>{supplier.offeringCategory}</strong></span>
-              <span>Location: <strong>{supplier.location}</strong></span>
-              <span>B-BBEE: <strong>{supplier.bbbeeLevel}</strong></span>
-              <span>Passport: <strong>{supplier.passportLabel || "In Review"}</strong></span>
+              <span>Category: <strong>{offeringCategory}</strong></span>
+              <span>Location: <strong>{location}</strong></span>
+              <span>B-BBEE: <strong>{bbbeeLevel}</strong></span>
+              <span>Passport: <strong>{passportLabel}</strong></span>
             </div>
           </div>
 
@@ -353,7 +370,7 @@ export default function ProcurementSupplierModal({
                     <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#2E7D32" }}>92%</span>
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "#6D4C41" }}>
-                    Tax pin verified · CIPC active · B-BBEE Level {supplier.bbbeeLevel} · COIDA compliant
+                    Tax pin verified · CIPC active · B-BBEE Level {bbbeeLevel} · COIDA compliant
                   </div>
                 </div>
 
@@ -426,10 +443,10 @@ export default function ProcurementSupplierModal({
                   Operating Footprint & Sites
                 </h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "0.8rem" }}>
-                  <div>Primary Facility Location: <strong>{supplier.location}</strong></div>
-                  <div>Service Reach: <strong>{supplier.serviceAreas || "National"}</strong></div>
-                  <div>Years in Operation: <strong>{supplier.yearsOperating || "5 years"}</strong></div>
-                  <div>Physical Address: <strong>{entity.physicalAddress || "Operational Facility Site 4"}</strong></div>
+                  <div>Primary Facility Location: <strong>{location}</strong></div>
+                  <div>Service Reach: <strong>{supplier.serviceAreas || ps.serviceAreas || "National"}</strong></div>
+                  <div>Years in Operation: <strong>{supplier.yearsOperating || entity.yearsOperating || "5 years"}</strong></div>
+                  <div>Physical Address: <strong>{entity.physicalAddress || location}</strong></div>
                 </div>
               </div>
             </div>
@@ -443,14 +460,14 @@ export default function ProcurementSupplierModal({
                   Offering Scope & Categories
                 </h4>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "14px" }}>
-                  {supplier.allCategories && supplier.allCategories.length > 0 ? (
-                    supplier.allCategories.map((c, i) => (
+                  {allCategories && allCategories.length > 0 ? (
+                    allCategories.map((c, i) => (
                       <span key={i} style={{ background: "#F5F0E1", color: "#4A352F", padding: "4px 10px", borderRadius: "14px", fontSize: "0.75rem", fontWeight: 600 }}>
                         ✓ {typeof c === "string" ? c : c.name || "Category"}
                       </span>
                     ))
                   ) : (
-                    <span style={{ fontSize: "0.8rem", color: "#8D6E63" }}>{supplier.offeringCategory}</span>
+                    <span style={{ fontSize: "0.8rem", color: "#8D6E63" }}>{offeringCategory}</span>
                   )}
                 </div>
 

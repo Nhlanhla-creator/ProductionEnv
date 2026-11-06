@@ -45,45 +45,27 @@ export const PROCUREMENT_COLUMN_DEFS = {
     visible: true,
     priority: 1,
     sortable: true,
-    tooltip: "Platform readiness BIG Score (0–100) assessing compliance, financial, and operational health.",
-  },
-  verifiedCoverage: {
-    label: "Verification",
-    align: "center",
-    width: 130,
-    filterType: "verification",
-    visible: true,
-    priority: 2,
-    sortable: true,
-    tooltip: "Verified statutory documentation coverage and clearance percentage.",
-  },
-  passportStatus: {
-    label: "Passport Status",
-    width: 140,
-    filterType: "passport",
-    visible: true,
-    priority: 1,
-    sortable: true,
-    tooltip: "Prism Universal Passport status: Active, In Review, or Gap Identified.",
+    tooltip: "Platform readiness BIG Score (0–100). Click gauge to view 5-pillar breakdown.",
   },
   requirementFit: {
     label: "MATCH %",
     align: "center",
-    width: 140,
+    width: 130,
     filterType: "match",
     visible: true,
     priority: 1,
     sortable: true,
-    tooltip: "Algorithmic alignment with buyer demand context. Click cell or info icon to view breakdown.",
+    tooltip: "Algorithmic alignment with buyer demand context. Click cell to view criteria breakdown.",
   },
-  criticalGaps: {
-    label: "Critical Gaps",
-    width: 160,
-    filterType: "gaps",
+  passportStatus: {
+    label: "Passport Status",
+    align: "center",
+    width: 170,
+    filterType: "passport",
     visible: true,
-    priority: 2,
-    sortable: false,
-    tooltip: "Pre-onboarding gates or missing statutory compliance items.",
+    priority: 1,
+    sortable: true,
+    tooltip: "Prism Universal Passport status & statutory clearance. Click to inspect pass/fail details.",
   },
   capacity: {
     label: "Capacity & Lead Time",
@@ -130,5 +112,5 @@ export const DEFAULT_PROCUREMENT_PINNED = Object.fromEntries(
 
 export const SUPPLIER_KEY = "__supplier__"
 export const ACTION_KEY = "__action__"
-export const FIXED_WIDTHS = { [SUPPLIER_KEY]: 220, [ACTION_KEY]: 160 }
+export const FIXED_WIDTHS = { [SUPPLIER_KEY]: 220, [ACTION_KEY]: 180 }
 export const MIN_COLUMN_WIDTH = 84

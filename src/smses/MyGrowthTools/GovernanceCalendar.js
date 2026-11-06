@@ -882,7 +882,7 @@ const EditableField = ({ icon, label, value, placeholder, onSave, disabled }) =>
 /* ════════════════════════════════════════════════════════════════════════════
    Governance Calendar
    ════════════════════════════════════════════════════════════════════════ */
-const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
+const GovernanceCalendar = ({ activeSection, isInvestorView, targetUid }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -894,6 +894,32 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [smeInfo, setSmeInfo] = useState(null);
+
+  const querySmeId = useMemo(() => new URLSearchParams(location.search).get("smeId"), [location.search]);
+  const sessionSmeId = typeof window !== "undefined" ? sessionStorage.getItem("viewingSMEId") : null;
+  const effectiveUid = targetUid || querySmeId || (isInvestorView ? sessionSmeId : null) || currentUser?.uid;
+
+  useEffect(() => {
+    if (!effectiveUid || (currentUser && effectiveUid === currentUser.uid)) {
+      setSmeInfo(null);
+      return;
+    }
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "universalProfiles", effectiveUid));
+        if (snap.exists()) {
+          const d = snap.data();
+          const name = d.entityOverview?.registeredName || d.entityOverview?.tradingName || d.businessName || "SME";
+          setSmeInfo({ id: effectiveUid, name });
+        } else {
+          setSmeInfo({ id: effectiveUid, name: "Cohort SME" });
+        }
+      } catch (err) {
+        console.warn("Could not load SME profile:", err);
+      }
+    })();
+  }, [effectiveUid, currentUser]);
   const [loadingMessage, setLoadingMessage] = useState("Processing...");
   const [notification, setNotification] = useState(null);
   const [showDoubleBookingWarning, setShowDoubleBookingWarning] = useState(false);
@@ -963,14 +989,15 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
   }, []);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!effectiveUid) return;
     (async () => {
       try {
-        const snap = await getDoc(doc(db, "governanceCalendar", currentUser.uid));
+        const snap = await getDoc(doc(db, "governanceCalendar", effectiveUid));
         if (snap.exists()) setMeetings(snap.data().meetings || []);
+        else setMeetings([]);
       } catch (error) { console.error("Error loading meetings:", error); }
     })();
-  }, [currentUser]);
+  }, [effectiveUid]);
 
   useEffect(() => {
     const meetingId = new URLSearchParams(location.search).get("meeting");
@@ -998,9 +1025,10 @@ const GovernanceCalendar = ({ activeSection, isInvestorView }) => {
   };
 
   const persistMeetings = async (updated) => {
+    if (!effectiveUid || !currentUser) return;
     setMeetings(updated);
-    await setDoc(doc(db, "governanceCalendar", currentUser.uid),
-      { meetings: updated, updatedAt: new Date().toISOString(), userId: currentUser.uid }, { merge: true });
+    await setDoc(doc(db, "governanceCalendar", effectiveUid),
+      { meetings: updated, updatedAt: new Date().toISOString(), userId: effectiveUid, updatedBy: currentUser.uid }, { merge: true });
   };
 
   const getMeetingsForDate = (date) => {
@@ -1500,6 +1528,41 @@ BIG Marketplace Team`;
         </div>
       )}
 
+      {smeInfo && (
+        <div style={{
+          backgroundColor: "#F5EBE1",
+          border: "1px solid #D7CCC8",
+          borderRadius: "8px",
+          padding: "10px 16px",
+          marginBottom: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#4A352F", fontSize: "0.88rem", fontWeight: 600 }}>
+            <FaUsers size={16} color="#7D5A50" />
+            <span>Viewing Shared Calendar for: <strong>{smeInfo.name}</strong></span>
+          </div>
+          <button
+            onClick={() => {
+              if (typeof window !== "undefined") sessionStorage.removeItem("viewingSMEId");
+              navigate(location.pathname);
+            }}
+            style={{
+              padding: "4px 10px",
+              background: "#7D5A50",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: "4px",
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            Switch to My Calendar
+          </button>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap", marginBottom: "20px", paddingBottom: "16px", borderBottom: "2px solid #e8ddd4" }}>
         <div>
           <h1 style={{ color: "#5d4037", fontSize: "28px", fontWeight: 700, margin: 0, marginBottom: "8px", letterSpacing: "-0.5px" }}>Governance Calendar</h1>

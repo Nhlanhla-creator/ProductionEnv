@@ -27,7 +27,7 @@ import {
   PinOff,
   Info,
 } from "lucide-react"
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, updateDoc } from "firebase/firestore"
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, updateDoc, query, where } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import emailjs from "@emailjs/browser"
 import { API_KEYS } from "../../API"
@@ -220,7 +220,7 @@ const calculateMatchScore = (internData, sponsorData) => {
 
   // 1. Skills/Role Match (30%)
   const internSkills = internProfile?.skillsInterests?.technicalSkills || []
-  const sponsorRole = sponsorIR?.internRolesText || ""
+  const sponsorRole = sponsorIR?.internRolesText || sponsorJob?.internshipTitle || ""
   const sponsorSkills = sponsorJob?.preferredSkills || []
 
   let skillsMatch = false
@@ -418,28 +418,45 @@ const calculateMatchScore = (internData, sponsorData) => {
   }
 }
 
-const checkApplicationStatus = async (userId, sponsorId) => {
+const checkApplicationStatus = async (userId, sponsorId, applicationId = null) => {
   try {
-    const docId = `${sponsorId}_${userId}`
-    const applicationDoc = await getDoc(doc(db, "internshipApplications", docId))
+    const candidateDocIds = []
+    if (applicationId && applicationId !== sponsorId) {
+      candidateDocIds.push(`${applicationId}_${userId}`)
+    }
+    candidateDocIds.push(`${sponsorId}_${userId}`)
 
-    if (applicationDoc.exists()) {
-      const appData = applicationDoc.data()
-      const status = appData.status || "Applied"
+    for (const docId of candidateDocIds) {
+      const applicationDoc = await getDoc(doc(db, "internshipApplications", docId))
+      if (applicationDoc.exists()) {
+        const appData = applicationDoc.data()
+        // If checking the sponsor-level docId against a specific V2 applicationId,
+        // ensure it either belongs to this applicationId or has no conflicting smeApplicationId
+        if (
+          docId === `${sponsorId}_${userId}` &&
+          applicationId &&
+          appData.smeApplicationId &&
+          appData.smeApplicationId !== applicationId
+        ) {
+          continue
+        }
+        const status = appData.status || "Applied"
+        const normalizedStatus = status === "Applied" ? "Applied" : status === "Requested" ? "Requested" : status
 
-      // Normalize status - treat both "Applied" and "Requested" as applied
-      const normalizedStatus = status === "Applied" ? "Applied" : status === "Requested" ? "Requested" : status
-
-      return {
-        status: normalizedStatus,
-        exists: true,
-        data: appData,
+        return {
+          status: normalizedStatus,
+          exists: true,
+          data: appData,
+          applicationDocId: docId,
+        }
       }
     }
+
     return {
       status: "New Match",
       exists: false,
       data: null,
+      applicationDocId: `${sponsorId}_${userId}`,
     }
   } catch (error) {
     console.warn(`Could not fetch application status for ${sponsorId}_${userId}:`, error)
@@ -447,6 +464,7 @@ const checkApplicationStatus = async (userId, sponsorId) => {
       status: "New Match",
       exists: false,
       data: null,
+      applicationDocId: `${sponsorId}_${userId}`,
     }
   }
 }
@@ -1003,7 +1021,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
     )
   }
 
-  // Fetch program sponsors from Firestore
+  // Fetch SME internship opportunities from internApplicationsV2 (with fallback to internApplications)
   const fetchSMes = async () => {
     if (!isMountedRef.current) return
 
@@ -1020,60 +1038,186 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
       const userDoc = await getDoc(doc(db, "internProfiles", userId))
       const userData = userDoc.exists() ? userDoc.data() : {}
 
-      // Get program sponsor profiles from Firebase
-      const snapshot = await getDocs(collection(db, "universalProfiles"))
+      // Fetch universalProfiles, internApplicationsV2, legacy internApplications, and internMatchResults in parallel
+      const [profilesSnap, v2AppsSnap, legacyAppsSnap, matchResultsSnap] = await Promise.all([
+        getDocs(collection(db, "universalProfiles")),
+        getDocs(collection(db, "internApplicationsV2")).catch(() => ({ docs: [] })),
+        getDocs(collection(db, "internApplications")).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "internMatchResults"), where("internId", "==", userId))).catch(() => ({ docs: [] })),
+      ])
 
-      if (snapshot.empty) {
-        console.log("No documents found in universalProfiles collection")
+      if (profilesSnap.empty && v2AppsSnap.docs.length === 0 && legacyAppsSnap.docs.length === 0) {
         setProgramSponsors([])
-        setNotification({ type: "info", message: "No program sponsors found." })
+        setNotification({ type: "info", message: "No internship opportunities found." })
         setTimeout(() => setNotification(null), 3000)
         setLoading(false)
         return
       }
 
-      const sponsors = await Promise.all(
-        snapshot.docs.map(async (docSnap) => {
+      const profilesByUid = {}
+      profilesSnap.docs.forEach((d) => {
+        profilesByUid[d.id] = d.data() || {}
+      })
+
+      const aiMatchByAppId = {}
+      matchResultsSnap.docs.forEach((d) => {
+        const mData = d.data() || {}
+        const appId = mData.applicationId
+        if (!appId) return
+        const score = Number(mData.matchScore ?? mData.overallScore ?? mData.matchPercentage ?? mData.score ?? 0)
+        if (!aiMatchByAppId[appId] || score > aiMatchByAppId[appId].score) {
+          aiMatchByAppId[appId] = { score, data: mData }
+        }
+      })
+
+      const v2SmeIds = new Set()
+
+      // 1. Process internApplicationsV2 rows
+      const v2Rows = await Promise.all(
+        v2AppsSnap.docs.map(async (appDocSnap) => {
           try {
-            const sponsorId = docSnap.id
+            const appId = appDocSnap.id
+            const AppData = appDocSnap.data() || {}
+            const sponsorId = AppData.userId || AppData.smeId || appId
+            if (!sponsorId || sponsorId === userId) return []
+            if (AppData.status && AppData.status.toLowerCase() === "draft") return []
 
-            // Skip current user's profile
-            if (sponsorId === userId) {
+            v2SmeIds.add(sponsorId)
+
+            const formData = profilesByUid[sponsorId] || {}
+            const Application = AppData.internshipRequest || AppData || {}
+            const ApplicationOverview = AppData.jobOverview || AppData || {}
+            const overview = formData.entityOverview || {}
+            const matchPrefs = formData.generalMatchingPreference || {}
+
+            const smseName =
+              overview.registeredName ||
+              overview.tradingName ||
+              overview.organizationName ||
+              AppData.companyName ||
+              "Organization"
+
+            const applicationStatusData = await checkApplicationStatus(userId, sponsorId, appId)
+            const matchResult = calculateMatchScore(userData, AppData)
+            const aiMatch = aiMatchByAppId[appId]
+            const finalScore =
+              aiMatch && Number.isFinite(aiMatch.score) && aiMatch.score > 0
+                ? Math.min(100, Math.round(aiMatch.score))
+                : matchResult.score
+
+            const roleTitle =
+              ApplicationOverview.internshipTitle ||
+              Application.internRolesText ||
+              matchPrefs.supportFocus ||
+              "Internship Role"
+
+            const rawStipend = Application.stipendAmount
+            const stipendDisplay = rawStipend
+              ? String(rawStipend).trim().startsWith("R") || String(rawStipend).trim().startsWith("ZAR")
+                ? String(rawStipend).trim()
+                : `R${rawStipend}`
+              : Application.stipendOffered === "No"
+                ? "Pro-Bono"
+                : "not specified"
+
+            const locationDisplay =
+              ApplicationOverview.province ||
+              (Array.isArray(ApplicationOverview.cities) && ApplicationOverview.cities.join(", ")) ||
+              overview.province ||
+              overview.regionCovered ||
+              "N/A"
+
+            const sectorDisplay =
+              formatLabel(
+                (Array.isArray(ApplicationOverview.Preferredsector)
+                  ? ApplicationOverview.Preferredsector.join(", ")
+                  : ApplicationOverview.Preferredsector) ||
+                  (Array.isArray(overview.economicSectors)
+                    ? overview.economicSectors.join(", ")
+                    : overview.economicSectors) ||
+                  matchPrefs.sectorFocus,
+              ) || "Various"
+
+            return [
+              {
+                id: appId,
+                applicationId: appId,
+                applicationDocId: applicationStatusData.applicationDocId,
+                originalSponsorId: sponsorId,
+                programIndex: 0,
+                smseName,
+                location: locationDisplay,
+                sector: sectorDisplay,
+                operationStage: overview.operationStage || "N/A",
+                internshipRole: roleTitle,
+                briefDescription: {
+                  title: ApplicationOverview.internshipTitle || `Internship at ${smseName}`,
+                  company: smseName,
+                  duration: Application.duration || "unspecified",
+                  requirements: ApplicationOverview.briefDescription || [
+                    "Currently pursuing relevant degree",
+                    "Strong communication skills",
+                    "Willingness to learn",
+                    "Team collaboration abilities",
+                  ],
+                  responsibilities: ApplicationOverview.keyTasks || [
+                    "Support daily operations",
+                    "Participate in projects",
+                    "Learn industry best practices",
+                    "Contribute to team initiatives",
+                  ],
+                  benefits: ApplicationOverview.learningOutcomes || [
+                    "Professional development",
+                    "Mentorship opportunities",
+                    "Industry exposure",
+                    "Networking opportunities",
+                  ],
+                  applicationProcess:
+                    formData.applicationBrief?.applicationProcess ||
+                    "Submit application through our portal. Successful candidates will be contacted for interviews.",
+                },
+                stipend: stipendDisplay,
+                startDate: Application.startDate || "TBD",
+                matchPercentage: finalScore,
+                matchBreakdown: matchResult.breakdown,
+                status: applicationStatusData.status,
+                action: applicationStatusData.exists ? "Application exists" : "Send Application",
+                applicationExists: applicationStatusData.exists,
+                applicationData: applicationStatusData.data,
+                ratingRecommendation: "Not Yet Completed",
+                documents: [],
+                notes: [],
+              },
+            ]
+          } catch (v2Err) {
+            console.warn(`Error processing V2 application ${appDocSnap.id}:`, v2Err)
+            return []
+          }
+        }),
+      )
+
+      // 2. Fallback: Process legacy internApplications for SMEs not already represented in V2
+      const legacyRows = await Promise.all(
+        legacyAppsSnap.docs.map(async (appDocSnap) => {
+          try {
+            const sponsorId = appDocSnap.id
+            if (sponsorId === userId || v2SmeIds.has(sponsorId)) {
               return []
             }
 
-            const data = docSnap.data()
-            if (!data) {
-              console.log(`No data found for sponsor ${sponsorId}`)
-              return []
-            }
-
-            // Get internship applications correctly
-            // Skip sponsors with no application document
-            let appDoc
-            try {
-              appDoc = await getDoc(doc(db, "internApplications", sponsorId))
-              if (!appDoc.exists()) {
-                return [] // Skip this sponsor if no application doc exists
-              }
-            } catch (appError) {
-              console.log(`Error checking application doc for ${sponsorId}:`, appError)
-              return [] // Also skip on read error
-            }
-
-            const AppData = appDoc.data() || {}
-
-            const formData = data || {}
+            const AppData = appDocSnap.data() || {}
+            const formData = profilesByUid[sponsorId] || {}
             const Application = AppData.internshipRequest || AppData || {}
             const ApplicationOverview = AppData.jobOverview || AppData || {}
             const overview = formData.entityOverview || {}
             const programs = formData?.programDetails?.programs || []
             const matchPrefs = formData.generalMatchingPreference || {}
 
-            // Only include profiles that have some relevant data
             const hasRelevantData =
               overview.registeredName ||
               overview.organizationName ||
+              Application.internRolesText ||
+              ApplicationOverview.internshipTitle ||
               programs.length > 0 ||
               Object.keys(matchPrefs).length > 0
 
@@ -1081,24 +1225,26 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
               return []
             }
 
-            // Check application status for this sponsor
-            const applicationStatusData = await checkApplicationStatus(userId, sponsorId)
-
-            // Calculate match result with breakdown
+            const applicationStatusData = await checkApplicationStatus(userId, sponsorId, sponsorId)
             const matchResult = calculateMatchScore(userData, AppData)
 
-            // If no programs, create one entry with default values
             if (programs.length === 0) {
               return [
                 {
                   id: sponsorId,
+                  applicationId: sponsorId,
+                  applicationDocId: applicationStatusData.applicationDocId,
                   originalSponsorId: sponsorId,
                   programIndex: 0,
                   smseName: overview.registeredName || overview.organizationName || "Unnamed Organization",
                   location: overview.province || overview.regionCovered || "N/A",
                   sector: formatLabel(matchPrefs.sectorFocus) || "Various",
                   operationStage: overview.operationStage || "N/A",
-                  internshipRole: Application.internRolesText || matchPrefs.supportFocus || "Not Provided",
+                  internshipRole:
+                    ApplicationOverview.internshipTitle ||
+                    Application.internRolesText ||
+                    matchPrefs.supportFocus ||
+                    "Not Provided",
                   briefDescription: {
                     title: `Internship at ${overview.registeredName || overview.organizationName || "Organization"}`,
                     company: overview.registeredName || overview.organizationName || "Organization",
@@ -1140,66 +1286,67 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
               ]
             }
 
-            // Create an entry for each program
-            return programs.map((program, index) => {
-              return {
-                id: `${sponsorId}_${index}`,
-                originalSponsorId: sponsorId,
-                programIndex: index,
-                smseName: `${overview.registeredName || overview.organizationName || "Unnamed"}${programs.length > 1 ? ` (${program.name || `Program ${index + 1}`})` : ""}`,
-                location: overview.province || overview.location || "N/A",
-                sector: formatLabel(program.sectorFocus || matchPrefs.sectorFocus) || "Various",
-                operationStage: program.stage || matchPrefs.programStage || overview.operationStage || "N/A",
-                internshipRole: program.role || program.focus || matchPrefs.supportFocus || "General Support",
-                briefDescription: {
-                  title: program.name || `Internship Program`,
-                  company: overview.registeredName || overview.organizationName || "Organization",
-                  duration: program.duration || formData.applicationBrief?.programDuration || "3-6 months",
-                  requirements: program.requirements || [
-                    "Currently pursuing relevant degree",
-                    "Strong communication skills",
-                    "Willingness to learn",
-                    "Team collaboration abilities",
-                  ],
-                  responsibilities: program.responsibilities || [
-                    "Support program activities",
-                    "Participate in training sessions",
-                    "Assist with project implementation",
-                    "Contribute to program objectives",
-                  ],
-                  benefits: program.benefits || [
-                    "Professional development",
-                    "Mentorship from experienced professionals",
-                    "Industry-specific training",
-                    "Certificate of completion",
-                  ],
-                  applicationProcess:
-                    program.applicationProcess ||
-                    formData.applicationBrief?.applicationProcess ||
-                    "Submit application through our portal. Shortlisted candidates will be invited for interviews.",
-                },
-                stipend: Application.stipendAmount || "not specified",
-                startDate: program.startDate || formData.applicationBrief?.startDate || "TBD",
-                matchPercentage: matchResult.score,
-                matchBreakdown: matchResult.breakdown,
-                status: applicationStatusData.status,
-                action: applicationStatusData.exists ? "Application exist" : "Send Application",
-                applicationExists: applicationStatusData.exists,
-                applicationData: applicationStatusData.data,
-                ratingRecommendation: "Not Yet Completed",
-                documents: [],
-                notes: [],
-              }
-            })
+            return programs.map((program, index) => ({
+              id: `${sponsorId}_${index}`,
+              applicationId: sponsorId,
+              applicationDocId: applicationStatusData.applicationDocId,
+              originalSponsorId: sponsorId,
+              programIndex: index,
+              smseName: `${overview.registeredName || overview.organizationName || "Unnamed"}${programs.length > 1 ? ` (${program.name || `Program ${index + 1}`})` : ""}`,
+              location: overview.province || overview.location || "N/A",
+              sector: formatLabel(program.sectorFocus || matchPrefs.sectorFocus) || "Various",
+              operationStage: program.stage || matchPrefs.programStage || overview.operationStage || "N/A",
+              internshipRole: program.role || program.focus || matchPrefs.supportFocus || "General Support",
+              briefDescription: {
+                title: program.name || `Internship Program`,
+                company: overview.registeredName || overview.organizationName || "Organization",
+                duration: program.duration || formData.applicationBrief?.programDuration || "3-6 months",
+                requirements: program.requirements || [
+                  "Currently pursuing relevant degree",
+                  "Strong communication skills",
+                  "Willingness to learn",
+                  "Team collaboration abilities",
+                ],
+                responsibilities: program.responsibilities || [
+                  "Support program activities",
+                  "Participate in training sessions",
+                  "Assist with project implementation",
+                  "Contribute to program objectives",
+                ],
+                benefits: program.benefits || [
+                  "Professional development",
+                  "Mentorship from experienced professionals",
+                  "Industry-specific training",
+                  "Certificate of completion",
+                ],
+                applicationProcess:
+                  program.applicationProcess ||
+                  formData.applicationBrief?.applicationProcess ||
+                  "Submit application through our portal. Shortlisted candidates will be invited for interviews.",
+              },
+              stipend: Application.stipendAmount || "not specified",
+              startDate: program.startDate || formData.applicationBrief?.startDate || "TBD",
+              matchPercentage: matchResult.score,
+              matchBreakdown: matchResult.breakdown,
+              status: applicationStatusData.status,
+              action: applicationStatusData.exists ? "Application exist" : "Send Application",
+              applicationExists: applicationStatusData.exists,
+              applicationData: applicationStatusData.data,
+              ratingRecommendation: "Not Yet Completed",
+              documents: [],
+              notes: [],
+            }))
           } catch (docError) {
-            console.log(`Error processing document ${docSnap.id}:`, docError)
-            return [] // Return empty array for failed documents
+            console.log(`Error processing legacy document ${appDocSnap.id}:`, docError)
+            return []
           }
         }),
       )
 
       // Flatten the array and filter out empty arrays
-      const flattenedSponsors = sponsors.flat().filter((sponsor) => sponsor && Object.keys(sponsor).length > 0)
+      const flattenedSponsors = [...v2Rows.flat(), ...legacyRows.flat()].filter(
+        (sponsor) => sponsor && Object.keys(sponsor).length > 0,
+      )
 
       console.log(`Found ${flattenedSponsors.length} program sponsors`)
       setProgramSponsors(flattenedSponsors)
@@ -1465,11 +1612,20 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
         console.warn("Could not retrieve user profile:", userError)
       }
 
-      // Get sponsor data
+      // Get sponsor data from internApplicationsV2 first, falling back to legacy internApplications
       let sponsorData = {}
+      const targetAppId = intern.applicationId || intern.id
       try {
-        const sponsorDoc = await getDoc(doc(db, "internApplications", intern.originalSponsorId))
-        sponsorData = sponsorDoc.exists() ? sponsorDoc.data() : {}
+        if (targetAppId) {
+          const v2Doc = await getDoc(doc(db, "internApplicationsV2", targetAppId))
+          if (v2Doc.exists()) {
+            sponsorData = v2Doc.data() || {}
+          }
+        }
+        if (!sponsorData || Object.keys(sponsorData).length === 0) {
+          const sponsorDoc = await getDoc(doc(db, "internApplications", intern.originalSponsorId))
+          sponsorData = sponsorDoc.exists() ? sponsorDoc.data() : {}
+        }
       } catch (sponsorError) {
         console.warn("Could not retrieve sponsor profile:", sponsorError)
       }
@@ -1530,6 +1686,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
         provinces: userFormData.personalOverview?.provinces || [],
         cities: userFormData.personalOverview?.cities || [],
         sponsorId: sponsorId,
+        smeApplicationId: intern.applicationId || intern.id || null,
         sponsorName: intern.smseName,
         location: intern.location || "N/A",
         type: "Internship",
@@ -1667,6 +1824,21 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
 
       // Save to Firestore
       await setDoc(doc(db, "internshipApplications", applicationDocId), applicationData, { merge: true })
+      if (intern.applicationId && intern.applicationId !== sponsorId) {
+        await setDoc(
+          doc(db, "internMatchResults", `${intern.applicationId}_${internId}`),
+          {
+            applicationId: intern.applicationId,
+            smeId: sponsorId,
+            internId: internId,
+            applicantId: internId,
+            matchScore: matchResult.score,
+            overallScore: matchResult.score,
+            createdAt: serverTimestamp(),
+          },
+          { merge: true },
+        ).catch((err) => console.warn("Could not sync internMatchResults link:", err))
+      }
       console.log("Application successfully saved to Firestore")
 
       // Update UI state
@@ -1909,7 +2081,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
 
       const internId = user.uid
       const sponsorId = intern.originalSponsorId || intern.id.split("_")[0]
-      const applicationDocId = `${sponsorId}_${internId}`
+      const applicationDocId = intern.applicationDocId || `${sponsorId}_${internId}`
 
       console.log("Accepting request for application:", applicationDocId)
 
@@ -2087,7 +2259,7 @@ export function InternTable({ interns = [], stageFilter: stageFilterProp = null,
         ...(messageText && { lastMessage: messageText }),
       }
 
-      const applicationDocId = `${sponsorId}_${internId}`
+      const applicationDocId = selectedIntern.applicationDocId || `${sponsorId}_${internId}`
       const docRef = doc(db, "internshipApplications", applicationDocId)
 
       const docSnapshot = await getDoc(docRef)
