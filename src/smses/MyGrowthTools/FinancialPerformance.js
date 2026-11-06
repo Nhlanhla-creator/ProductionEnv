@@ -1,9 +1,11 @@
 "use client";
 
+import CompanyHealthDiagnostics from "./shared/CompanyHealthDiagnostics";
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Chart, Pie } from "react-chartjs-2";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, runTransaction } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db, auth } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
@@ -84,8 +86,8 @@ const fyStartYearOf = (date, sm) => (date.getMonth() >= sm ? date.getFullYear() 
 const fyLabel = (sy, sm) => (sm === 0 ? `${sy}` : `${sy}/${String(sy + 1).slice(2)}`);
 
 const fyMonths = (sy, sm) =>
-  Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(sy, sm + i, 1);
+  !Number.isInteger(Number(sy)) || Number(sy) < 1900 || Number(sy) > 9998 || !Number.isInteger(Number(sm)) || Number(sm) < 0 || Number(sm) > 11 ? [] : Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Number(sy), Number(sm) + i, 1);
     return {
       key: `M:${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
       label: `${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`,
@@ -212,10 +214,11 @@ const bsTotals = (bsDoc, mi) => {
 const buildContext = (docs, year, mi, budgetMode = false) => {
   if (budgetMode) {
     const projected = {};
+    const suffix = budgetMode === "forecast" ? "Forecast" : "Budget";
     Object.values(DOC).forEach(prefix => {
       const key = `${prefix}_${year}`, source = docs[key] || {};
-      projected[key] = Object.fromEntries(Object.entries(source).filter(([k]) => k.endsWith("Budget")).map(([k,v]) => [k.slice(0,-6),v]));
-      if (prefix === DOC.bs) projected[key].balanceSheetData = source.balanceSheetBudget;
+      projected[key] = Object.fromEntries(Object.entries(source).filter(([k]) => k.endsWith(suffix)).map(([k,v]) => [k.slice(0,-suffix.length),v]));
+      if (prefix === DOC.bs) projected[key].balanceSheetData = source[`balanceSheet${suffix}`];
     });
     return buildContext(projected, year, mi);
   }
@@ -459,19 +462,49 @@ const StatusIcon = ({ status, size = 22 }) => {
   return <Info {...p} />;
 };
 
-const localDate = (s) => { const [y,m,d=1] = String(s).split("-").map(Number); return new Date(y,m-1,d); };
-const bucketWindow = (key) => {
-  const start = localDate(key.slice(2));
-  return [start, key.startsWith("M:") ? monthEnd(start.getFullYear(),start.getMonth()) : key.startsWith("W:") ? addDays(start,6) : start];
+const MAX_FINANCIAL_MONTHS = 120;
+const MAX_FINANCIAL_BUCKETS = 3660;
+const FORECAST_COLOR = "#7c3aed";
+const FORECAST_STYLE = { hdr: FORECAST_COLOR, hdrText: "#ede9fe", cell: "#f5f3ff", border: "#c4b5fd", input: "#6d28d9" };
+const localDate = value => {
+  const match = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(String(value || ""));
+  if (!match) return new Date(NaN);
+  const y=Number(match[1]),m=Number(match[2]),d=Number(match[3] || 1);
+  const result=new Date(y,m-1,d);
+  return y>=1900 && y<=9999 && result.getFullYear()===y && result.getMonth()===m-1 && result.getDate()===d ? result : new Date(NaN);
 };
-const rangeEntries = (kpi, from, to) => {
-  const prefix = kpi.frequency === "Daily" ? "D:" : kpi.frequency === "Weekly" ? "W:" : "M:";
-  return Object.entries(kpi.entries || {}).filter(([key]) => {
-    if (!key.startsWith(prefix)) return false;
-    const [a,b] = bucketWindow(key);
-    return startOfDay(a) >= startOfDay(from) && startOfDay(b) <= startOfDay(to);
-  }).sort(([a],[b]) => a.localeCompare(b));
+const validFinancialRange = (from,to) => Number.isFinite(+from) && Number.isFinite(+to) && from.getFullYear()>=1900 && to.getFullYear()<=9999 && startOfDay(from)<=startOfDay(to) && (to.getFullYear()-from.getFullYear())*12+to.getMonth()-from.getMonth()<MAX_FINANCIAL_MONTHS;
+const requireFinancialRange = range => {
+  const from=localDate(range?.from),to=localDate(range?.to);
+  if (!validFinancialRange(from,to)) throw new Error("Choose valid dates in order, spanning no more than 10 years.");
+  return [from,to];
 };
+const bucketWindow = key => {
+  if (!/^(?:M:\d{4}-\d{2}|[DW]:\d{4}-\d{2}-\d{2})$/.test(String(key))) return [new Date(NaN),new Date(NaN)];
+  const start=localDate(key.slice(2));
+  return [start,key.startsWith("M:")?monthEnd(start.getFullYear(),start.getMonth()):key.startsWith("W:")?addDays(start,6):start];
+};
+const isFutureBucket = (key,now=new Date()) => {
+  const [start]=bucketWindow(key);return Number.isFinite(+start) && startOfDay(start)>startOfDay(now);
+};
+const financialValueType = (key,which) => which === "actual" && isFutureBucket(key) ? "forecast" : which;
+const financialBucketValues = (entry,key) => ({...entry,actual:isFutureBucket(key)?null:parseNum(entry?.actual),budget:parseNum(entry?.budget),forecast:isFutureBucket(key)?parseNum(entry?.forecast):null});
+const boundedPeriodKeys = (frequency,from,to) => {
+  if (!validFinancialRange(from,to)) return [];
+  const monthly=frequency!=="Daily" && frequency!=="Weekly",weekly=frequency==="Weekly",keys=[];
+  let cursor=monthly?monthStart(from.getFullYear(),from.getMonth()):weekly?startOfWeek(from):startOfDay(from);
+  for(let count=0;count<MAX_FINANCIAL_BUCKETS && cursor<=to;count++) {
+    const key=monthly?`M:${dayKeyOf(cursor).slice(2,9)}`:weekly?weekKeyOf(cursor):dayKeyOf(cursor);
+    const [a,b]=bucketWindow(key);
+    if(startOfDay(a)>=startOfDay(from) && startOfDay(b)<=startOfDay(to)) keys.push(key);
+    const next=monthly?new Date(cursor.getFullYear(),cursor.getMonth()+1,1):addDays(cursor,weekly?7:1);
+    if(!Number.isFinite(+next)||next<=cursor)break;
+    cursor=next;
+  }
+  return keys;
+};
+const rangeEntries = (kpi,from,to) => boundedPeriodKeys(kpi.frequency,from,to).map(key=>[key,financialBucketValues(kpi.entries?.[key] || {},key)]);
+
 const ratioParts = {
   gpMargin: c => [c.gp,c.sales,100], npMargin: c => [c.np,c.sales,100],
   fixedVariableRatio: c => [c.fixedCosts, Number.isFinite(c.fixedCosts) && Number.isFinite(c.variableCosts) ? c.fixedCosts+c.variableCosts : null,100],
@@ -489,13 +522,13 @@ const aggregateEntries = (kpi, entries, which) => {
 };
 const rollupRange = (kpi, from, to) => {
   const entries = rangeEntries(kpi,from,to);
-  return { actual: aggregateEntries(kpi,entries,"actual"), budget: aggregateEntries(kpi,entries,"budget") };
+  return { actual: aggregateEntries(kpi,entries.filter(([key])=>!isFutureBucket(key)),"actual"), budget: aggregateEntries(kpi,entries,"budget"), forecast: aggregateEntries(kpi,entries.filter(([key])=>isFutureBucket(key)),"forecast") };
 };
 const resolveMonth = (kpi, year, mi) => rollupRange(kpi,monthStart(year,mi),monthEnd(year,mi));
 const variancePercent = (actual,budget) => { const a=parseNum(actual), b=parseNum(budget); return a === null || b === null || b === 0 ? null : (a-b)/Math.abs(b)*100; };
 const periodSeries = (kpi, period, fy) => {
   const [from,to] = periodWindow(period,fy), rows = rangeEntries(kpi,from,to);
-  return { labels: rows.map(([key])=>key.slice(2)), actual: rows.map(([,r])=>parseNum(r.actual)), budget: rows.map(([,r])=>parseNum(r.budget)), noteKey: `${dayKeyOf(from)}:${dayKeyOf(to)}`, caption: `${fmtDMY(from)} – ${fmtDMY(to)} · ${kpi.frequency || "Monthly"} (complete buckets only)` };
+  return { labels: rows.map(([key])=>key.slice(2)), forecast: rows.map(([,r])=>parseNum(r.forecast)), keys: rows.map(([key])=>key), actual: rows.map(([,r])=>parseNum(r.actual)), budget: rows.map(([,r])=>parseNum(r.budget)), noteKey: `${dayKeyOf(from)}:${dayKeyOf(to)}`, caption: `${fmtDMY(from)} – ${fmtDMY(to)} · ${kpi.frequency || "Monthly"} (complete buckets only)` };
 };
 
 const periodWindow = (period, fy) => {
@@ -553,9 +586,6 @@ const periodWindow = (period, fy) => {
 
 const periodValues = (kpi, period, fy) => {
   const [from, to] = periodWindow(period, fy);
-  if (from.getDate() === 1 && from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear() && to.getDate() >= 28) {
-    return resolveMonth(kpi, from.getFullYear(), from.getMonth());
-  }
   return rollupRange(kpi, from, to);
 };
 const getStatus = (kpi, period, fy) => { const v = periodValues(kpi, period, fy); return statusFromPair(kpi, v.budget, v.actual); };
@@ -682,7 +712,7 @@ const DateRangeControls = ({ fy, onChange }) => {
     if (mode === "custom") { a = localDate(from); b = localDate(to); }
     else if (mode === "month") { a = localDate(month); b = monthEnd(a.getFullYear(), a.getMonth()); }
     else { a = new Date(Number(year), mode === "financial" ? fy.startMonth : 0, 1); b = monthEnd(a.getFullYear(), a.getMonth() + 11); }
-    if (!Number.isFinite(+a) || !Number.isFinite(+b) || a > b || a.getFullYear() < 1900 || b.getFullYear() > 9999 || b.getFullYear() - a.getFullYear() > 100) { setError("Choose a valid date range."); return; }
+    if (!Number.isFinite(+a) || !Number.isFinite(+b) || a > b || a.getFullYear() < 1900 || b.getFullYear() > 9999 || !validFinancialRange(a,b)) { setError("Choose valid dates in order, spanning no more than 10 years."); return; }
     setBusy(true); setError("");
     try { await onChange({ from: dayKeyOf(a).slice(2), to: dayKeyOf(b).slice(2) }); setOpen(false); }
     catch { setError("Could not apply these dates. Please try again."); }
@@ -709,14 +739,9 @@ const DateRangeControls = ({ fy, onChange }) => {
   </div>;
 };
 
-const monthsForRange = (from,to) => {
-  const result=[];
-  for(let d=new Date(from.getFullYear(),from.getMonth(),1); d<=to; d=new Date(d.getFullYear(),d.getMonth()+1,1)) {
-    const m=fyMonths(d.getFullYear(),0)[d.getMonth()];
-    if (d>=startOfDay(from) && startOfDay(monthEnd(m.year,m.month))<=startOfDay(to)) result.push(m);
-  }
-  return result;
-};
+const monthsForRange = (from,to) => boundedPeriodKeys("Monthly",from,to).map(key=>{
+  const d=localDate(key.slice(2));return fyMonths(d.getFullYear(),0)[d.getMonth()];
+});
 
 const Modal = ({ title, subtitle, icon, onClose, children, width = 640, footer }) => (
   <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(45,32,28,0.55)",
@@ -798,6 +823,7 @@ const KpiInfoModal = ({ kpi, onClose, onSave, readOnly }) => {
 };
 
 const localAnalysis = (kpi, period, v, fy) => {
+  if(v.actual===null && Number.isFinite(v.forecast))return {observations:[`Forecast for the selected dates: ${fmtValue(v.forecast,kpi)}. No realised actual is recorded in these dates.`],issues:["Forecast values are plans, not actual performance."],opportunities:["Review forecast assumptions and capture verified actual results as they occur."]};
   const status = statusFromPair(kpi, v.budget, v.actual);
   const variance = Number.isFinite(parseNum(v.budget)) && Number.isFinite(parseNum(v.actual)) ? parseNum(v.actual) - parseNum(v.budget) : null;
   const fav = varianceFavourable(kpi, variance);
@@ -884,7 +910,10 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
           timeframe: scope === "summary" ? "All timeframes" : PERIOD_LABEL[period],
           financialYearStartMonth: fy.startMonth,
           budget: v.budget, actual: v.actual, variance: getVariance(kpi, period, fy),
-          status: getStatus(kpi, period, fy).label, notes: kpi.notes || "", entries: kpi.entries || {},
+          status: getStatus(kpi, period, fy).label, notes: kpi.notes || "",
+          reportingRange:periodWindow(period,fy).map(d=>dayKeyOf(d).slice(2)), forecast:v.forecast,
+          dataPolicy:"Future values are forecasts, not realised performance. Never treat forecast as actual.",
+          entries:Object.fromEntries(rangeEntries(kpi,...periodWindow(period,fy))),
         });
         const d = res?.data;
         if (d?.observations && d?.opportunities) {
@@ -937,10 +966,10 @@ const AnalysisBody = ({ kpi, period, fy, scope = "period", compact = false }) =>
 };
 
 const AnalysisModal = ({ kpi, period, fy, onClose }) => (
-  <Modal title="Observations and Opportunities" subtitle={`${kpi.name} · across all timeframes`}
+  <Modal title="Observations and Opportunities" subtitle={`${kpi.name} · ${periodWindow(period,fy).map(fmtDMY).join(" – ")}`}
     icon={<Lightbulb size={17} />} onClose={onClose} width={700}
     footer={<button onClick={onClose} style={btnPrimary}>Close</button>}>
-    <AnalysisBody kpi={kpi} period={period} fy={fy} scope="summary" />
+    <AnalysisBody kpi={kpi} period={period} fy={fy} scope="period" />
   </Modal>
 );
 
@@ -989,7 +1018,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const noteTimer = useRef(null);
   const prefs = kpi.chart?.v === CHART_VERSION ? { ...DEFAULT_CHART, ...kpi.chart } : { ...DEFAULT_CHART };
 
-  const { labels, actual, budget, noteKey, caption } = useMemo(() => periodSeries(kpi,period,fy), [kpi,period,fy]);
+  const { labels, actual, budget, forecast, noteKey, caption } = useMemo(() => periodSeries(kpi,period,fy), [kpi,period,fy]);
 
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
 
@@ -1035,8 +1064,9 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
   const mainData = { labels, datasets: [
     buildChartSeries(prefs.budgetType, budget, prefs.budgetColor, { label: "Budget", order: 1 }),
     buildChartSeries(prefs.actualType, actual, prefs.actualColor, { label: "Actual", order: 2 }),
+    ...(forecast.some(Number.isFinite) ? [buildChartSeries("bar", forecast, FORECAST_COLOR, {label:"Forecast",order:3})] : []),
   ] };
-  const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType]);
+  const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType, ...(forecast.some(Number.isFinite)?["bar"]:[])]);
   const mainOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
     layout: { padding: { top: 12, right: 12, bottom: 0 } },
@@ -1126,6 +1156,7 @@ const TrendChartModal = ({ kpi, period, fy, onClose, onSaveNote, onSaveChart, re
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
             {key("Budget", swatchFor(prefs.budgetType, prefs.budgetColor))}
             {key("Actual", swatchFor(prefs.actualType, prefs.actualColor))}
+          {forecast.some(Number.isFinite) && key("Forecast · future periods", barChip(FORECAST_COLOR))}
             <span style={{ width: 1, height: 14, background: T.lineSoft }} aria-hidden="true" />
             {key("Favourable", dot(T.green, true))}{key("Unfavourable", dot(T.red, true))}
           </div>
@@ -2017,7 +2048,7 @@ const MODE_COLOR = {
    SimpleTrendChartModal — full-featured, matching the KPI trend chart
    ════════════════════════════════════════════════════════════════════════ */
 const SimpleTrendChartModal = ({
-  title, subtitle, labels, actual, budget,
+  title, subtitle, labels, actual: rawActual, budget, forecast: rawForecast = [], periodKeys = [],
   actualLabel = "Actual", budgetLabel = "Budget", direction = "match",
   storageKey, savedPrefs, onSavePrefs,
   onClose,
@@ -2034,6 +2065,8 @@ const SimpleTrendChartModal = ({
     if (onSavePrefs && storageKey) onSavePrefs(storageKey, next);
   };
 
+  const actual = rawActual.map((v,i)=>isFutureBucket(periodKeys[i])?null:parseNum(v));
+  const forecast = rawActual.map((v,i)=>isFutureBucket(periodKeys[i])?parseNum(rawForecast[i]):null);
   const kpiShape = { units: "R" };
 
   const variance = actual.map((a, i) => (Number.isFinite(a) && Number.isFinite(budget[i]) ? a - budget[i] : null));
@@ -2065,8 +2098,9 @@ const SimpleTrendChartModal = ({
   const mainData = { labels, datasets: [
     buildChartSeries(prefs.budgetType, budget, prefs.budgetColor, { label: budgetLabel, order: 1 }),
     buildChartSeries(prefs.actualType, actual, prefs.actualColor, { label: actualLabel, order: 2 }),
+    ...(forecast.some(Number.isFinite) ? [buildChartSeries("bar", forecast, FORECAST_COLOR, {label:"Forecast",order:3})] : []),
   ] };
-  const mainBaseType = baseChartType([prefs.actualType, prefs.budgetType]);
+  const mainBaseType = baseChartType([prefs.actualType,prefs.budgetType,...(forecast.some(Number.isFinite)?["bar"]:[])]);
   const mainOptions = {
     responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
     layout: { padding: { top: 12, right: 12, bottom: 0 } },
@@ -2173,6 +2207,7 @@ const SimpleTrendChartModal = ({
         <div aria-hidden="true" style={{ borderTop: `1px solid ${T.lineSoft}`, margin: "6px 12px 0 88px" }} />
         <div style={{ height: 320 }}>
           <Chart type={mainBaseType} data={mainData} options={mainOptions} />
+          {forecast.some(Number.isFinite) && <div style={{fontSize:12,color:FORECAST_COLOR}}>■ Forecast · future periods only</div>}
         </div>
       </div>
 
@@ -2205,24 +2240,24 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
   );
 
   const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") });
+  const [editDraft, setEditDraft] = useState({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill(""), forecast: Array(12).fill("") });
   const [addingNew, setAddingNew] = useState(false);
-  const [newLoan, setNewLoan] = useState({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") });
+  const [newLoan, setNewLoan] = useState({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill(""), forecast: Array(12).fill("") });
 
   const startEdit = (loan, idx) => {
     setEditingId(idx);
     setEditDraft({
       name: loan.name || "",
       scheduled: Array.isArray(loan.scheduled) ? [...loan.scheduled] : Array(12).fill(""),
-      paid: Array.isArray(loan.paid) ? [...loan.paid] : Array(12).fill(""),
+      paid: Array.isArray(loan.paid) ? [...loan.paid] : Array(12).fill(""), forecast:[...(loan.forecast || Array(12).fill(""))],
     });
   };
 
-  const cancelEdit = () => { setEditingId(null); setEditDraft({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") }); };
+  const cancelEdit = () => { setEditingId(null); setEditDraft({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill(""), forecast: Array(12).fill("") }); };
 
   const saveEdit = () => {
     if (!onSave) return;
-    const next = loans.map((l, i) => i === editingId ? { ...l, name: editDraft.name, scheduled: editDraft.scheduled, paid: editDraft.paid } : l);
+    const next = loans.map((l, i) => i === editingId ? { ...l, name: editDraft.name, scheduled: editDraft.scheduled, paid: editDraft.paid, forecast:editDraft.forecast } : l);
     onSave(next);
     cancelEdit();
   };
@@ -2235,8 +2270,8 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
 
   const addNew = () => {
     if (!onSave || !newLoan.name.trim()) return;
-    onSave([...(loans || []), { id: uid(), startYear:fy.startYear, startMonth:fy.startMonth, name: newLoan.name.trim(), scheduled: newLoan.scheduled, paid: newLoan.paid }]);
-    setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") });
+    onSave([...(loans || []), { id: uid(), startYear:fy.startYear, startMonth:fy.startMonth, name: newLoan.name.trim(), scheduled: newLoan.scheduled, paid: newLoan.paid, forecast:newLoan.forecast }]);
+    setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill(""), forecast: Array(12).fill("") });
     setAddingNew(false);
   };
 
@@ -2270,12 +2305,12 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
     const data = isEditing ? editDraft : {
       name: loan.name,
       scheduled: Array.isArray(loan.scheduled) ? loan.scheduled : Array(12).fill(""),
-      paid: Array.isArray(loan.paid) ? loan.paid : Array(12).fill(""),
+      paid: Array.isArray(loan.paid) ? loan.paid : Array(12).fill(""), forecast:loan.forecast || Array(12).fill(""),
     };
 
     // Visible window totals
     const totalScheduled = rollUp(months.map(m=>parseNum(data.scheduled[m.index])),"sum");
-    const totalPaid = rollUp(months.map(m=>parseNum(data.paid[m.index])),"sum");
+    const totalPaid = rollUp(months.filter(m=>!isFutureBucket(m.key)).map(m=>parseNum(data.paid[m.index])),"sum");
     const totalVar = Number.isFinite(totalPaid)&&Number.isFinite(totalScheduled)?totalPaid-totalScheduled:null;
 
     // Full-FY totals — for the badge
@@ -2301,7 +2336,7 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
               </label>
               <span title={`Based on the selected period · Scheduled ${fyScheduled.toLocaleString()} / Paid ${fyPaid.toLocaleString()}`}
                 style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "999px", background: fyVar >= 0 ? T.greenBg : T.redBg, color: fyVar >= 0 ? T.green : T.red, fontWeight: 700 }}>
-                {!Number.isInteger(loan.startYear) ? "Assign year" : !months.length || (totalScheduled === null && totalPaid === null) ? "No data in range" : fyVar >= 0 ? "On Track" : "Behind"} · selected period
+                {!Number.isInteger(loan.startYear) ? "Assign year" : !months.length || (totalScheduled === null && totalPaid === null) ? "No data in range" : months.every(m=>isFutureBucket(m.key)) ? "Forecast only" : totalPaid===null ? "No actual in range" : fyVar >= 0 ? "On Track" : "Behind"} · selected period
               </span>
             </div>
           )}
@@ -2334,7 +2369,7 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
               <tr>
                 <th style={{ background: T.panel, padding: "8px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: T.accent, textTransform: "uppercase", borderRight: `2px solid ${T.lineStrong}`, width: 140 }}>Month</th>
                 <th style={{ background: MODE_COLOR.budget.cell, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: MODE_COLOR.budget.hdr, textTransform: "uppercase", borderRight: `1px solid ${T.lineStrong}` }}>Scheduled</th>
-                <th style={{ background: MODE_COLOR.actual.cell, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: MODE_COLOR.actual.hdr, textTransform: "uppercase", borderRight: `1px solid ${T.lineStrong}` }}>Paid</th>
+                <th style={{ background: MODE_COLOR.actual.cell, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: MODE_COLOR.actual.hdr, textTransform: "uppercase", borderRight: `1px solid ${T.lineStrong}` }}>Paid / Forecast</th>
                 <th style={{ background: T.panel, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: T.accent, textTransform: "uppercase" }}>Variance</th>
               </tr>
             </thead>
@@ -2342,16 +2377,17 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
               {months.map((m, i) => {
                 const origIdx = m.index;
                 const sch = data.scheduled[origIdx];
-                const pd = data.paid[origIdx];
-                const schNum = parseNum(sch) || 0;
-                const pdNum = parseNum(pd) || 0;
-                const variance = pdNum - schNum;
+                const future=isFutureBucket(m.key),paidTok=future?FORECAST_STYLE:MODE_COLOR.actual;
+                const pd = future?data.forecast[origIdx]:data.paid[origIdx];
+                const schNum = parseNum(sch);
+                const pdNum = future?null:parseNum(pd);
+                const variance = schNum!==null&&pdNum!==null?pdNum-schNum:null;
                 const hasData = sch !== "" || pd !== "";
 
                 return (
                   <tr key={m.key} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
                     <td style={{ padding: "8px 12px", fontSize: "13px", fontWeight: 600, color: T.ink, borderRight: `1px solid ${T.lineSoft}` }}>
-                      {m.long}
+                      {m.long}{isFutureBucket(m.key)&&<strong style={{color:FORECAST_COLOR}}> · Forecast</strong>}
                     </td>
                     <td style={{ padding: "4px 8px", borderRight: `1px solid ${T.lineSoft}`, background: MODE_COLOR.budget.cell }}>
                       {isEditing ? (
@@ -2362,11 +2398,11 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
                         <span style={{ display: "block", textAlign: "right", fontSize: "13px", fontVariantNumeric: "tabular-nums", color: T.body }}>{fmt(sch)}</span>
                       )}
                     </td>
-                    <td style={{ padding: "4px 8px", borderRight: `1px solid ${T.lineSoft}`, background: MODE_COLOR.actual.cell }}>
+                    <td style={{ padding: "4px 8px", borderRight: `1px solid ${T.lineSoft}`, background: paidTok.cell }}>
                       {isEditing ? (
-                        <input type="number" value={editDraft.paid[origIdx] ?? ""} placeholder="—"
-                          onChange={(e) => updateDraft("paid", origIdx, e.target.value)}
-                          style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right", border: `1.5px solid ${MODE_COLOR.actual.border}`, color: MODE_COLOR.actual.input, fontWeight: 600 }} />
+                        <input type="number" value={(future?editDraft.forecast[origIdx]:editDraft.paid[origIdx]) ?? ""} placeholder="—"
+                          onChange={(e) => updateDraft(future?"forecast":"paid", origIdx, e.target.value)}
+                          style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right", border: `1.5px solid ${paidTok.border}`, color: paidTok.input, fontWeight: 600 }} />
                       ) : (
                         <span style={{ display: "block", textAlign: "right", fontSize: "13px", fontVariantNumeric: "tabular-nums", color: T.body }}>{fmt(pd)}</span>
                       )}
@@ -2457,7 +2493,7 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
         <div style={{ ...cardS, background: T.panel, marginBottom: "16px", border: `1px solid ${T.accent}33` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
             <span style={{ fontSize: "14px", fontWeight: 700, color: T.accent }}>New Loan</span>
-            <button onClick={() => { setAddingNew(false); setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") }); }}
+            <button onClick={() => { setAddingNew(false); setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill(""), forecast: Array(12).fill("") }); }}
               style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}><X size={14} /></button>
           </div>
           <div style={{ marginBottom: "12px" }}>
@@ -2470,7 +2506,7 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
                 <tr>
                   <th style={{ background: T.header, padding: "8px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase", width: 120 }}>Month</th>
                   <th style={{ background: MODE_COLOR.budget.hdr, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>Scheduled</th>
-                  <th style={{ background: MODE_COLOR.actual.hdr, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>Paid</th>
+                  <th style={{ background: MODE_COLOR.actual.hdr, padding: "8px 12px", textAlign: "right", fontSize: "11px", fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>Paid / Forecast</th>
                 </tr>
               </thead>
               <tbody>
@@ -2478,16 +2514,16 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
                   const origIdx = m.index;
                   return (
                     <tr key={m.key} style={{ background: i % 2 ? T.panel : T.bg, borderBottom: `1px solid ${T.lineSoft}` }}>
-                      <td style={{ padding: "8px 12px", fontSize: "13px", fontWeight: 600, color: T.ink, borderRight: `1px solid ${T.lineSoft}` }}>{m.long}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "13px", fontWeight: 600, color: T.ink, borderRight: `1px solid ${T.lineSoft}` }}>{m.long}{isFutureBucket(m.key)&&<strong style={{color:FORECAST_COLOR}}> · Forecast</strong>}</td>
                       <td style={{ padding: "4px 8px", borderRight: `1px solid ${T.lineSoft}` }}>
                         <input type="number" value={newLoan.scheduled[origIdx] ?? ""} placeholder="—"
                           onChange={(e) => updateNew("scheduled", origIdx, e.target.value)}
                           style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right" }} />
                       </td>
                       <td style={{ padding: "4px 8px" }}>
-                        <input type="number" value={newLoan.paid[origIdx] ?? ""} placeholder="—"
-                          onChange={(e) => updateNew("paid", origIdx, e.target.value)}
-                          style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right" }} />
+                        <input type="number" value={(isFutureBucket(m.key)?newLoan.forecast[origIdx]:newLoan.paid[origIdx]) ?? ""} placeholder="—"
+                          onChange={(e) => updateNew(isFutureBucket(m.key)?"forecast":"paid", origIdx, e.target.value)}
+                          style={{ ...inputS, padding: "5px 8px", fontSize: "12px", textAlign: "right", ...(isFutureBucket(m.key)?{color:FORECAST_STYLE.input,background:FORECAST_STYLE.cell,borderColor:FORECAST_STYLE.border}:{}) }} />
                       </td>
                     </tr>
                   );
@@ -2499,7 +2535,7 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
             <button onClick={addNew} disabled={!newLoan.name.trim()} style={{ ...btnPrimary, opacity: !newLoan.name.trim() ? 0.6 : 1 }}>
               <Check size={13} /> Save Loan
             </button>
-            <button onClick={() => { setAddingNew(false); setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill("") }); }} style={btnGhost}>
+            <button onClick={() => { setAddingNew(false); setNewLoan({ name: "", scheduled: Array(12).fill(""), paid: Array(12).fill(""), forecast: Array(12).fill("") }); }} style={btnGhost}>
               Cancel
             </button>
           </div>
@@ -2533,7 +2569,7 @@ const LoanRepaymentsPanel = ({ loans, readOnly, onSave, fy, chartPrefs, onSaveCh
           <SimpleTrendChartModal
             title={`${l.name || "Loan"} — Repayment trend`}
             subtitle={`FY ${fyLabel(fy.startYear, fy.startMonth)} · Scheduled vs Paid`}
-            labels={labels}
+            labels={labels} periodKeys={months.map(m=>m.key)} forecast={months.map(m=>parseNum(l.forecast?.[m.index]))}
             actual={paid}
             budget={scheduled}
             direction="higher" actualLabel="Paid"
@@ -2597,12 +2633,12 @@ const setBsValue = (root, path, monthIdx, raw) => {
 /* ════════════════════════════════════════════════════════════════════════
    BsLineModal — NOW WITH ACTUAL / BUDGET TABS
    ════════════════════════════════════════════════════════════════════════ */
-const BsLineModal = ({ mode, lineName, initialValues, initialBudgetValues, months, onClose, onSave }) => {
+const BsLineModal = ({ mode, lineName, initialValues, initialBudgetValues, initialForecastValues, months, onClose, onSave }) => {
   const [name, setName] = useState(lineName || "");
   const [tab, setTab] = useState("actual");
   const [values, setValues] = useState(() => {
     const v = {};
-    months.forEach((m) => { v[m.calIndex] = initialValues?.[m.calIndex] ?? ""; });
+    months.forEach((m) => { v[m.calIndex] = isFutureBucket(m.key) ? initialForecastValues?.[m.calIndex] ?? "" : initialValues?.[m.calIndex] ?? ""; });
     return v;
   });
   const [budgetValues, setBudgetValues] = useState(() => {
@@ -2621,12 +2657,14 @@ const BsLineModal = ({ mode, lineName, initialValues, initialBudgetValues, month
     setSaving(true);
     try {
       const fullArr = Array.from({length:12},(_,i)=>initialValues?.[i] ?? "");
+      const fullForecastArr=Array.from({length:12},(_,i)=>initialForecastValues?.[i] ?? "");
       const fullBudgetArr = Array.from({length:12},(_,i)=>initialBudgetValues?.[i] ?? "");
       months.forEach((m) => {
-        fullArr[m.calIndex] = values[m.calIndex] ?? "";
+        if(isFutureBucket(m.key))fullForecastArr[m.calIndex]=values[m.calIndex] ?? "";
+        else fullArr[m.calIndex] = values[m.calIndex] ?? "";
         fullBudgetArr[m.calIndex] = budgetValues[m.calIndex] ?? "";
       });
-      await onSave({ name: name.trim(), values: fullArr, budgetValues: fullBudgetArr });
+      await onSave({ name: name.trim(), values: fullArr, budgetValues: fullBudgetArr, forecastValues: fullForecastArr });
       onClose();
     } catch (err) {
       console.error(err);
@@ -2681,11 +2719,11 @@ const BsLineModal = ({ mode, lineName, initialValues, initialBudgetValues, month
       )}
 
       <div style={{ display: "inline-flex", background: T.raised, borderRadius: "9px", padding: "3px", marginBottom: "14px", gap: "2px" }}>
-        {tabBtn("actual", "Actual", filledCount(values))}
+        {tabBtn("actual", "Actual / Forecast", filledCount(values))}
         {tabBtn("budget", "Budget", filledCount(budgetValues))}
       </div>
 
-      <label style={labelS}>{tab === "actual" ? "Actual values" : "Budget values"} (calendar months)</label>
+      <label style={labelS}>{tab === "actual" ? "Actual / Forecast values" : "Budget values"} (calendar months)</label>
       <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
           <thead>
@@ -2695,18 +2733,18 @@ const BsLineModal = ({ mode, lineName, initialValues, initialBudgetValues, month
             </tr>
           </thead>
           <tbody>
-            {months.map((m, i) => (
+            {months.map((m, i) => { const forecast=tab==="actual"&&isFutureBucket(m.key);const cellTok=forecast?FORECAST_STYLE:tok;return (
               <tr key={m.key} style={{ background: i % 2 ? T.panel : T.bg }}>
                 <td style={{ padding: "6px 12px", fontSize: "13.5px", color: T.ink, fontWeight: 500,
-                  borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>{m.long}</td>
-                <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, background: tok.cell }}>
+                  borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}` }}>{m.long}{forecast && <strong style={{color:FORECAST_COLOR}}> · Forecast</strong>}</td>
+                <td style={{ padding: "4px 8px", borderBottom: `1px solid ${T.lineSoft}`, background: cellTok.cell }}>
                   <input type="number" step="any" value={activeValues[m.calIndex] ?? ""} placeholder="—"
                     onChange={(e) => setActiveValues((p) => ({ ...p, [m.calIndex]: e.target.value }))}
                     style={{ ...inputS, padding: "6px 9px", fontSize: "13px", textAlign: "right",
-                      border: `1.5px solid ${tok.border}`, color: tok.input, fontWeight: 600, background: "#fff" }} />
+                      border: `1.5px solid ${cellTok.border}`, color: cellTok.input, fontWeight: 600, background: "#fff" }} />
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
       </div>
@@ -2766,7 +2804,8 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
   const monthIndex = months.findIndex((m) => m.key === meta.key);
   const calIndex = meta.month;
   const bsDoc = docs[`${DOC.bs}_${meta.year}`];
-  const bs = bsDoc?.balanceSheetData || BLANK_BS;
+  const futureSnapshot=isFutureBucket(meta.key);
+  const bs = (futureSnapshot?bsDoc?.balanceSheetForecast:bsDoc?.balanceSheetData) || BLANK_BS;
   const bsBudget = bsDoc?.balanceSheetBudget || {};
   const [bsMode, setBsMode] = useState("actual");
   const totals = bsTotals({ balanceSheetData: bsMode === "budget" ? bsBudget : bs }, calIndex);
@@ -2785,6 +2824,7 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
     if (total !== undefined) total = rollUp(Object.entries(bsMode === "budget" ? budgetNode || {} : obj || {}).map(([key,arr])=>{const n=parseNum(arr?.[calIndex]); return n===null?null:NEGATIVE_KEYS.has(key)?-n:n;}),"sum");
     return (
       <div style={{ marginBottom: "18px" }}>
+        {futureSnapshot && <div style={{color:FORECAST_COLOR,fontWeight:600,fontSize:12}}>Forecast snapshot · {meta.long}</div>}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
           <div style={{ fontSize: "13px", fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.5px" }}>{title}</div>
           <div style={{ display: "flex", gap: "6px" }}>
@@ -2841,8 +2881,8 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
                     {(bsMode === "actual" || bsMode === "both") && (
                       <td style={{ padding: "8px 12px", textAlign: "right", fontSize: "13.5px", color: T.ink,
                         fontVariantNumeric: "tabular-nums", borderBottom: `1px solid ${T.lineSoft}`, borderRight: `1px solid ${T.lineSoft}`,
-                        background: bsMode === "both" ? MODE_COLOR.actual.cell : "transparent" }}>
-                        {bsMode === "both" && <div style={{ fontSize: "9.5px", color: MODE_COLOR.actual.hdr, fontWeight: 700, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: "2px" }}>Actual</div>}
+                        background: bsMode === "both" ? (futureSnapshot?FORECAST_STYLE:MODE_COLOR.actual).cell : "transparent" }}>
+                        {bsMode === "both" && <div style={{ fontSize: "9.5px", color: (futureSnapshot?FORECAST_STYLE:MODE_COLOR.actual).hdr, fontWeight: 700, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: "2px" }}>{futureSnapshot?"Forecast":"Actual"}</div>}
                         {fmtCell(actualVal)}
                       </td>
                     )}
@@ -2926,7 +2966,7 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
     return node;
   };
 
-  const handleLineSave = async ({ name, values, budgetValues }) => {
+  const handleLineSave = async ({ name, values, budgetValues, forecastValues }) => {
     const lm = lineModal;
     if (!lm) return;
     const docKey = `${DOC.bs}_${meta.year}`;
@@ -2953,7 +2993,10 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
       target[lm.lineName] = values;
       if (targetB) targetB[lm.lineName] = budgetValues || Array(12).fill("");
     }
-    await onSaveBsFull(docKey, { ...existingDoc, balanceSheetData: next, balanceSheetBudget: nextBudget, year: meta.year }, true);
+    const forecastTree=JSON.parse(JSON.stringify(existingDoc.balanceSheetForecast || BLANK_BS));
+    const forecastNode=resolveNode(forecastTree,lm.sectionPath,lm.sectionType,lm.customIndex);
+    if(forecastNode){const target=lm.sectionPath==="__custom__"?forecastNode.items:forecastNode;target[lm.mode==="add"?name.replace(/\s+/g,""):lm.lineName]=forecastValues || Array(12).fill("");}
+    await onSaveBsFull(docKey, { ...existingDoc, balanceSheetData: next, balanceSheetBudget: nextBudget, balanceSheetForecast:forecastTree, year: meta.year }, true);
   };
 
   const handleSectionSave = async ({ sectionName, firstLine }) => {
@@ -3024,7 +3067,7 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "1px" }}>
           <span style={{ fontSize: "12px", color: T.muted, fontWeight: 600 }}>View</span>
           <div style={{ display: "inline-flex", background: T.raised, borderRadius: "8px", padding: "3px", gap: "2px" }}>
-            {modeBtn("actual", "Actual")}
+            {modeBtn("actual", futureSnapshot?"Forecast":"Actual")}
             {modeBtn("budget", "Budget")}
             {modeBtn("both", "Both")}
           </div>
@@ -3101,8 +3144,9 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
         <BsLineModal
           mode={lineModal.mode}
           lineName={lineModal.lineName}
-          initialValues={lineModal.values}
+          initialValues={lineModal.lineName ? bsChartSeries(docs,fyMonths(meta.year,0),lineModal.linePath || (lineModal.sectionPath==="__custom__" ? [lineModal.sectionType==="assets"?"customCategories":lineModal.sectionType==="liabilities"?"customLiabilitiesCategories":"customEquityCategories",lineModal.customIndex,"items",lineModal.lineName] : [...lineModal.sectionPath.split("."),lineModal.lineName]),"actualStored") : lineModal.values}
           initialBudgetValues={lineModal.budgetValues}
+          initialForecastValues={lineModal.lineName ? bsChartSeries(docs,fyMonths(meta.year,0),lineModal.sectionPath==="__custom__" ? [lineModal.sectionType==="assets"?"customCategories":lineModal.sectionType==="liabilities"?"customLiabilitiesCategories":"customEquityCategories",lineModal.customIndex,"items",lineModal.lineName] : [...lineModal.sectionPath.split("."),lineModal.lineName],"forecastStored") : []}
           months={modalMonths}
           onClose={() => setLineModal(null)}
           onSave={handleLineSave}
@@ -3120,7 +3164,7 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
           <SimpleTrendChartModal
             title={`${chartLine.name} — Balance Sheet trend`}
             subtitle={`FY ${fyLabel(fy.startYear, fy.startMonth)} · Actual vs Budget`}
-            labels={labels}
+            labels={labels} periodKeys={months.map(m=>m.key)} forecast={bsChartSeries(docs,months,chartLine.path,"forecast")}
             actual={actualSeries}
             budget={budgetSeries}
             actualLabel="Actual"
@@ -3140,9 +3184,9 @@ const BalanceSheetTab = ({ fy, docs, readOnly, onSaveBsFull, onDeleteSection, on
    Report Generator
    ════════════════════════════════════════════════════════════════════════ */
 const bsChartSeries = (docs,months,path,which) => months.map(m=> {
-  const root=docs[`${DOC.bs}_${m.year}`]?.[which === "budget"?"balanceSheetBudget":"balanceSheetData"];
+  const root=docs[`${DOC.bs}_${m.year}`]?.[which === "budget"?"balanceSheetBudget":["forecast","forecastStored"].includes(which)?"balanceSheetForecast":"balanceSheetData"];
   const values=pathArr(path).reduce((o,k)=>o?.[k],root);
-  return parseNum(values?.[m.month]);
+  return which==="actual" && isFutureBucket(m.key) || which==="forecast" && !isFutureBucket(m.key) ? null : parseNum(values?.[m.month]);
 });
 
 const buildSplitRows = (kpi, fy, period = "this_year") => {
@@ -3157,7 +3201,10 @@ const flattenMonthly = (root,path=[],out={}) => {
 };
 const reportRows = ({tabs,selectedTabs,period,fy,docs,meta,dividends=[],investors=[],irrInvestments=[]}) => {
   const [from,to]=periodWindow(period,fy), months=monthsForRange(from,to), rows=[];
-  const add=(section,category,name,units,key,budget,actual,kind="Detail")=>rows.push([section,category,name,units,key,kind,budget,actual,Number.isFinite(actual)&&Number.isFinite(budget)?actual-budget:null,variancePercent(actual,budget)]);
+  const add=(section,category,name,units,key,budget,actual,kind="Detail",forecast=null)=>{
+    const future=isFutureBucket(key);if(future)actual=null;
+    rows.push([section,category,name,units,key,future?"Forecast":kind,budget,actual,Number.isFinite(actual)&&Number.isFinite(budget)?actual-budget:null,variancePercent(actual,budget),future?forecast:null]);
+  };
   for(const tab of tabs.filter(t=>selectedTabs[t.id])) {
     if(tab.custom === "balanceSheet") {
       for(const m of months) {
@@ -3187,7 +3234,7 @@ const reportRows = ({tabs,selectedTabs,period,fy,docs,meta,dividends=[],investor
       for(const k of cat.kpis || []) {
         const v=periodValues(k,period,fy);
         add(tab.name,cat.name,k.name,k.units,`${fmtDMY(from)} – ${fmtDMY(to)}`,v.budget,v.actual,"Period summary");
-        for(const [key,v] of rangeEntries(k,from,to)) add(tab.name,cat.name,k.name,k.units,key,parseNum(v.budget),parseNum(v.actual));
+        for(const [key,v] of rangeEntries(k,from,to)) add(tab.name,cat.name,k.name,k.units,key,parseNum(v.budget),parseNum(v.actual),"Detail",parseNum(v.forecast));
       }
     }
   }
@@ -3255,17 +3302,8 @@ const createFinancialWorkbook = sheets => {
   });
   return workbookZip(files);
 };
-const spreadsheetPeriodKeys = (frequency, from, to) => {
-  const keys = [];
-  let date = frequency === "Monthly" ? monthStart(from.getFullYear(), from.getMonth()) : frequency === "Weekly" ? startOfWeek(from) : startOfDay(from);
-  while (startOfDay(date) <= startOfDay(to)) {
-    const key = frequency === "Monthly" ? `M:${dayKeyOf(date).slice(2, 9)}` : frequency === "Weekly" ? weekKeyOf(date) : dayKeyOf(date);
-    const [a, b] = bucketWindow(key);
-    if (startOfDay(a) >= startOfDay(from) && startOfDay(b) <= startOfDay(to)) keys.push(key);
-    date = frequency === "Monthly" ? new Date(date.getFullYear(), date.getMonth() + 1, 1) : addDays(date, frequency === "Weekly" ? 7 : 1);
-  }
-  return keys;
-};
+const spreadsheetPeriodKeys = boundedPeriodKeys;
+
 const financialSpreadsheetSheets = ({ tabs, selectedTabs, period, fy, docs, meta, dividends, investors, irrInvestments, blank }) => {
   const sheets = [{ name: "Start here", widths: [27, 110], rows: [
     ["Financial spreadsheet", blank ? "Blank entry template" : "Current figures"],
@@ -3291,8 +3329,8 @@ const financialSpreadsheetSheets = ({ tabs, selectedTabs, period, fy, docs, meta
       records = records.filter(row => !kpiNames.has(`${row[1]}\u0000${row[2]}`));
       tab.categories.forEach(cat => (cat.kpis || []).forEach(kpi => {
         spreadsheetPeriodKeys(kpi.frequency || "Monthly", from, to).forEach(key => {
-          const entry = kpi.entries?.[key] || {};
-          records.push([tab.name, cat.name, kpi.name, kpi.units, key, "Detail", parseNum(entry.budget), parseNum(entry.actual)]);
+          const entry = financialBucketValues(kpi.entries?.[key] || {},key);
+          records.push([tab.name, cat.name, kpi.name, kpi.units, key, isFutureBucket(key)?"Forecast":"Detail", parseNum(entry.budget), parseNum(entry.actual),null,null,parseNum(entry.forecast)]);
         });
       }));
     }
@@ -3300,14 +3338,14 @@ const financialSpreadsheetSheets = ({ tabs, selectedTabs, period, fy, docs, meta
     let name = base, suffix = 2;
     while (names.has(name.toLowerCase())) name = `${base} ${suffix++}`;
     names.add(name.toLowerCase());
-    const rows = [["Category", "Record", "Units", "Period", "Row type", "Budget", "Actual", "Variance", "Variance %"]];
+    const rows = [["Category", "Record", "Units", "Period", "Row type", "Budget", "Actual", "Variance", "Variance %", "Forecast"]];
     records.forEach(record => {
       const row = rows.length + 1;
       rows.push([...record.slice(1, 6), blank ? null : record[6], blank ? null : record[7],
         { formula: `IF(COUNT(F${row}:G${row})<2,"",G${row}-F${row})` },
-        { formula: `IF(OR(COUNT(F${row}:G${row})<2,F${row}=0),"",(G${row}-F${row})/ABS(F${row}))` }]);
+        { formula: `IF(OR(COUNT(F${row}:G${row})<2,F${row}=0),"",(G${row}-F${row})/ABS(F${row}))` }, blank?null:record[10] ?? null]);
     });
-    sheets.push({ name, widths: [26, 42, 12, 32, 22, 19, 19, 19, 18], numeric: true, rows });
+    sheets.push({ name, widths: [26, 42, 12, 32, 22, 19, 19, 19, 18, 19], numeric: true, rows });
   });
   return sheets;
 };
@@ -3923,11 +3961,17 @@ const AddDataWizard = ({
       : prefs?.tabId && editableTabs.some((t) => t.id === prefs.tabId) ? prefs.tabId
       : editableTabs[0]?.id
   );
-  const [startYear, setStartYear] = useState(fy.range ? localDate(fy.range.from).getFullYear() : fy.startYear);
-  const [entryRange,setEntryRange] = useState(fy.range || null);
+  const selectedWindow=fy.period?periodWindow(fy.period,fy):null;
+  const initialEntryRange=selectedWindow?{from:dayKeyOf(selectedWindow[0]).slice(2),to:dayKeyOf(selectedWindow[1]).slice(2)}:fy.range || null;
+  const initialYear=initialEntryRange?fyStartYearOf(localDate(initialEntryRange.from),fy.startMonth):fy.startYear;
+  const [startYear, setStartYear] = useState(initialYear);
+  const [entryRange,setEntryRange] = useState(initialEntryRange);
+  const [yearInput,setYearInput]=useState(String(initialYear));
+  const [bucketPage,setBucketPage]=useState(0);
+  useEffect(()=>{setYearInput(String(startYear));},[startYear]);
   const changeEntryRange = async range => {
-    try { await drain(); await onEnsureRange(range); setEntryRange(range); setStartYear(localDate(range.from).getFullYear()); setMonthStart(0); setMonthCount(12); }
-    catch { setSaveState("error"); }
+    try { await drain(); await onEnsureRange(range); setBucketPage(0); setEntryRange(range); setStartYear(fyStartYearOf(localDate(range.from),fy.startMonth)); setMonthStart(0); setMonthCount(12); }
+    catch(error) { setSaveState("error"); throw error; }
   };
   const [saveState, setSaveState] = useState("idle");
   const timer = useRef(null);
@@ -4007,9 +4051,12 @@ const AddDataWizard = ({
     return sections.some((s) => s.key === freqTab) ? freqTab : sections[0].key;
   }, [freqTab, sections]);
 
+  useEffect(()=>{setBucketPage(0);},[activeSection,tabId,entryRange?.from,entryRange?.to]);
+
   const draftKey = (kpiId, bucketKey, which) => `${bucketKey}|${kpiId}|${which}`;
 
   const getEntry = (kpi, bucketKey, which) => {
+    which=financialValueType(bucketKey,which);
     const dk = draftKey(kpi.id, bucketKey, which);
     if (draft[dk] !== undefined) return draft[dk];
     if (kpi.frequency === "Daily" || kpi.frequency === "Weekly" || kpi.custom) {
@@ -4017,7 +4064,7 @@ const AddDataWizard = ({
       return v === undefined || v === null ? "" : String(v);
     }
     if (kpi.field) {
-      const path = which === "actual" ? kpi.field.a : kpi.field.b;
+      const path = which === "forecast" ? `${kpi.field.a}Forecast` : which === "actual" ? kpi.field.a : kpi.field.b;
       if (!path) return "";
       const [year, month] = bucketKey.startsWith("M:") ? bucketKey.slice(2).split("-").map(Number) : [null, null];
       if (!year) return "";
@@ -4030,11 +4077,12 @@ const AddDataWizard = ({
   };
 
   const getBsEntry = (path, monthIdx, mode = "actual", year = startYear) => {
+    mode=financialValueType(`M:${year}-${String(monthIdx+1).padStart(2,"0")}`,mode);
     const pathKey = path.join(".");
     const dk = `bs|${year}|${mode}|${pathKey}|${monthIdx}`;
     if (draft[dk] !== undefined) return draft[dk];
     const source=docs[`${DOC.bs}_${year}`] || {};
-    const root = mode === "budget" ? source.balanceSheetBudget : source.balanceSheetData;
+    const root = mode === "budget" ? source.balanceSheetBudget : mode === "forecast" ? source.balanceSheetForecast : source.balanceSheetData;
     const raw = pathArr(path).reduce((o, k) => (o == null ? undefined : o[k]), root);
     const v = Array.isArray(raw) ? raw[monthIdx] : null;
     return v === undefined || v === null ? "" : String(v);
@@ -4082,10 +4130,15 @@ const AddDataWizard = ({
           }
           nextDoc.balanceSheetBudget = root;
         }
+        if(Object.keys(data.forecast || {}).length){
+          const root=JSON.parse(JSON.stringify(currentDoc.balanceSheetForecast || {}));
+          for(const [path,values]of Object.entries(data.forecast))for(const [index,raw]of Object.entries(values))setBsValue(root,path.split("."),Number(index),raw);
+          nextDoc.balanceSheetForecast=root;
+        }
         await onSaveBsFull(docKey, nextDoc, true);
       } catch (e) {
-        const pending = pendingBsRef.current[docKey] || {actual:{},budget:{}};
-        for (const mode of ["actual","budget"]) for (const [path,values] of Object.entries(data[mode])) pending[mode][path] = {...values,...pending[mode][path]};
+        const pending = pendingBsRef.current[docKey] || {actual:{},budget:{},forecast:{}};
+        for (const mode of ["actual","budget","forecast"]) for (const [path,values] of Object.entries(data[mode] || {})) pending[mode][path] = {...values,...pending[mode][path]};
         pendingBsRef.current[docKey] = pending; setSaveState("error"); throw e;
       }
     }
@@ -4113,13 +4166,14 @@ const AddDataWizard = ({
   };
 
   const setBsEntry = (path, monthIdx, raw, mode = "actual", year = startYear) => {
+    mode=financialValueType(`M:${year}-${String(monthIdx+1).padStart(2,"0")}`,mode);
     const pathKey = path.join(".");
     const dk = `bs|${year}|${mode}|${pathKey}|${monthIdx}`;
     setDraft((p) => ({ ...p, [dk]: raw }));
     setSaveState("saving");
 
     const docKey = `${DOC.bs}_${year}`;
-    if (!pendingBsRef.current[docKey]) pendingBsRef.current[docKey] = { actual: {}, budget: {} };
+    if (!pendingBsRef.current[docKey]) pendingBsRef.current[docKey] = { actual: {}, budget: {}, forecast: {} };
     if (!pendingBsRef.current[docKey][mode][pathKey]) pendingBsRef.current[docKey][mode][pathKey] = {};
     pendingBsRef.current[docKey][mode][pathKey][monthIdx] = raw;
 
@@ -4127,6 +4181,7 @@ const AddDataWizard = ({
   };
 
   const setEntry = (kpi, bucketKey, which, raw) => {
+    which=financialValueType(bucketKey,which);
     const dk = draftKey(kpi.id, bucketKey, which);
     setDraft((p) => ({ ...p, [dk]: raw }));
     setSaveState("saving");
@@ -4142,14 +4197,7 @@ const AddDataWizard = ({
 
   const activeColumns = useMemo(() => {
     if (entryRange && activeSection !== "monthly") {
-      const from=localDate(entryRange.from),to=localDate(entryRange.to), result=[];
-      let d=activeSection === "weekly" ? startOfWeek(from) : from;
-      for(;d<=to;d=addDays(d,activeSection === "weekly"?7:1)) {
-        const end=activeSection === "weekly"?addDays(d,6):d;
-        if(d<from || end>to) continue;
-        result.push({key:activeSection === "weekly"?weekKeyOf(d):dayKeyOf(d),label:fmtDMY(d),long:fmtDMY(d)});
-      }
-      return result;
+      return boundedPeriodKeys(activeSection==="weekly"?"Weekly":"Daily",...requireFinancialRange(entryRange)).map(key=>({key,label:fmtDMY(bucketWindow(key)[0]),long:fmtDMY(bucketWindow(key)[0])}));
     }
     if (activeSection === "monthly") {
       return allMonths;
@@ -4161,7 +4209,7 @@ const AddDataWizard = ({
       const weeks = [];
       let cursor = startOfWeek(new Date(startMonth.year, startMonth.month, 1));
       const endDate = new Date(endMonth.year, endMonth.month + 1, 0);
-      while (cursor <= endDate) {
+      for (let step=0; step<MAX_FINANCIAL_BUCKETS && cursor<=endDate; step++) {
         weeks.push({
           key: weekKeyOf(cursor),
           label: `${String(cursor.getDate()).padStart(2, "0")} ${MONTHS[cursor.getMonth()]}`,
@@ -4326,8 +4374,8 @@ const AddDataWizard = ({
 
   const renderMonthlyGrid = () => {
     if (!kpiRows.monthly.length) return null;
-    const clampedStart = Math.max(0, Math.min(monthStart, 12 - monthCount));
-    const months = entryRange ? allMonths : allMonths.slice(clampedStart, clampedStart + monthCount);
+    const clampedStart = Math.max(0, Math.min(monthStart, Math.max(0,allMonths.length - monthCount)));
+    const months = allMonths.slice(clampedStart, clampedStart + monthCount);
     const rowLabelW = 210;
 
     return (
@@ -4343,7 +4391,7 @@ const AddDataWizard = ({
                 style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px", fontFamily: "inherit",
                   background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
                 {allMonths.map((m, i) => (
-                  <option key={m.key} value={i} disabled={i > 12 - monthCount} style={{ color: "#000" }}>{m.label}</option>
+                  <option key={m.key} value={i} disabled={i > Math.max(0,allMonths.length - monthCount)} style={{ color: "#000" }}>{m.label}</option>
                 ))}
               </select>
             </div>
@@ -4351,7 +4399,7 @@ const AddDataWizard = ({
               {[3, 6, 12].map((n) => {
                 const on = monthCount === n;
                 return (
-                  <button key={n} onClick={() => { setMonthCount(n); setMonthStart((s) => Math.max(0, Math.min(s, 12 - n))); }}
+                  <button key={n} onClick={() => { setMonthCount(n); setMonthStart((s) => Math.max(0, Math.min(s, Math.max(0,allMonths.length - n)))); }}
                     style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
                       cursor: "pointer", fontFamily: "inherit", border: "none",
                       background: on ? "#fff" : "transparent", color: on ? T.header : "#fff" }}>
@@ -4372,7 +4420,7 @@ const AddDataWizard = ({
                 {months.map((m) => (
                   <th key={m.key} style={{ background: T.header, padding: "6px 4px", fontSize: "10.5px",
                     fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
-                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{m.label}</th>
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{m.label}{isFutureBucket(m.key) && <div style={{color:"#ddd6fe",fontSize:9}}>FORECAST</div>}</th>
                 ))}
               </tr>
             </thead>
@@ -4420,18 +4468,19 @@ const AddDataWizard = ({
                         borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
-                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700, letterSpacing: "0.3px" }}>ACTUAL</span>
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700, letterSpacing: "0.3px" }}>ACTUAL / FORECAST</span>
                           <span style={{ fontSize: "12px", color: T.ink }}>{kpi.name}</span>
                         </div>
                         <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px", paddingLeft: "2px" }}>{category} · {kpi.units}</div>
                       </td>
                       {months.map((m) => {
-                        const tok = MODE_COLOR.actual;
+                        const future=isFutureBucket(m.key);
+                        const tok = future ? FORECAST_STYLE : MODE_COLOR.actual;
                         const val = getEntry(kpi, m.key, "actual");
                         return (
                           <td key={m.key} style={{ padding: "4px 5px", borderBottom: `2px solid ${T.lineStrong}`,
-                            borderRight: `1px solid ${tok.border}`, background: alt }}>
-                            <input type="number" step="any" value={val} placeholder="—"
+                            borderRight: `1px solid ${tok.border}`, background: tok.cell }}>
+                            <input type="number" step="any" value={val} placeholder={future ? "Forecast" : "—"} aria-label={`${kpi.name} ${m.label} ${future ? "Forecast" : "Actual"}`}
                               onChange={(e) => setEntry(kpi, m.key, "actual", e.target.value)}
                               style={{ width: "100%", padding: "6px 8px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
                                 fontSize: "12px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
@@ -4455,8 +4504,8 @@ const AddDataWizard = ({
   // Balance Sheet Grid — BUDGET above, ACTUAL below, WITH CHART BUTTON
   const renderBsGrid = () => {
     if (!bsData) return null;
-    const clampedStart = Math.max(0, Math.min(monthStart, 12 - monthCount));
-    const months = entryRange ? allMonths : allMonths.slice(clampedStart, clampedStart + monthCount);
+    const clampedStart = Math.max(0, Math.min(monthStart, Math.max(0,allMonths.length - monthCount)));
+    const months = allMonths.slice(clampedStart, clampedStart + monthCount);
     const rowLabelW = 240;
 
     const bsRows = [];
@@ -4503,7 +4552,7 @@ const AddDataWizard = ({
                 style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11.5px", fontFamily: "inherit",
                   background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", cursor: "pointer" }}>
                 {allMonths.map((m, i) => (
-                  <option key={m.key} value={i} disabled={i > 12 - monthCount} style={{ color: "#000" }}>{m.label}</option>
+                  <option key={m.key} value={i} disabled={i > Math.max(0,allMonths.length - monthCount)} style={{ color: "#000" }}>{m.label}</option>
                 ))}
               </select>
             </div>
@@ -4511,7 +4560,7 @@ const AddDataWizard = ({
               {[3, 6, 12].map((n) => {
                 const on = monthCount === n;
                 return (
-                  <button key={n} onClick={() => { setMonthCount(n); setMonthStart((s) => Math.max(0, Math.min(s, 12 - n))); }}
+                  <button key={n} onClick={() => { setMonthCount(n); setMonthStart((s) => Math.max(0, Math.min(s, Math.max(0,allMonths.length - n)))); }}
                     style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
                       cursor: "pointer", fontFamily: "inherit", border: "none",
                       background: on ? "#fff" : "transparent", color: on ? T.header : "#fff" }}>
@@ -4532,7 +4581,7 @@ const AddDataWizard = ({
                 {months.map((m) => (
                   <th key={m.key} style={{ background: T.header, padding: "6px 4px", fontSize: "10.5px",
                     fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
-                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{m.label}</th>
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{m.label}{isFutureBucket(m.key) && <div style={{color:"#ddd6fe",fontSize:9}}>FORECAST</div>}</th>
                 ))}
                 <th style={{ background: T.header, width: 44, padding: "8px 4px", textAlign: "center",
                   fontSize: "10.5px", fontWeight: 700, color: "rgba(255,255,255,0.85)", textTransform: "uppercase" }}></th>
@@ -4596,11 +4645,13 @@ const AddDataWizard = ({
                         borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
-                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700, letterSpacing: "0.3px" }}>ACTUAL</span>
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700, letterSpacing: "0.3px" }}>ACTUAL / FORECAST</span>
                           <span style={{ fontSize: "12px", color: T.ink }}>{row.label}</span>
                         </div>
                       </td>
                       {months.map((m) => {
+                        const future=isFutureBucket(m.key);
+                        const tok=future?FORECAST_STYLE:MODE_COLOR.actual;
                         const val = getBsEntry(row.path, m.month, "actual", m.year);
                         return (
                           <td key={m.key} style={{ padding: "4px 5px",
@@ -4630,18 +4681,9 @@ const AddDataWizard = ({
 
   const renderWeeklyGrid = () => {
     if (!kpiRows.weekly.length) return null;
-    const baseMonths = fyMonths(startYear,fy.startMonth);
-    const startMonth = weeklyHalf === 0 ? baseMonths[0] : baseMonths[6];
-    const endMonth = weeklyHalf === 0 ? baseMonths[5] : baseMonths[11];
-    let weeks = [];
-    let cursor = startOfWeek(new Date(startMonth.year, startMonth.month, 1));
-    const endDate = new Date(endMonth.year, endMonth.month + 1, 0);
-    while (cursor <= endDate) {
-      weeks.push({ key: weekKeyOf(cursor), label: `${String(cursor.getDate()).padStart(2,"0")} ${MONTHS[cursor.getMonth()]}` });
-      cursor = addDays(cursor, 7);
-    }
-
-    if (entryRange) weeks = activeColumns;
+    const baseMonths=fyMonths(startYear,fy.startMonth);
+    const half=baseMonths.slice(weeklyHalf===0?0:6,weeklyHalf===0?6:12);
+    const weeks=entryRange?activeColumns.slice(bucketPage*26,(bucketPage+1)*26):boundedPeriodKeys("Weekly",localDate(half[0].key.slice(2)),monthEnd(half[half.length-1].year,half[half.length-1].month)).map(key=>({key,label:fmtDMY(bucketWindow(key)[0])}));
 
     return (
       <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
@@ -4652,10 +4694,10 @@ const AddDataWizard = ({
           <div style={{ display: "flex", gap: "6px" }}>
             <button onClick={() => setWeeklyHalf(0)} style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
               cursor: "pointer", fontFamily: "inherit", background: weeklyHalf === 0 ? "#fff" : "rgba(255,255,255,0.15)",
-              color: weeklyHalf === 0 ? T.header : "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>{allMonths[0].label} – {allMonths[5].label}</button>
+              color: weeklyHalf === 0 ? T.header : "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>{allMonths[0]?.label} – {allMonths[5]?.label}</button>
             <button onClick={() => setWeeklyHalf(1)} style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 600,
               cursor: "pointer", fontFamily: "inherit", background: weeklyHalf === 1 ? "#fff" : "rgba(255,255,255,0.15)",
-              color: weeklyHalf === 1 ? T.header : "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>{allMonths[6].label} – {allMonths[11].label}</button>
+              color: weeklyHalf === 1 ? T.header : "#fff", border: "1px solid rgba(255,255,255,0.25)" }}>{allMonths[6]?.label} – {allMonths[11]?.label}</button>
           </div>
         </div>
         <div style={{ overflowX: "auto" }}>
@@ -4668,7 +4710,7 @@ const AddDataWizard = ({
                 {weeks.map((w) => (
                   <th key={w.key} style={{ background: T.header, padding: "6px 4px", fontSize: "10.5px",
                     fontWeight: 700, color: "rgba(255,255,255,0.85)", textAlign: "center",
-                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{w.label}</th>
+                    borderRight: "1px solid rgba(255,255,255,0.15)" }}>{w.label}{isFutureBucket(w.key) && <div style={{color:"#ddd6fe",fontSize:9}}>FORECAST</div>}</th>
                 ))}
               </tr>
             </thead>
@@ -4711,18 +4753,19 @@ const AddDataWizard = ({
                         borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
-                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700 }}>ACTUAL</span>
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700 }}>ACTUAL / FORECAST</span>
                           <span style={{ fontSize: "12px" }}>{kpi.name}</span>
                         </div>
                         <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px" }}>{category} · {kpi.units}</div>
                       </td>
                       {weeks.map((w) => {
-                        const tok = MODE_COLOR.actual;
+                        const future=isFutureBucket(w.key);
+                        const tok = future ? FORECAST_STYLE : MODE_COLOR.actual;
                         const val = getEntry(kpi, w.key, "actual");
                         return (
                           <td key={w.key} style={{ padding: "4px 5px", borderBottom: `2px solid ${T.lineStrong}`,
-                            borderRight: `1px solid ${tok.border}`, background: alt }}>
-                            <input type="number" step="any" value={val} placeholder="—"
+                            borderRight: `1px solid ${tok.border}`, background: tok.cell }}>
+                            <input type="number" step="any" value={val} placeholder={future ? "Forecast" : "—"} aria-label={`${kpi.name} ${w.label} ${future ? "Forecast" : "Actual"}`}
                               onChange={(e) => setEntry(kpi, w.key, "actual", e.target.value)}
                               style={{ width: "100%", padding: "6px 8px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
                                 fontSize: "12px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
@@ -4754,7 +4797,7 @@ const AddDataWizard = ({
       days.push({ key: dayKeyOf(day), label: String(d), dow: ["Su","Mo","Tu","We","Th","Fr","Sa"][day.getDay()] });
     }
 
-    if (entryRange) days = activeColumns;
+    if (entryRange) days = activeColumns.slice(bucketPage*31,(bucketPage+1)*31);
 
     return (
       <div style={{ border: `1px solid ${T.lineStrong}`, borderRadius: "10px", overflow: "hidden" }}>
@@ -4827,18 +4870,19 @@ const AddDataWizard = ({
                         borderRight: `2px solid ${T.lineStrong}`, background: alt }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "999px",
-                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700 }}>ACTUAL</span>
+                            background: MODE_COLOR.actual.hdr, color: "#fff", fontWeight: 700 }}>ACTUAL / FORECAST</span>
                           <span style={{ fontSize: "12px" }}>{kpi.name}</span>
                         </div>
                         <div style={{ fontSize: "10px", color: T.muted, marginTop: "2px" }}>{category} · {kpi.units}</div>
                       </td>
                       {days.map((d) => {
-                        const tok = MODE_COLOR.actual;
+                        const future=isFutureBucket(d.key);
+                        const tok = future ? FORECAST_STYLE : MODE_COLOR.actual;
                         const val = getEntry(kpi, d.key, "actual");
                         return (
                           <td key={d.key} style={{ padding: "3px 3px", borderBottom: `2px solid ${T.lineStrong}`,
-                            borderRight: `1px solid ${tok.border}`, background: alt }}>
-                            <input type="number" step="any" value={val} placeholder="—"
+                            borderRight: `1px solid ${tok.border}`, background: tok.cell }}>
+                            <input type="number" step="any" value={val} placeholder={future ? "Forecast" : "—"} aria-label={`${kpi.name} ${d.label} ${future ? "Forecast" : "Actual"}`}
                               onChange={(e) => setEntry(kpi, d.key, "actual", e.target.value)}
                               style={{ width: "100%", padding: "6px 4px", border: `1.5px solid ${tok.border}`, borderRadius: "5px",
                                 fontSize: "11px", fontFamily: "inherit", fontVariantNumeric: "tabular-nums", textAlign: "right",
@@ -4903,11 +4947,14 @@ const AddDataWizard = ({
         </>
       }>
 
-      <DateRangeControls fy={{ ...fy, period: entryRange ? "custom" : fy.period, range: entryRange || fy.range }} onChange={changeEntryRange}/>
+      <DateRangeControls fy={{...fy,startYear,range:entryRange,period:entryRange?"custom":fy.period}} onChange={changeEntryRange}/>
+      {activeSection==="monthly" && !allMonths.length && <p role="status" style={{fontSize:12,color:T.amber}}>This selection has no complete month. Choose a full month/financial year, or use a Daily KPI for partial dates.</p>}
+      <p style={{fontSize:12,color:T.muted}}>Future periods use <strong style={{color:FORECAST_COLOR}}>purple Forecast</strong> inputs and bars. Actual and Budget colours are unchanged. Forecasts are saved separately and never automatically become actuals.</p>
+      {entryRange && ["daily","weekly"].includes(activeSection) && <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><button style={btnGhost} disabled={bucketPage===0} onClick={()=>setBucketPage(p=>Math.max(0,p-1))}>Previous dates</button><span style={{fontSize:12}}>Page {bucketPage+1} of {Math.max(1,Math.ceil(activeColumns.length/(activeSection==="daily"?31:26)))}</span><button style={btnGhost} disabled={(bucketPage+1)*(activeSection==="daily"?31:26)>=activeColumns.length} onClick={()=>setBucketPage(p=>p+1)}>Next dates</button></div>}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px", alignItems: "end" }}>
         <div>
           <label style={labelS}>Financial year</label>
-          <input type="number" min="1900" max="9998" value={startYear} style={inputS} onChange={e=>{const y=Number(e.target.value); if(y>=1900 && y<=9998) changeEntryRange({from:dayKeyOf(new Date(y,fy.startMonth,1)).slice(2),to:dayKeyOf(monthEnd(y,fy.startMonth+11)).slice(2)});}}/>
+          <input type="number" min="1900" max="9998" value={yearInput} style={inputS} onChange={e=>setYearInput(e.target.value)} onBlur={()=>{const y=Number(yearInput);if(Number.isInteger(y)&&y>=1900&&y<=9998){if(y!==startYear)changeEntryRange({from:dayKeyOf(new Date(y,fy.startMonth,1)).slice(2),to:dayKeyOf(monthEnd(y,fy.startMonth+11)).slice(2)});}else {setYearInput(String(startYear));setSaveState("error");}}} onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/>
         </div>
         <div>
           <label style={labelS}>Section</label>
@@ -4931,7 +4978,7 @@ const AddDataWizard = ({
               return (
                 <button
                   key={s.key}
-                  onClick={() => setFreqTab(s.key)}
+                  onClick={() => {setFreqTab(s.key);setBucketPage(0);}}
                   style={{
                     padding: "8px 16px", borderRadius: "8px",
                     fontSize: "13.5px", fontWeight: 600,
@@ -5081,7 +5128,7 @@ const AddDataWizard = ({
           <SimpleTrendChartModal
             title={`${chartLine.name} — Balance Sheet trend`}
             subtitle={`FY ${fyLabel(fy.startYear, fy.startMonth)} · Actual vs Budget`}
-            labels={labels}
+            labels={labels} periodKeys={allMonths.map(m=>m.key)} forecast={bsChartSeries(docs,allMonths,chartLine.path,"forecast")}
             actual={actualSeries}
             budget={budgetSeries}
             actualLabel="Actual"
@@ -5104,8 +5151,64 @@ const PREFS_KEY = "finPerf.addData.prefs.v2";
 const CHART_PREFS_KEY = "finPerf.chart.prefs.v1";
 const META_DOC = "financialKpiMeta";
 
-const FinancialPerformance = () => {
+// Legacy future inputs are reclassified once, preserving their original values in an audit archive.
+const separateLegacyForecasts = (source,docKey) => {
+  const patch={},archive={...(source.forecastLegacyArchive || {})};
+  const copy=value=>JSON.parse(JSON.stringify(value));
+  const classify=(actual,forecast,year,path)=>{
+    let changed=false;const a=[...(actual || [])],f=[...(forecast || Array(12).fill(""))];
+    for(let month=0;month<12;month++){
+      const key=`M:${year}-${String(month+1).padStart(2,"0")}`;
+      if(!isFutureBucket(key)||parseNum(a[month])===null)continue;
+      archive[`${path}|${key}`]=a[month];if(parseNum(f[month])===null)f[month]=a[month];a[month]="";changed=true;
+    }
+    return {actual:a,forecast:f,changed};
+  };
+  if(docKey===META_DOC){
+    const kpis=copy(source.kpis || {});let changed=false;
+    for(const [id,kpi]of Object.entries(kpis))for(const [key,entry]of Object.entries(kpi.entries || {})){
+      if(isFutureBucket(key)&&parseNum(entry.actual)!==null){archive[`${id}|${key}`]=entry.actual;if(parseNum(entry.forecast)===null)entry.forecast=entry.actual;entry.actual=null;changed=true;}
+    }
+    if(changed)patch.kpis=kpis;
+    let loanChanged=false;const loans=(source.loans || []).map(loan=>{
+      if(!Number.isInteger(loan.startYear)||!Number.isInteger(loan.startMonth))return loan;
+      const paid=[...(loan.paid || [])],forecast=[...(loan.forecast || Array(12).fill(""))];let edited=false;
+      for(const m of fyMonths(loan.startYear,loan.startMonth || 0))if(isFutureBucket(m.key)&&parseNum(paid[m.index])!==null){archive[`loan:${loan.id || loan.name}|${m.key}`]=paid[m.index];if(parseNum(forecast[m.index])===null)forecast[m.index]=paid[m.index];paid[m.index]="";edited=true;}
+      if(edited)loanChanged=true;return edited?{...loan,paid,forecast}:loan;
+    });
+    if(loanChanged)patch.loans=loans;
+  }else{
+    const year=Number(docKey.split("_").pop());
+    if(Number.isInteger(year)&&year>=1900&&year<=9999){
+      const prefix=docKey.slice(0,docKey.lastIndexOf("_"));
+      const fields=new Set(TAB_DEFS.flatMap(t=>t.categories || []).flatMap(c=>c.kpis || []).filter(k=>DOC[k.field?.src]===prefix && typeof k.field?.a==="string").map(k=>k.field.a));
+      for(const field of fields)if(Array.isArray(source[field])){const r=classify(source[field],source[`${field}Forecast`],year,field);if(r.changed){patch[field]=r.actual;patch[`${field}Forecast`]=r.forecast;}}
+      if(source.balanceSheetData){
+        const actual=copy(source.balanceSheetData),forecast=copy(source.balanceSheetForecast || {});let changed=false;
+        const visit=(a,f,path=[])=>{for(const [key,value]of Object.entries(a || {})){
+          if(Array.isArray(value)&&value.every(v=>v===null||typeof v!=="object")){const r=classify(value,Array.isArray(f[key])?f[key]:[],year,[...path,key].join("."));if(r.changed){a[key]=r.actual;f[key]=r.forecast;changed=true;}}
+          else if(value&&typeof value==="object"){if(!f[key]||typeof f[key]!=="object")f[key]=Array.isArray(value)?[]:{};visit(value,f[key],[...path,key]);}
+        }};
+        visit(actual,forecast);if(changed){patch.balanceSheetData=actual;patch.balanceSheetForecast=forecast;}
+      }
+    }
+  }
+  if(Object.keys(patch).length)patch.forecastLegacyArchive=archive;
+  return {document:{...source,...patch},patch};
+};
+const resolveFinancialBusiness = async ({authenticatedUser,selectedBusinessId,investorBusinessId,ownerId}) => {
+  if(!authenticatedUser)return null;
+  const target=investorBusinessId || selectedBusinessId || await ownerId() || authenticatedUser.uid;
+  if(typeof target!=="string" || !target.trim() || target.includes("/"))throw new Error("The selected business profile is invalid.");
+  return {uid:target,authUid:authenticatedUser.uid,displayName:authenticatedUser.displayName,email:authenticatedUser.email};
+};
+const FinancialPerformance = ({businessId:selectedBusinessId} = {}) => {
+  const [authenticatedUser,setAuthenticatedUser]=useState(null);
+  const [loadedBusinessId,setLoadedBusinessId]=useState(null);
+  const [loadError,setLoadError]=useState("");
+  const activeBusinessRef=useRef(null);
   const [user, setUser] = useState(null);
+  activeBusinessRef.current=user?.uid || null;
   const [userProfile, setUserProfile] = useState(null);
   const [fyStartMonth, setFyStartMonth] = useState(0);
   const [docs, setDocsState] = useState({});
@@ -5188,11 +5291,46 @@ const FinancialPerformance = () => {
     }
   }, []);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (cu) => setUser(isInvestorView && viewingSMEId ? { uid: viewingSMEId } : cu));
-    return () => unsub();
-  }, [isInvestorView, viewingSMEId]);
+  useEffect(()=>onAuthStateChanged(auth,setAuthenticatedUser),[]);
+  useEffect(()=>{
+    let cancelled=false,busy=false,timer;
+    const refresh=async()=>{
+      if(busy || cancelled)return;
+      busy=true;
+      try {
+        const investorId=sessionStorage.getItem("investorViewMode")==="true"?sessionStorage.getItem("viewingSMEId"):null;
+        const next=await resolveFinancialBusiness({authenticatedUser,selectedBusinessId,investorBusinessId:investorId,ownerId:getProfileOwnerId});
+        if(cancelled)return;
+        setIsInvestorView(!!investorId);setViewingSMEId(investorId);
+        setUser(previous=>previous?.uid===next?.uid && previous?.authUid===next?.authUid?previous:next);
+        if(!next){setLoading(false);setLoadedBusinessId(null);setLoadError("");}
+      }catch(error){if(!cancelled){setUser(null);setLoadError(`Could not select the business: ${errText(error)}`);setLoading(false);}}
+      finally{busy=false;}
+    };
+    // The supplied selector prop is immediate; shared profile-context is also checked on focus/storage and while visible.
+    const poll=async()=>{if(!document.hidden)await refresh();if(!cancelled)timer=setTimeout(poll,2500);};
+    refresh();timer=setTimeout(poll,2500);
+    window.addEventListener("focus",refresh);window.addEventListener("storage",refresh);window.addEventListener("business-profile-changed",refresh);
+    return()=>{cancelled=true;clearTimeout(timer);window.removeEventListener("focus",refresh);window.removeEventListener("storage",refresh);window.removeEventListener("business-profile-changed",refresh);};
+  },[authenticatedUser,selectedBusinessId]);
 
+  const readFinancialDocument=useCallback(async(businessId,key)=>{
+    const ref=doc(db,"users",businessId,"financialData",key);
+    const snapshot=await getDoc(ref);
+    if(!snapshot.exists())return {};
+    const initial=separateLegacyForecasts(snapshot.data(),key);
+    if(!Object.keys(initial.patch).length || isInvestorView)return initial.document;
+    try{return await runTransaction(db,async transaction=>{
+      const current=await transaction.get(ref);if(!current.exists())return {};
+      const result=separateLegacyForecasts(current.data(),key);
+      if(Object.keys(result.patch).length)transaction.set(ref,{...result.patch,updatedAt:new Date().toISOString()},{merge:true});
+      return result.document;
+    });}catch(error){
+      // Read access must still work for connected profiles that lack migration/write permission.
+      if(error?.code==="permission-denied"){return initial.document;}
+      throw error;
+    }
+  },[isInvestorView]);
   const loadDocs = useCallback(async (uid_, startMonth) => {
     const base = fyStartYearOf(new Date(), startMonth);
     const years = [base - 1, base, base + 1, base + 2];
@@ -5201,84 +5339,71 @@ const FinancialPerformance = () => {
     const out = {};
     await Promise.all(keys.map(async (k) => {
       try {
-        const snap = await getDoc(doc(db, "users", uid_, "financialData", k));
-        if (snap.exists()) out[k] = snap.data();
+        out[k] = await readFinancialDocument(uid_,k);
       } catch (err) { throw new Error(`Could not load ${k}: ${errText(err)}`); }
     }));
     return out;
-  }, []);
+  }, [readFinancialDocument]);
 
-  const ensureRange = useCallback(async (range) => {
-    if (!user?.uid) return;
-    const from=localDate(range.from),to=localDate(range.to), out={};
-    const tasks=[];
-    for(let y=from.getFullYear();y<=to.getFullYear();y++) for (const prefix of Object.values(DOC)) {
+  const ensureRange = useCallback(async range=>{
+    const [from,to]=requireFinancialRange(range),businessId=user?.uid;
+    if(!businessId || activeBusinessRef.current!==businessId)return;
+    const out={},tasks=[];
+    for(let y=from.getFullYear();y<=to.getFullYear();y++)for(const prefix of Object.values(DOC)){
       const key=`${prefix}_${y}`;
-      if (Object.prototype.hasOwnProperty.call(liveDocs.current,key)) continue;
-      tasks.push(getDoc(doc(db,"users",user.uid,"financialData",key)).then(snap=>{out[key]=snap.exists()?snap.data():{};}));
+      if(Object.prototype.hasOwnProperty.call(liveDocs.current,key))continue;
+      tasks.push(readFinancialDocument(businessId,key).then(data=>{out[key]=data;}));
     }
-    await Promise.all(tasks); setDocs(prev=>({...out,...prev}));
-  },[user?.uid,setDocs]);
+    await Promise.all(tasks);
+    if(activeBusinessRef.current===businessId)setDocs(prev=>({...out,...prev}));
+  },[user?.uid,setDocs,readFinancialDocument]);
+
   const applyRange = async range => {
     try { await ensureRange(range); setDateRange(range); setPeriod("custom"); }
-    catch(e) { notify("error",`Could not load selected dates: ${errText(e)}`); }
+    catch(e) { notify("error",`Could not load selected dates: ${errText(e)}`); throw e; }
   };
 
-  const loadEquityData = useCallback(async (uid_) => {
-    try {
-      const divSnap = await getDoc(doc(db, "dividend-history", uid_));
-      setDividends(divSnap.exists() ? divSnap.data().dividends || [] : []);
-      const capSnap = await getDoc(doc(db, "cap-table", uid_));
-      if (capSnap.exists()) {
-        const data = capSnap.data();
-        setInvestors(data.investors || []);
-        setIrrInvestments(data.irrInvestments || []);
-      } else { setInvestors([]); setIrrInvestments([]); }
-    } catch (err) { console.error(err); }
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      if (!user?.uid) { setLoading(false); return; }
-      try {
-        let profileUid = user.uid;
-        try {
-          const ownerId = await getProfileOwnerId();
-          if (ownerId) profileUid = ownerId;
-        } catch (e) { /* ignore */ }
-        let profile = await getDoc(doc(db, "universalProfiles", profileUid));
-        if (!profile.exists() && profileUid !== user.uid) {
-          profile = await getDoc(doc(db, "universalProfiles", user.uid));
-        }
-        if (profile.exists()) {
-          setUserProfile(profile.data());
-        } else {
-          try {
-            const raw = localStorage.getItem(`universalProfileData_${user.uid}`) || localStorage.getItem("universalProfileData");
-            if (raw) setUserProfile(JSON.parse(raw));
-          } catch (e) { /* ignore */ }
-        }
-        const start = fyStartMonthFromEnd(profile.exists() ? profile.data()?.entityOverview?.financialYearEnd : null);
-        setFyStartMonth(start);
-        const [loaded, metaSnap] = await Promise.all([
-          loadDocs(user.uid, start),
-          getDoc(doc(db, "users", user.uid, "financialData", META_DOC)),
-        ]);
-        setDocs(loaded);
-        if (metaSnap.exists()) setMeta({ kpis: {}, custom: [], hiddenTabs: [], hiddenKpis: [], loans: [], ...metaSnap.data() });
-        await loadEquityData(user.uid);
-      } catch (err) {
-        console.error(err);
-        notify("error", `Could not load your financial data: ${errText(err)}`);
-      } finally {
-        setLoading(false);
-      }
+  const loadEquityData = useCallback(async businessId=>{
+    const results=await Promise.allSettled([getDoc(doc(db,"dividend-history",businessId)),getDoc(doc(db,"cap-table",businessId))]);
+    const dividendData=results[0].status==="fulfilled"&&results[0].value.exists()?results[0].value.data():{};
+    const capital=results[1].status==="fulfilled"&&results[1].value.exists()?results[1].value.data():{};
+    return {dividends:dividendData.dividends||[],investors:capital.investors||[],irrInvestments:capital.irrInvestments||[],unavailable:results.some(r=>r.status==="rejected")};
+  },[]);
+  useEffect(()=>{
+    let cancelled=false;
+    const businessId=user?.uid;
+    if(!businessId)return undefined;
+    setLoading(true);setLoadError("");setLoadedBusinessId(null);
+    setDocs({});setMeta({kpis:{},custom:[],hiddenTabs:[],hiddenKpis:[],loans:[]});setUserProfile(null);
+    setDividends([]);setInvestors([]);setIrrInvestments([]);
+    setAddFlow(null);setChartKpi(null);setAnalysisKpi(null);setInfoKpi(null);setShowReport(false);setNotesKpi(null);setActionKpi(null);
+    (async()=>{
+      try{
+        const profile=await getDoc(doc(db,"universalProfiles",businessId));
+        const data=profile.exists()?profile.data():null;
+        const start=fyStartMonthFromEnd(data?.entityOverview?.financialYearEnd || data?.formData?.entityOverview?.financialYearEnd);
+        const [loaded,metaSnap,equity]=await Promise.all([loadDocs(businessId,start),readFinancialDocument(businessId,META_DOC),loadEquityData(businessId)]);
+        if(cancelled || activeBusinessRef.current!==businessId)return;
+        setUserProfile(data);setFyStartMonth(start);setDocs(loaded);
+        setMeta({kpis:{},custom:[],hiddenTabs:[],hiddenKpis:[],loans:[],...metaSnap});
+        setDividends(equity.dividends);setInvestors(equity.investors);setIrrInvestments(equity.irrInvestments);setLoadedBusinessId(businessId);
+        if(equity.unavailable)notify("error","Some equity data is unavailable for this business.");
+      }catch(error){if(!cancelled && activeBusinessRef.current===businessId){setLoadError(`Could not load this business's financial data: ${errText(error)}`);}}
+      finally{if(!cancelled && activeBusinessRef.current===businessId)setLoading(false);}
     })();
-  }, [user, loadDocs, loadEquityData]);
+    return()=>{cancelled=true;};
+  },[user?.uid,loadDocs,loadEquityData,readFinancialDocument]);
+  useEffect(()=>{
+    if(!user?.uid || loadedBusinessId!==user.uid)return;
+    const [from,to]=periodWindow(period,fy);
+    if(!validFinancialRange(from,to))return;
+    ensureRange({from:dayKeyOf(from).slice(2),to:dayKeyOf(to).slice(2)}).catch(error=>{if(activeBusinessRef.current===user.uid)notify("error",`Could not load selected dates: ${errText(error)}`);});
+  },[user?.uid,loadedBusinessId,period,fy,ensureRange]);
 
   const persistMeta = async (next) => {
+    if(activeBusinessRef.current!==user?.uid)return;
     setMeta(next);
-    if (!user?.uid || isInvestorView) return;
+    if (!user?.uid || isInvestorView || activeBusinessRef.current!==user.uid) return;
     try {
       await setDoc(doc(db, "users", user.uid, "financialData", META_DOC),
         { ...next, updatedAt: new Date().toISOString() }, { merge: true });
@@ -5289,7 +5414,7 @@ const FinancialPerformance = () => {
   };
 
   const writeArrayCell = async ({ docKey, field, monthIndex, raw }) => {
-    if (!user?.uid || isInvestorView) return;
+    if (!user?.uid || isInvestorView || activeBusinessRef.current!==user.uid) return;
     let nextToPersist = null;
     setDocs((prev) => {
       const existing = prev[docKey] || {};
@@ -5308,6 +5433,9 @@ const FinancialPerformance = () => {
   };
 
   const saveKpiField = async ({ kpi, which, raw, periodKey }) => {
+    which=financialValueType(periodKey,which);
+    if(!["actual","budget","forecast"].includes(which)||!Number.isFinite(+bucketWindow(periodKey)[0]))throw new Error("Choose a valid reporting period.");
+    if(which==="forecast" && !isFutureBucket(periodKey))throw new Error("Forecast entry is only available for future periods.");
     const freq = kpi.frequency || "Monthly";
     if (raw !== "" && raw !== null && raw !== undefined && parseNum(raw) === null) throw new Error("Enter a finite number.");
 
@@ -5321,7 +5449,7 @@ const FinancialPerformance = () => {
     }
 
     if (!kpi.field) return;
-    const field = which === "actual" ? kpi.field.a : kpi.field.b;
+    const field = which === "forecast" ? `${kpi.field.a}Forecast` : which === "actual" ? kpi.field.a : kpi.field.b;
     if (!field) return;
     if (Array.isArray(field)) return;
     if (!periodKey || !periodKey.startsWith("M:")) return;
@@ -5332,13 +5460,15 @@ const FinancialPerformance = () => {
   };
 
   const batchSaveKpiFields = async (updates) => {
-    if (!user?.uid || isInvestorView || !updates?.length) return;
+    if (!user?.uid || isInvestorView || activeBusinessRef.current!==user.uid || !updates?.length) return;
     try {
       const docUpdates = {};
       const metaEntriesUpdates = {};
 
       updates.forEach(({ kpi, which, raw, periodKey }) => {
-        if (!["actual","budget"].includes(which)) throw new Error("Invalid value type");
+        which=financialValueType(periodKey,which);
+        if(!Number.isFinite(+bucketWindow(periodKey)[0]) || which==="forecast" && !isFutureBucket(periodKey))throw new Error("Choose a valid future forecast period.");
+        if (!["actual","budget","forecast"].includes(which)) throw new Error("Invalid value type");
         if (raw !== "" && raw !== null && raw !== undefined && parseNum(raw) === null) throw new Error("Enter a finite number.");
         const freq = kpi.frequency || "Monthly";
         if (freq === "Daily" || freq === "Weekly" || kpi.custom) {
@@ -5350,7 +5480,7 @@ const FinancialPerformance = () => {
         }
 
         if (!kpi.field) return;
-        const field = which === "actual" ? kpi.field.a : kpi.field.b;
+        const field = which === "forecast" ? `${kpi.field.a}Forecast` : which === "actual" ? kpi.field.a : kpi.field.b;
         if (!field || Array.isArray(field)) return;
         if (!periodKey || !periodKey.startsWith("M:")) return;
         const [yearStr, monthStr] = periodKey.slice(2).split("-");
@@ -5409,7 +5539,7 @@ const FinancialPerformance = () => {
   };
 
   const saveBsFullDoc = async (docKey, nextBsDataOrDoc, isFullDoc = false) => {
-    if (!user?.uid || isInvestorView) return;
+    if (!user?.uid || isInvestorView || activeBusinessRef.current!==user.uid) return;
     const year = Number(docKey.split("_").pop());
     let nextToPersist = null;
     setDocs((prev) => {
@@ -5477,7 +5607,7 @@ const FinancialPerformance = () => {
   };
 
   const saveDividends = async (data) => {
-    if (!user?.uid || isInvestorView) return;
+    if (!user?.uid || isInvestorView || activeBusinessRef.current!==user.uid) return;
     try {
       await setDoc(doc(db, "dividend-history", user.uid), { dividends: data, lastUpdated: new Date().toISOString() });
       setDividends(data);
@@ -5486,7 +5616,7 @@ const FinancialPerformance = () => {
   };
 
   const saveCapTable = async (data) => {
-    if (!user?.uid || isInvestorView) return;
+    if (!user?.uid || isInvestorView || activeBusinessRef.current!==user.uid) return;
     try {
       await setDoc(doc(db, "cap-table", user.uid), { ...data, lastUpdated: new Date().toISOString() });
       setInvestors(data.investors || []);
@@ -5523,18 +5653,20 @@ const FinancialPerformance = () => {
           months.forEach((m) => {
             if (kpi.custom) {
               const saved = meta.kpis[kpi.id]?.entries?.[m.key];
-              entries[m.key] = { actual: saved?.actual ?? null, budget: saved?.budget ?? null };
+              entries[m.key] = { actual: saved?.actual ?? null, budget: saved?.budget ?? null, forecast: saved?.forecast ?? null };
             } else {
               const ctx = buildContext(docs, m.year, m.month);
               const budgetCtx = buildContext(docs,m.year,m.month,true);
-              contexts[m.key] = {actual:ctx,budget:budgetCtx};
-              entries[m.key] = { actual: kpi.actual ? kpi.actual(ctx) : null, budget: kpi.budget?.(ctx) ?? kpi.actual?.(budgetCtx) ?? null };
+              const forecastCtx = buildContext(docs,m.year,m.month,"forecast");
+              contexts[m.key] = {actual:ctx,budget:budgetCtx,forecast:forecastCtx};
+              entries[m.key] = { forecast: kpi.actual ? kpi.actual(forecastCtx) : null, actual: kpi.actual ? kpi.actual(ctx) : null, budget: kpi.budget?.(ctx) ?? kpi.actual?.(budgetCtx) ?? null };
             }
           });
           const storedEntries = meta.kpis[kpi.id]?.entries || {};
           Object.entries(storedEntries).forEach(([key, v]) => {
             if (kpi.custom || key.startsWith("D:") || key.startsWith("W:")) entries[key] = v;
           });
+          Object.keys(entries).forEach(key=>{entries[key]=financialBucketValues(entries[key],key);});
           const saved = meta.kpis[kpi.id] || {};
           return { ...kpi, entries, contexts,
             meaning: saved.meaning ?? kpi.meaning, measured: saved.measured ?? kpi.measured,
@@ -5658,7 +5790,9 @@ const FinancialPerformance = () => {
   const tdS = { padding: "13px 14px", color: T.body, fontSize: "14px", overflow: "hidden", borderRight: `1px solid ${T.lineSoft}` };
   const iconBtn = (c) => ({ background: "none", border: "none", cursor: "pointer", padding: "5px", borderRadius: "6px", color: c, display: "inline-flex", alignItems: "center" });
 
-  if (loading) return <div style={{ padding: "80px", textAlign: "center", color: T.body, fontSize: "14px" }}>Loading financial performance…</div>;
+  if (loadError) return <div role="alert" style={{padding:40,color:T.red}}>{loadError}</div>;
+  if (!user?.uid) return <div role="status" style={{padding:40,color:T.muted}}>{authenticatedUser?"Selecting business profile…":"Sign in to view financial performance."}</div>;
+  if (loading || loadedBusinessId!==user.uid) return <div style={{ padding: "80px", textAlign: "center", color: T.body, fontSize: "14px" }}>Loading financial performance…</div>;
 
   const userName = user?.displayName || user?.email || "User";
 
@@ -5803,6 +5937,7 @@ const FinancialPerformance = () => {
       </div>
 
       <DateRangeControls fy={fy} onChange={applyRange}/>
+      <CompanyHealthDiagnostics businessId={user?.uid} from={dayKeyOf(periodWindow(period,fy)[0]).slice(2)} to={dayKeyOf(periodWindow(period,fy)[1]).slice(2)} />
       {isKpiTableTab && (
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
           <div style={{ display: "inline-flex", background: T.raised, borderRadius: "10px", padding: "3px", flexWrap: "wrap" }}>
