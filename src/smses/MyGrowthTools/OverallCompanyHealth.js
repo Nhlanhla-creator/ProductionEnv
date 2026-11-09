@@ -5,7 +5,7 @@ import { httpsCallable, getFunctions } from "firebase/functions";
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
-import { Brain, ClipboardList, Info, MessageSquare, Route } from "lucide-react";
+import { Brain, ClipboardList, Info, MessageSquare } from "lucide-react";
 
 // ==================== VIEWER ORIGINS ====================
 // Every cohorts table that can open this page "as" an SME writes viewOrigin
@@ -1188,6 +1188,8 @@ function OverallCompanyHealth() {
   const [healthNotes, setHealthNotes] = useState({});
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [healthBaseline, setHealthBaseline] = useState(null);
+  const [lockingBaseline, setLockingBaseline] = useState(false);
 
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId] = useState(null);
@@ -1217,17 +1219,20 @@ function OverallCompanyHealth() {
 
   useEffect(() => {
     setHealthNotes({});
+    setHealthBaseline(null);
     if (!user?.uid) return;
     let active = true;
-    getDoc(doc(db, "users", user.uid, "companyHealth", "notes"))
-      .then((snapshot) => {
-        if (active && snapshot.exists()) {
-          setHealthNotes(snapshot.data().notes || {});
-        }
-      })
-      .catch((loadError) => {
-        console.error("Could not load company health notes:", loadError);
-      });
+
+    Promise.all([
+      getDoc(doc(db, "users", user.uid, "companyHealth", "notes")),
+      getDoc(doc(db, "users", user.uid, "companyHealth", "baseline")),
+    ]).then(([notesSnapshot, baselineSnapshot]) => {
+      if (!active) return;
+      if (notesSnapshot.exists()) setHealthNotes(notesSnapshot.data().notes || {});
+      if (baselineSnapshot.exists()) setHealthBaseline(baselineSnapshot.data());
+    }).catch((loadError) => {
+      console.error("Could not load company health data:", loadError);
+    });
     return () => { active = false; };
   }, [user]);
 
@@ -1325,6 +1330,38 @@ function OverallCompanyHealth() {
     }
   };
 
+  const lockHealthBaseline = async () => {
+    if (!user?.uid || isInvestorView || !inputs) return;
+    if (healthBaseline?.lockedAt) return;
+
+    setLockingBaseline(true);
+    setError(null);
+    const snapshot = {};
+    HEALTH_DATA.forEach((row) => {
+      const live = inputs[row.key];
+      if (!live) return;
+      snapshot[row.key] = {
+        score: Number.isFinite(live.score) ? live.score : null,
+        status: live.status || null,
+        riskLevel: live.riskLevel || null,
+      };
+    });
+
+    try {
+      const baseline = {
+        lockedAt: new Date().toISOString(),
+        snapshot,
+      };
+      await setDoc(doc(db, "users", user.uid, "companyHealth", "baseline"), baseline);
+      setHealthBaseline(baseline);
+    } catch (lockError) {
+      console.error("Could not lock company health baseline:", lockError);
+      setError("The baseline could not be locked. Please try again.");
+    } finally {
+      setLockingBaseline(false);
+    }
+  };
+
   // ---- Auto-run once the user is known ----
   useEffect(() => {
     if (user) generateAnalysis(false);
@@ -1406,6 +1443,35 @@ function OverallCompanyHealth() {
               {companyContext.companyGoal || "No mission or strategic priorities are recorded yet."}
             </p>
           </div>
+          {!isInvestorView && (
+            <div style={{ marginTop: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+              <div>
+                <strong style={{ color: "#5d4037", fontSize: "13px" }}>
+                  {healthBaseline?.lockedAt ? "Baseline locked" : "Baseline not locked"}
+                </strong>
+                <div style={{ color: "#7d5a50", fontSize: "12px", marginTop: "3px" }}>
+                  {healthBaseline?.lockedAt
+                    ? `Current health can now be tracked from ${new Date(healthBaseline.lockedAt).toLocaleDateString()}.`
+                    : "Lock the current assessment once to start tracking progress."}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={lockHealthBaseline}
+                disabled={lockingBaseline || Boolean(healthBaseline?.lockedAt) || !inputs}
+                style={{
+                  padding: "9px 16px", borderRadius: "6px", border: 0,
+                  background: healthBaseline?.lockedAt ? "#d1fae5" : "#5d4037",
+                  color: healthBaseline?.lockedAt ? "#166534" : "#fff",
+                  fontWeight: "700", fontSize: "13px",
+                  cursor: healthBaseline?.lockedAt ? "default" : "pointer",
+                  opacity: lockingBaseline || !inputs ? 0.65 : 1,
+                }}
+              >
+                {healthBaseline?.lockedAt ? "Baseline Locked" : lockingBaseline ? "Locking…" : "Lock Baseline"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ---- AI Executive Summary Banner ---- */}
@@ -1494,20 +1560,22 @@ function OverallCompanyHealth() {
           overflowX: "auto", border: "1px solid #e8ddd4", margin: "0 20px",
         }}>
           <div style={{
-            minWidth: "790px", display: "grid",
-            gridTemplateColumns: "minmax(190px,1.2fr) minmax(140px,.8fr) minmax(100px,.65fr) minmax(360px,2fr)",
+            minWidth: "930px", display: "grid",
+            gridTemplateColumns: "minmax(190px,1.2fr) minmax(140px,.8fr) minmax(140px,.8fr) minmax(100px,.65fr) minmax(360px,2fr)",
             backgroundColor: "#5d4037", color: "#fdfcfb",
             fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px",
           }}>
-            {["Category", "Health Status", "Risk Level", "Actions"].map((label) => (
+            {["Category", "Baseline Status", "Current Health Status", "Risk Level", "Actions"].map((label) => (
               <div key={label} style={{ padding: "15px 18px" }}>{label}</div>
             ))}
           </div>
 
           {HEALTH_DATA.map((row, index) => {
             const live = inputs?.[row.key];
+            const baseline = healthBaseline?.snapshot?.[row.key];
             const displayStatus = live?.status || null;
             const displayRisk = live?.riskLevel || null;
+            const baselineStatus = baseline?.status || null;
 
             return (
               <div
@@ -1515,10 +1583,10 @@ function OverallCompanyHealth() {
                 style={{
                   borderBottom: index < HEALTH_DATA.length - 1 ? "1px solid #e8ddd4" : "none",
                   backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f7f3f0",
-                  minWidth: "790px",
+                  minWidth: "930px",
                 }}
               >
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(190px,1.2fr) minmax(140px,.8fr) minmax(100px,.65fr) minmax(360px,2fr)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(190px,1.2fr) minmax(140px,.8fr) minmax(140px,.8fr) minmax(100px,.65fr) minmax(360px,2fr)" }}>
                   <div style={{
                     padding: "18px", borderRight: "1px solid #e8ddd4",
                     fontWeight: "700", color: "#5d4037", fontSize: "14px",
@@ -1535,13 +1603,32 @@ function OverallCompanyHealth() {
                     display: "flex", alignItems: "center",
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div style={statusDotStyle(displayStatus)} />
+                      <div style={statusDotStyle(baselineStatus)} />
                       <div>
                         <strong style={{ color: "#4a352f", fontSize: "13px", textTransform: "capitalize" }}>
-                          {displayStatus || "Pending"}
+                          {baselineStatus || (healthBaseline?.lockedAt ? "Not assessed" : "—")}
                         </strong>
                         <div style={{ fontSize: "11px", color: "#8a7a74" }}>
-                          {Number.isFinite(live?.score) ? `${live.score}/100` : live?.analysisOnly ? "Narrative only" : "No score"}
+                          {Number.isFinite(baseline?.score) ? `${baseline.score}/100` : "Awaiting baseline"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    padding: "18px", borderRight: "1px solid #e8ddd4",
+                    display: "flex", alignItems: "center", background: healthBaseline?.lockedAt ? "rgba(209,250,229,.18)" : "transparent",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={statusDotStyle(healthBaseline?.lockedAt ? displayStatus : null)} />
+                      <div>
+                        <strong style={{ color: "#4a352f", fontSize: "13px", textTransform: "capitalize" }}>
+                          {healthBaseline?.lockedAt ? (displayStatus || "Pending") : "Locked until baseline"}
+                        </strong>
+                        <div style={{ fontSize: "11px", color: "#8a7a74" }}>
+                          {!healthBaseline?.lockedAt
+                            ? "Current starts after lock"
+                            : Number.isFinite(live?.score) ? `${live.score}/100` : live?.analysisOnly ? "Narrative only" : "No score"}
                         </div>
                       </div>
                     </div>
@@ -1566,9 +1653,6 @@ function OverallCompanyHealth() {
                       { mode: "analysis", label: "AI analysis", Icon: Brain },
                       { mode: "more", label: "More information", Icon: Info },
                       { mode: "notes", label: "Notes / comments", Icon: MessageSquare },
-                      ...(row.key === "strategy"
-                        ? [{ mode: "strategyPlan", label: "Detailed strategy & execution plan", Icon: Route }]
-                        : []),
                     ].map(({ mode, label, Icon }) => (
                       <button
                         key={mode}
@@ -1634,7 +1718,31 @@ function OverallCompanyHealth() {
 
                 <div style={{ padding: "20px 22px" }}>
                   {detailModal.mode === "sections" && (
-                    <SectionBreakdown metrics={row.metrics} live={live} aiSections={ai?.sections || {}} />
+                    <div>
+                      <SectionBreakdown metrics={row.metrics} live={live} aiSections={ai?.sections || {}} />
+                      {row.key === "strategy" && (
+                        <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: "1px solid #e8ddd4" }}>
+                          <h3 style={{ margin: "0 0 10px", color: "#5d4037", fontSize: "15px" }}>Detailed strategy & execution plan</h3>
+                          {Array.isArray(aiResults?.strategyExecutionPlan) && aiResults.strategyExecutionPlan.length > 0 ? (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
+                              {aiResults.strategyExecutionPlan.map((item, index) => (
+                                <article key={`${item.objective}-${index}`} style={{ padding: "15px", background: "#f7f3f0", border: "1px solid #e8ddd4", borderRadius: "8px" }}>
+                                  <strong style={{ color: "#4a352f" }}>{item.objective}</strong>
+                                  <ol style={{ paddingLeft: "20px", margin: "12px 0", color: "#4a352f", fontSize: "12px", lineHeight: 1.6 }}>
+                                    {(item.actions || []).map((action, actionIndex) => <li key={actionIndex}>{action}</li>)}
+                                  </ol>
+                                  <p style={{ margin: "5px 0", color: "#5d4037", fontSize: "12px" }}><strong>Owner:</strong> {item.owner}</p>
+                                  <p style={{ margin: "5px 0", color: "#5d4037", fontSize: "12px" }}><strong>Due:</strong> {item.dueDate}</p>
+                                  <p style={{ margin: "5px 0 0", color: "#5d4037", fontSize: "12px" }}><strong>Success measure:</strong> {item.successMeasure}</p>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <p style={{ color: "#7d5a50", fontSize: "13px" }}>No strategy and execution plan is available yet.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {detailModal.mode === "strategyPlan" && (
