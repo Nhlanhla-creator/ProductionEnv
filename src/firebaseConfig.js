@@ -17,15 +17,14 @@ import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 // ── Environment-specific configs ──────────────────────────────────────────
 const devConfig = {
-  apiKey: "AIzaSyDfcXO4GbNdPFY7qGbjwH1z3A78FwXiFAE",
-  authDomain: "tuts-7ea8c.firebaseapp.com",
-  projectId: "tuts-7ea8c",
-  storageBucket: "tuts-7ea8c.appspot.com",
-  messagingSenderId: "546514581101",
-  appId: "1:546514581101:web:a34e661b6cad46f01db164",
-  measurementId: "G-LK13NE8TBS"
+  apiKey: "AIzaSyBDouReGMtDaM_HTavtgJ8bAsF7YQdtnow",
+  authDomain: "back-up-5b6fe.firebaseapp.com",
+  projectId: "back-up-5b6fe",
+  storageBucket: "back-up-5b6fe.firebasestorage.app",
+  messagingSenderId: "493526158907",
+  appId: "1:493526158907:web:0fdb1137ec71d69acfd61e",
+  measurementId: "G-23L9BH08JP"
 };
-
 const prodConfig = {
   apiKey: "AIzaSyBeidLheVERNRY4ZCzzw4NiQVjj9y2nIUU",
   authDomain: "production-environment-cf7da.firebaseapp.com",
