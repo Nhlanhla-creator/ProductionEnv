@@ -84,6 +84,11 @@ const STATE_STYLE = {
 };
 
 const defaultFmtPts = (n) => `+${(Math.round(Number(n || 0) * 10) / 10).toFixed(1)}%`;
+const actionLines = (analysis) =>
+  String(analysis?.actions || "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "").replace(/\*\*/g, "").trim())
+    .filter(Boolean);
 
 const TABS = [
   { key: "breakdown", label: "Score breakdown", short: "Breakdown", icon: BarChart3 },
@@ -352,9 +357,9 @@ function ItemRow({ item, fmtPts, onNavigate }) {
         </span>
         {item.evidence && <span style={{ display: "block", color: T.body, fontSize: "12px" }}>{item.evidence}</span>}
         {item.reason && <span style={{ display: "block", color: T.badText, fontSize: "12px" }}>{item.reason}</span>}
-        {!item.claimable && item.withheld > 0 && (
+        {!item.claimable && item.withheld > 0 && (item.pointValue == null || item.pointValue > 0.05) && (
           <span style={{ display: "block", color: T.mute, fontStyle: "italic", fontSize: "11.5px", marginTop: "3px" }}>
-            Fixed deduction — follows the financial position, not the form.
+            {item.deductionNote || "This reflects the current source evidence, not a missing form field."}
           </span>
         )}
         {item.withheld > 0 && item.claimable && item.route && (
@@ -397,9 +402,9 @@ function ItemRow({ item, fmtPts, onNavigate }) {
           </button>
         )}
       </span>
-      {item.withheld > 0 && (
+      {item.withheld > 0 && (item.pointValue == null || item.pointValue > 0.05) && (
         <Pill tone={item.claimable ? "good" : "neutral"} icon={item.claimable ? undefined : Lock}>
-          {fmtPts(item.pointValue)}
+          {item.claimable ? fmtPts(item.pointValue) : fmtPts(-Math.abs(item.pointValue))}
         </Pill>
       )}
     </div>
@@ -474,6 +479,17 @@ function FindingsPanel({ findings, mode }) {
         </div>
       )}
 
+      {(findings.riskNotes || []).length > 0 && (
+        <div style={{ marginTop: "10px", padding: "10px 11px", background: T.warnBg, border: `1px solid ${T.warnLine}`, borderRadius: "8px" }}>
+          <div style={{ fontSize: "11.5px", fontWeight: 700, color: T.warn, marginBottom: "5px" }}>
+            Risks and discrepancies explicitly noted in the report
+          </div>
+          {findings.riskNotes.map((note, index) => (
+            <Prose key={index} style={{ fontSize: "12px", marginBottom: index < findings.riskNotes.length - 1 ? "5px" : 0 }}>{note}</Prose>
+          ))}
+        </div>
+      )}
+
       {showImps && imps.length > 0 && (
         <div style={{ marginTop: weak.length && showWeak ? "14px" : 0 }}>
           <div style={{ fontSize: "11.5px", fontWeight: 700, color: T.ink, marginBottom: "7px" }}>
@@ -486,6 +502,25 @@ function FindingsPanel({ findings, mode }) {
                 <strong style={{ color: T.ink, fontSize: "12.5px" }}>{im.title}</strong>
                 {im.body && <Prose style={{ fontSize: "12.5px", marginTop: "2px" }}>{im.body}</Prose>}
               </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(findings.followUps || []).length > 0 && mode !== "breakdown" && (
+        <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: `1px dashed ${T.line2}` }}>
+          <div style={{ fontSize: "11.5px", fontWeight: 700, color: T.ink, marginBottom: "7px" }}>
+            Follow-up actions grounded in this analysis · no point promise
+          </div>
+          {findings.followUps.map((item, index) => (
+            <div key={index} style={{ marginBottom: "9px" }}>
+              <strong style={{ color: T.ink, fontSize: "12.5px" }}>{item.title}</strong>
+              {(item.evidence || []).map((evidence, evidenceIndex) => (
+                <Prose key={evidenceIndex} style={{ fontSize: "11.5px", fontStyle: "italic", color: T.mute, marginTop: "3px" }}>
+                  From analysis: {evidence}
+                </Prose>
+              ))}
+              <Prose style={{ fontSize: "12px", marginTop: "2px" }}>{item.body}</Prose>
             </div>
           ))}
         </div>
@@ -526,6 +561,12 @@ function ElementRow({ element, fmtPts, onOpen, openPop, setOpenPop }) {
               {weak.length > 3 ? "…" : ""}
             </div>
           )}
+          {element.qualitativeAction && (
+            <div style={{ marginTop: imps.length || docImps.length || actions.length ? "7px" : 0, paddingTop: imps.length || docImps.length || actions.length ? "7px" : 0, borderTop: imps.length || docImps.length || actions.length ? `1px dashed ${T.line2}` : "none" }}>
+              <div style={{ color: T.mute, marginBottom: "3px" }}>Next step · not point-valued:</div>
+              <div>{element.qualitativeAction}</div>
+            </div>
+          )}
         </>
       );
     }
@@ -553,7 +594,8 @@ function ElementRow({ element, fmtPts, onOpen, openPop, setOpenPop }) {
     }
     const imps = element.improvements || [];
     const docImps = element.findings?.improvements || [];
-    if (!imps.length && !docImps.length) {
+    const actions = actionLines(element.analysis);
+    if (!imps.length && !docImps.length && !actions.length && !element.qualitativeAction) {
       return element.extraImprovements ? (
         <em>Open the full view — this element's actions are listed there.</em>
       ) : (
@@ -584,6 +626,14 @@ function ElementRow({ element, fmtPts, onOpen, openPop, setOpenPop }) {
               <div key={n} style={{ marginBottom: "2px" }}>
                 • {i.title}
               </div>
+            ))}
+          </div>
+        )}
+        {actions.length > 0 && (
+          <div style={{ marginTop: imps.length || docImps.length ? "7px" : 0, paddingTop: imps.length || docImps.length ? "7px" : 0, borderTop: imps.length || docImps.length ? `1px dashed ${T.line2}` : "none" }}>
+            <div style={{ color: T.mute, marginBottom: "3px" }}>Practical actions · not point-valued:</div>
+            {actions.slice(0, 3).map((action, index) => (
+              <div key={index} style={{ marginBottom: "3px" }}>• {action}</div>
             ))}
           </div>
         )}
@@ -729,6 +779,8 @@ export default function ScoreExplorer({
   onClose,
   onRequestAnalysis,     // () => Promise<void>
   analysisPending,
+  analysisError,
+  staleAnalysis = false,
   analysisTimestamp,
   fmtPts = defaultFmtPts,
 }) {
@@ -1162,6 +1214,16 @@ export default function ScoreExplorer({
               // sits in Firestore was the whole problem.
               <>
                 <FindingsPanel findings={el.findings} mode="analysis" />
+                {analysisError && (
+                  <Prose style={{ marginTop: "12px", padding: "10px 12px", background: T.badBg, border: `1px solid ${T.badLine}`, borderRadius: "8px", color: T.badText }}>
+                    A complete AI analysis is not available: {analysisError}
+                  </Prose>
+                )}
+                {!analysisError && staleAnalysis && (
+                  <Prose style={{ marginTop: "12px", padding: "10px 12px", background: T.warnBg, border: `1px solid ${T.warnLine}`, borderRadius: "8px", color: T.warn }}>
+                    The saved AI analysis was based on different score inputs, so it is hidden. Generate a fresh analysis for the current evidence.
+                  </Prose>
+                )}
                 {onRequestAnalysis && (
                   <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px dashed ${T.line2}` }}>
                     <Prose style={{ fontSize: "12px", color: T.mute, marginBottom: "9px" }}>
@@ -1195,7 +1257,11 @@ export default function ScoreExplorer({
             ) : (
               <>
                 <Prose style={{ marginBottom: "12px", fontStyle: "italic", color: T.mute }}>
-                  No written analysis for this element yet. The score and the point values are already final and do not depend on it.
+                  {analysisError
+                    ? `No valid AI analysis is available for this element: ${analysisError}`
+                    : staleAnalysis
+                    ? "The saved AI analysis used different score inputs and is hidden. Generate a fresh analysis; no stale result is shown."
+                    : "No written analysis for this element yet. The score and the point values are already final and do not depend on it."}
                 </Prose>
                 {onRequestAnalysis && (
                   <button
@@ -1259,14 +1325,60 @@ export default function ScoreExplorer({
                 ))}
               </>
             ) : el.locked?.length ? (
-              <Prose>
-                Nothing here can be recovered by editing the profile. {el.locked.map((i) => i.label).join("; ")} follow your actual
-                records and balance sheet — they move as the business does.
-              </Prose>
-            ) : el.findings || el.extraImprovements ? null : (
+              <>
+                <Prose style={{ marginBottom: "10px" }}>
+                  These deductions reflect reported facts or source evidence, not missing form answers. They change only when the underlying evidence changes.
+                </Prose>
+                {el.locked.map((item) => (
+                  <div key={item.key} style={{ border: `1px solid ${T.hair}`, borderRadius: "8px", padding: "9px 11px", marginBottom: "7px" }}>
+                    <strong style={{ color: T.ink, fontSize: "12px" }}>{item.label}</strong>
+                    {(item.reason || item.fix) && (
+                      <Prose style={{ fontSize: "12px", marginTop: "3px" }}>{[item.reason, item.fix].filter(Boolean).join(" ")}</Prose>
+                    )}
+                  </div>
+                ))}
+              </>
+            ) : el.findings || el.extraImprovements || actionLines(el.analysis).length || el.qualitativeAction ? null : (
               <Prose>
                 <strong style={{ color: T.goodMid }}>Complete.</strong> Everything captured in this element was counted in full.
               </Prose>
+            )}
+
+            {el.qualitativeAction && (
+              <div style={{ marginTop: (el.improvements || []).length || el.locked?.length ? "16px" : 0, paddingTop: (el.improvements || []).length || el.locked?.length ? "14px" : 0, borderTop: (el.improvements || []).length || el.locked?.length ? `1px dashed ${T.line2}` : "none" }}>
+                <SectionLabel>Practical next step · not point-valued</SectionLabel>
+                {el.qualitativeImportance && <Prose style={{ fontSize: "12px", marginBottom: "6px" }}>{el.qualitativeImportance}</Prose>}
+                <Prose style={{ fontSize: "12.5px", marginBottom: "9px" }}>{el.qualitativeAction}</Prose>
+                {el.improvementRoute && (
+                  <GoButton
+                    small
+                    label={`Open ${el.improvementSection}`}
+                    onClick={() => onNavigate(el.improvementRoute)}
+                  />
+                )}
+              </div>
+            )}
+
+            {actionLines(el.analysis).length > 0 && (
+              <div style={{ marginTop: (el.improvements || []).length || el.locked?.length ? "16px" : 0, paddingTop: (el.improvements || []).length || el.locked?.length ? "14px" : 0, borderTop: (el.improvements || []).length || el.locked?.length ? `1px dashed ${T.line2}` : "none" }}>
+                <SectionLabel>Practical actions · not point-valued</SectionLabel>
+                <Prose style={{ fontSize: "12px", marginBottom: "9px" }}>
+                  These are qualitative steps, not promises of a score change. Report only accurate, current information.
+                </Prose>
+                {actionLines(el.analysis).map((action, index) => (
+                  <div key={index} style={{ display: "flex", gap: "8px", marginBottom: "7px", color: T.body, fontSize: "12.5px", lineHeight: 1.6 }}>
+                    <span style={{ color: T.brand, fontWeight: 800 }}>{index + 1}.</span>
+                    <span>{action}</span>
+                  </div>
+                ))}
+                {el.improvementRoute && (
+                  <GoButton
+                    small
+                    label={`Go to ${el.improvementSection}`}
+                    onClick={() => onNavigate(el.improvementRoute)}
+                  />
+                )}
+              </div>
             )}
 
             {/* A card can hand in its own improvements panel — the board

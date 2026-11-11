@@ -11,7 +11,7 @@ import { useSolvencyScore } from "../hooks/useSolvencyScore";
 import { normalizeSolvencyScore } from "../MyGrowthTools/financial/data_utils/solvencyScoreUtils";
 import {
   buildCapitalAppealAssessment, fmtPts, detectInstruments, applicationSnapshot, METHODOLOGY_VERSION,
-  STAGE_LABELS, FS_FACTOR_WEIGHTS, scoreEnvironmentalStrength, scoreSocialStrength,
+  STAGE_LABELS, FS_FACTOR_WEIGHTS, scoreEnvironmentalStrength, scoreSocialStrength, routeFor,
 } from "./fundability-potential";
 import { buildDocumentFindings } from "./document-findings";
 import ScoreExplorer from "./ScoreExplorer";
@@ -183,12 +183,15 @@ const INTERPRETATION = [
 
 const normLabel = (s) =>
   String(s || "").toLowerCase().replace(/^\s*\d+[.)]\s*/, "").replace(/[^a-z0-9]/g, "");
+const hasGeneratedText = (value) =>
+  typeof value === "string" && value.trim() !== "" && !/^\[[\s\S]*\]$/.test(value.trim());
 
 const FIELD_PATTERNS = [
   ["evidence", /\*\*Evidence:\*\*/i],
   ["withheld", /\*\*Points withheld:\*\*/i],
   ["rationale", /\*\*Rationale:\*\*/i],
   ["available", /\*\*Points available:\*\*/i],
+  ["actions", /\*\*Practical actions:\*\*/i],
   ["why", /\*\*Why:\*\*/i],
   ["impact", /\*\*Impact on your score:\*\*/i],
 ];
@@ -522,6 +525,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
   );
   const a = selected?.assessment || null;
   const fundabilityScore = a?.totalScore ?? 0;
+  const currentSnapshotSignature = a ? applicationSnapshot(a).signature : null;
 
   useEffect(() => {
     if (a && onScoreUpdate) onScoreUpdate(a.totalScore);
@@ -531,14 +535,30 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
   // for another application would describe the wrong instrument, so none is shown.
   const narrative = useMemo(() => {
     const key = selected?.id || "profile";
-    if (localNarratives[key]) return localNarratives[key];
+    if (localNarratives[key]?.snapshotSignature === currentSnapshotSignature) return localNarratives[key];
     const fromApp = selected?.app?.fundabilityNarrative;
-    if (fromApp?.result) return { result: fromApp.result, timestamp: fromApp.evaluatedAt };
-    if (userNarrative?.result && (userNarrative.applicationId ?? "profile") === key) return userNarrative;
+    if (fromApp?.result && fromApp.snapshotSignature === currentSnapshotSignature) {
+      return { result: fromApp.result, timestamp: fromApp.evaluatedAt };
+    }
+    if (
+      userNarrative?.result &&
+      (userNarrative.applicationId ?? "profile") === key &&
+      userNarrative.snapshotSignature === currentSnapshotSignature
+    ) return userNarrative;
     return null;
-  }, [selected, localNarratives, userNarrative]);
+  }, [selected, localNarratives, userNarrative, currentSnapshotSignature]);
   const aiEvaluationResult = narrative?.result || "";
   const evaluationTimestamp = fmtTs(narrative?.timestamp);
+  const staleNarrative = useMemo(() => {
+    if (narrative || !currentSnapshotSignature) return false;
+    const key = selected?.id || "profile";
+    const candidates = [
+      localNarratives[key],
+      selected?.app?.fundabilityNarrative,
+      (userNarrative?.applicationId ?? "profile") === key ? userNarrative : null,
+    ];
+    return candidates.some((candidate) => candidate?.result && candidate.snapshotSignature !== currentSnapshotSignature);
+  }, [narrative, currentSnapshotSignature, selected, localNarratives, userNarrative]);
 
   // Persist each application's own result so the applications list can show it.
   // Written only when the signature changes, and only once the document analyses
@@ -671,30 +691,37 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
       enterpriseReadiness: currentProfile.enterpriseReadiness || {},
       socialImpact: applicationSocialImpact || currentProfile.socialImpact || {},
     };
-    const esgOutputFormat = `### ${sections.length + 1}. Environmental Strength
-**Evidence:** [profile governance Environment fields and Social Impact environmental evidence actually on file]
-**Points withheld:** [missing or weak environmental evidence and why]
-**Rationale:** [what environmental evidence tells a funder]
-**Points available:** [specific governance profile or Social Impact fields to complete]
-
-### ${sections.length + 2}. Social Strength
-**Evidence:** [profile governance Social fields and Social Impact evidence actually on file]
-**Points withheld:** [missing or weak social evidence and why]
-**Rationale:** [what social evidence tells a funder]
-**Points available:** [specific governance profile or Social Impact fields to complete]
-
-### ${sections.length + 3}. Governance Strength
+    const impactSections = [
+      ...(a.capitalAppeal?.environmentalBreakdown || []).map((row) => ({ ...row, pillar: "Environmental Strength" })),
+      ...(a.capitalAppeal?.socialBreakdown || []).map((row) => ({ ...row, pillar: "Social Strength" })),
+    ];
+    const esgRows = impactSections
+      .map((row) => `- ${row.pillar} / ${row.label}: ${row.percent}% of ${row.weight}% weight; evidence: ${row.evidence || "Not answered"}; scoring note: ${row.reason || "No additional scoring note."}`)
+      .join("\n");
+    const esgOutputFormat = [
+      ...impactSections.map((row, index) => `### ${sections.length + index + 1}. ${row.label}
+**Evidence:** [the recorded answer or explicitly say it is not answered]
+**Points withheld:** [explain the existing score and the supplied scoring note; do not invent facts or point values]
+**Rationale:** [why this evidence matters to a funder]
+**Practical actions:** [one or two truthful, specific actions tied to this field; do not promise a score increase or assign points]
+**Points available:** None — this evidence row has no separately validated point-valued action.`),
+      `### ${sections.length + impactSections.length + 1}. Governance Strength
 **Evidence:** [governance and ownership-management fields actually on file]
 **Points withheld:** [missing or weak governance evidence and why]
 **Rationale:** [what governance evidence tells a funder]
-**Points available:** [specific governance profile fields to complete]`;
+**Practical actions:** [one or two truthful, specific actions tied to the supplied fields; do not promise a score increase or assign points]
+**Points available:** None — Governance Strength improvements are assessed in its own breakdown.`,
+    ].join("\n\n");
     const esgSectionData = `
 === ENVIRONMENTAL, SOCIAL AND GOVERNANCE PROFILE DATA ===
 ${JSON.stringify(esgProfileData, null, 2)}
 Environmental Strength score: ${a.capitalAppeal?.environmentalPercent ?? "Not scored yet — not a zero"}%
 Social Strength score: ${a.capitalAppeal?.socialPercent ?? "Not scored yet — not a zero"}%
 Governance Strength score: ${a.capitalAppeal?.governancePercent ?? "Not scored yet — not a zero"}%
-Assess these as separate Capital Appeal components. Use only the supplied profile fields; do not infer missing answers as facts.`;
+Assess these as separate Capital Appeal components. Use only the supplied profile fields; do not infer missing answers as facts.
+SCORING ROWS:
+${esgRows || "No Environmental or Social evidence rows are currently scored."}
+The row scores and weights above are final. Environmental and Social practical actions are qualitative only: do not claim they have a known or guaranteed point value.`;
 
     return `You are writing the capital appeal findings for a funding-readiness report.
 
@@ -740,6 +767,7 @@ RULES
 - Where points were withheld on something that WAS captured, lead with that — it is more useful than listing blanks.
 - Every recommendation must be an item above, must be marked recoverable, and must carry its exact value.
 - Never invent an improvement that is not on the list — it cannot earn anything.
+- For Environmental and Social Strength only, use the separate Practical actions field for qualitative steps tied to the supplied row; do not assign points or promise that any step will change the score.
 - Never state or imply that a score guarantees readiness, creditworthiness or approval.
 - Plain business English. Short sentences. No preamble, no closing summary inside a section.
 
@@ -816,9 +844,77 @@ ${esgOutputFormat}
       const ta = target.assessment;
 
       const result = await callFunction("generateFundabilityAnalysis", {
+        max_tokens: 9000,
         prompt: buildPrompt(ta, buildDocumentFindings(pickAnalyses(fresh)), ta.application.instrumentLabel, labelFor(target), target?.app?.socialImpact || null),
       });
-      return { content: result?.content || "", target };
+      const content = result?.content?.trim();
+      if (!content) throw new Error("The analysis service returned no report. No analysis was saved.");
+
+      const sections = buildSections(ta, ta.application.instrumentLabel);
+      const impactRows = [
+        ...(ta.capitalAppeal?.environmentalBreakdown || []),
+        ...(ta.capitalAppeal?.socialBreakdown || []),
+      ];
+      const expectedLabels = [
+        ...sections.map((section) => section.title),
+        ...impactRows.map((row) => row.label),
+        "Governance Strength",
+        "Overall Assessment",
+      ];
+      const parsedReport = parseAnalysisByElement(content);
+      const missingSections = [...new Set(expectedLabels)].filter(
+        (label) => !parsedReport.map[normLabel(label)]
+      );
+      const incompleteSections = sections
+        .filter((section) => !section.excluded)
+        .filter((section) => {
+          const detail = parsedReport.map[normLabel(section.title)];
+          return !hasGeneratedText(detail?.evidence) || !hasGeneratedText(detail?.withheld) ||
+            !hasGeneratedText(detail?.rationale) || !hasGeneratedText(detail?.available);
+        })
+        .map((section) => section.title);
+      const incompleteExcludedSections = sections
+        .filter((section) => section.excluded)
+        .filter((section) => {
+          const detail = parsedReport.map[normLabel(section.title)];
+          return !hasGeneratedText(detail?.why) || !hasGeneratedText(detail?.impact);
+        })
+        .map((section) => section.title);
+      const incompleteImpactSections = impactRows
+        .filter((row) => {
+          const detail = parsedReport.map[normLabel(row.label)];
+          return !hasGeneratedText(detail?.evidence) || !hasGeneratedText(detail?.withheld) ||
+            !hasGeneratedText(detail?.rationale) || !hasGeneratedText(detail?.actions);
+        })
+        .map((row) => row.label);
+      const governanceDetail = parsedReport.map[normLabel("Governance Strength")];
+      const incompleteGovernance = !hasGeneratedText(governanceDetail?.evidence) ||
+        !hasGeneratedText(governanceDetail?.withheld) || !hasGeneratedText(governanceDetail?.rationale) ||
+        !hasGeneratedText(governanceDetail?.actions);
+      const incompleteOverall = !hasGeneratedText(parsedReport.overall?.strongest) ||
+        !hasGeneratedText(parsedReport.overall?.weakest) || !hasGeneratedText(parsedReport.overall?.nextStep) ||
+        !hasGeneratedText(parsedReport.overall?.final);
+
+      if (
+        missingSections.length || incompleteSections.length || incompleteExcludedSections.length ||
+        incompleteImpactSections.length || incompleteGovernance || incompleteOverall
+      ) {
+        const missing = [
+          ...new Set([
+            ...missingSections,
+            ...incompleteSections,
+            ...incompleteExcludedSections,
+            ...incompleteImpactSections,
+            ...(incompleteGovernance ? ["Governance Strength details"] : []),
+            ...(incompleteOverall ? ["Overall Assessment details"] : []),
+          ]),
+        ];
+        throw new Error(
+          `The analysis service returned an incomplete report (${missing.join(", ")}). No incomplete analysis was saved; try again.`
+        );
+      }
+
+      return { content, target };
     } catch (error) {
       console.error("Capital appeal AI evaluation error:", error);
        await logAnalysisFailure(db, profileUid, "fundability", error);
@@ -839,6 +935,7 @@ ${esgOutputFormat}
     stage: target?.assessment?.stage?.key ?? null,
     methodologyVersion: METHODOLOGY_VERSION,
     applicationId: target?.id ?? null,
+    snapshotSignature: target?.assessment ? applicationSnapshot(target.assessment).signature : null,
   });
 
   // The narrative is stored on the application it explains, and also on the
@@ -871,8 +968,16 @@ ${esgOutputFormat}
         { merge: true }
       );
     }
-    setLocalNarratives((prev) => ({ ...prev, [target?.id || "profile"]: { result: content, timestamp: iso } }));
-    setUserNarrative({ result: content, applicationId: target?.id ?? null, timestamp: iso });
+    setLocalNarratives((prev) => ({
+      ...prev,
+      [target?.id || "profile"]: { result: content, timestamp: iso, snapshotSignature: meta.snapshotSignature },
+    }));
+    setUserNarrative({
+      result: content,
+      applicationId: target?.id ?? null,
+      timestamp: iso,
+      snapshotSignature: meta.snapshotSignature,
+    });
   };
   useEffect(() => { saveNarrativeRef.current = saveNarrative; });
 
@@ -932,6 +1037,7 @@ ${esgOutputFormat}
             result: d.result,
             applicationId: d.applicationId ?? null,
             timestamp: d.timestamp?.toDate ? d.timestamp.toDate().toISOString() : d.timestamp || null,
+            snapshotSignature: d.snapshotSignature ?? null,
           });
         }
       } catch (e) { console.error("Load saved eval error:", e); }
@@ -1032,6 +1138,46 @@ ${esgOutputFormat}
     const signed = (n) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}`;
 
     const findingFor = (label) => parsed.map[normLabel(label)] || null;
+    const impactElements = (rows, blockKey, blockShare, sourceNote) =>
+      rows.map((row) => {
+        const withheld = row.weight * (1 - row.percent / 100);
+        const pointValue = Math.round((withheld * blockShare / 100) * 10) / 10;
+        const section = row.section || "Governance";
+        const item = {
+          key: `${blockKey}:${row.key}:evidence`,
+          label: row.label,
+          points: row.weight,
+          earned: Math.round((row.weight * row.percent / 100) * 10) / 10,
+          withheld: Math.round(withheld * 10) / 10,
+          pointValue: blockShare > 0 ? pointValue : 0,
+          state: row.percent >= 100 ? "counted" : row.percent > 0 ? "partial" : "missing",
+          evidence: row.evidence,
+          reason: withheld > 0 ? row.reason : null,
+          importance: row.importance,
+          fix: withheld > 0 ? row.fix : null,
+          claimable: false,
+          section,
+          field: row.field,
+          route: routeFor(section, row.field),
+          deductionNote: "This score reflects the evidence currently reported. An improved score is not guaranteed by changing a form answer.",
+        };
+        return {
+          key: `${blockKey}:${row.key}`,
+          label: row.label,
+          weight: row.weight,
+          effectiveWeight: Math.round(row.weight * blockShare / 100 * 10) / 10,
+          percent: row.percent,
+          breakdown: [item],
+          improvements: [],
+          locked: blockShare > 0 && withheld > 0 && row.actionable === false ? [item] : [],
+          qualitativeAction: withheld > 0 ? row.fix : null,
+          qualitativeImportance: row.importance,
+          analysis: findingFor(row.label) || findingFor(blockKey === "environmental" ? "Environmental Strength" : "Social Strength"),
+          improvementRoute: routeFor(section, row.field),
+          improvementSection: section,
+          sourceNote,
+        };
+      });
     const toElement = (src, blockKey, extra = {}) => ({
       key: `${blockKey}:${src.key}`,
       findings: documentFindings[`${blockKey}:${src.key}`] || null,
@@ -1075,15 +1221,13 @@ ${esgOutputFormat}
         inactive: a.capitalAppeal.environmentalPercent == null,
         note: a.capitalAppeal.environmentalPercent == null
           ? "Complete the Environment information in Profile Governance or the Social Impact section of a funding application to activate this component."
-          : "Environmental exposure, controls, compliance and application impact evidence from the Social Impact section are included.",
-        elements: (a.capitalAppeal.environmentalBreakdown || []).map((e) => ({
-          key: `environmental:${e.key}`,
-          label: e.label,
-          weight: e.weight,
-          effectiveWeight: Math.round(e.weight * (shares.environmental / 100) * 10) / 10,
-          percent: e.percent,
-          sourceNote: "Profile Governance Environment and Social Impact evidence.",
-        })),
+          : "Environmental exposure, compliance and permits, incidents, controls, environmental impact and SDG alignment are scored from the answers shown in each breakdown. Unanswered fields earn no credit; a response does not automatically earn full points.",
+        elements: impactElements(
+          a.capitalAppeal.environmentalBreakdown || [],
+          "environmental",
+          shares.environmental || 0,
+          "Profile Governance Environment and funding application Social Impact evidence."
+        ),
       },
       {
         key: "social",
@@ -1093,15 +1237,13 @@ ${esgOutputFormat}
         inactive: a.capitalAppeal.socialPercent == null,
         note: a.capitalAppeal.socialPercent == null
           ? "Complete the Social information in Profile Governance or the Social Impact section of a funding application to activate this component."
-          : "Workforce, community, inclusion and local value evidence from Profile Governance and the funding application's Social Impact section are included.",
-        elements: (a.capitalAppeal.socialBreakdown || []).map((e) => ({
-          key: `social:${e.key}`,
-          label: e.label,
-          weight: e.weight,
-          effectiveWeight: Math.round(e.weight * (shares.social / 100) * 10) / 10,
-          percent: e.percent,
-          sourceNote: "Profile Governance Social and funding application Social Impact evidence.",
-        })),
+          : "Workforce, safeguards, incidents, jobs, inclusion, local value, community investment and beneficiaries are scored from the answers shown in each breakdown. Unanswered fields earn no credit; No earns zero for positive-practice questions and full credit only when it represents a favourable outcome such as no incidents.",
+        elements: impactElements(
+          a.capitalAppeal.socialBreakdown || [],
+          "social",
+          shares.social || 0,
+          "Profile Governance Social and funding application Social Impact evidence."
+        ),
       }
     );
     const govBlock = gov?.explorer?.blocks?.[0];
@@ -1165,8 +1307,18 @@ ${esgOutputFormat}
         firstColumn: "Block",
         rows: [
           { label: "Financial Strength", weight: `${Math.round(shares.financialStrength)}%`, now: `${Math.round(a.financialStrength.percent)}%` },
-          { label: "Environmental Strength", weight: "—", now: "Not scored yet", excluded: true },
-          { label: "Social Strength", weight: "—", now: "Not scored yet", excluded: true },
+          {
+            label: "Environmental Strength",
+            weight: shares.environmental ? `${Math.round(shares.environmental)}%` : "—",
+            now: a.capitalAppeal.environmentalPercent == null ? "Not scored yet" : `${Math.round(a.capitalAppeal.environmentalPercent)}%`,
+            excluded: a.capitalAppeal.environmentalPercent == null,
+          },
+          {
+            label: "Social Strength",
+            weight: shares.social ? `${Math.round(shares.social)}%` : "—",
+            now: a.capitalAppeal.socialPercent == null ? "Not scored yet" : `${Math.round(a.capitalAppeal.socialPercent)}%`,
+            excluded: a.capitalAppeal.socialPercent == null,
+          },
           { label: "Governance Strength", weight: govBlock ? `${Math.round(shares.governance)}%` : "—", now: govBlock ? `${Math.round(govBlock.percent)}%` : "—", excluded: !govBlock },
           { label: "Fundability", weight: "—", now: "—", excluded: true },
         ],
@@ -1284,7 +1436,7 @@ ${esgOutputFormat}
       attention,
       about: {
         definition:
-          "Capital Appeal measures how financially sound and responsibly managed the business is, independent of any funding application: Financial Strength, Environmental Strength, Social Strength and Governance Strength. Environmental and Social are not scored yet. Where a funding request is complete, Fundability is scored for that request's instrument and shown beside it as an application view. It never changes the Capital Appeal score itself.",
+          "Capital Appeal measures how financially sound and responsibly managed the business is, independent of any funding application: Financial Strength, Environmental Strength, Social Strength and Governance Strength. Environmental and Social Strength are scored from answered Profile Governance and funding application Social Impact fields; each breakdown shows the source answer and how it affected the score. Unanswered fields receive no credit, and No is scored according to what the question means. Where a funding request is complete, Fundability is scored for that request's instrument and shown beside it as an application view. It never changes the Capital Appeal score itself.",
         definitionNotes: [
           {
             title: "The score is calculated in code",
@@ -1319,13 +1471,21 @@ ${esgOutputFormat}
         const gAvail = gItems.reduce((n, i) => n + i.pointValue, 0);
         const gLockedPts = (gp?.locked || 0) * gScale;
         const r1 = (n) => Math.round(n * 10) / 10;
+                const esg = blocks
+          .filter((b) => b.key === "environmental" || b.key === "social")
+          .flatMap((b) => b.elements.map((e) => ({ b, e })));
+        const tag = (list, b, e) => list.map((i) => ({ ...i, container: `${b.label} — ${e.label}`, block: b.label, projected: null }));
+        const esgItems = esg.flatMap(({ b, e }) => tag(e.improvements, b, e));
+        const esgLocked = esg.flatMap(({ b, e }) => tag(e.locked, b, e));
+        const esgAvail = esgItems.reduce((n, i) => n + i.pointValue, 0);
+        const esgLockedPts = esgLocked.reduce((n, i) => n + i.pointValue, 0);
         return {
-          available: r1(a.availablePoints + gAvail),
-          locked: r1(a.lockedPoints + gLockedPts),
+                    available: r1(a.availablePoints + gAvail + esgAvail),
+          locked: r1(a.lockedPoints + gLockedPts + esgLockedPts),
           current: Math.round(a.totalRaw * 10) / 10,
-          projected: Math.round(a.totalRaw + a.availablePoints + gAvail),
-          items: [...a.outstanding, ...gItems].sort((x, y) => y.pointValue - x.pointValue),
-          lockedItems: [...a.locked, ...gLocked],
+          projected: Math.round(a.totalRaw + a.availablePoints + gAvail + esgAvail),
+          items: [...a.outstanding, ...gItems, ...esgItems].sort((x, y) => y.pointValue - x.pointValue),
+          lockedItems: [...a.locked, ...gLocked, ...esgLocked],
           footnotes,
         };
       })(),
@@ -1496,6 +1656,8 @@ ${esgOutputFormat}
                 onClose={() => setShowModal(false)}
                 onRequestAnalysis={refreshAiEvaluation}
                 analysisPending={isEvaluating}
+                analysisError={evaluationError}
+                staleAnalysis={staleNarrative}
                 analysisTimestamp={evaluationTimestamp}
                 fmtPts={fmtPts}
               />

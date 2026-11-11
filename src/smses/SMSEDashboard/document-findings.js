@@ -194,6 +194,43 @@ export function statementFindings(financialStatementsAnalysis) {
   if (!fs) return null;
   const entries = Object.entries(fs.breakdown || {}).filter(([, v]) => typeof v === "number");
   if (!entries.length && !fs.summary) return null;
+  const sentences = String(fs.summary || "")
+    .match(/[^.!?]+(?:[.!?]+|$)/g)
+    ?.map((sentence) => sentence.trim())
+    .filter(Boolean) || [];
+  const riskNotes = sentences.filter((sentence) =>
+    /\b(?:risk|concern|discrepanc\w*|mismatch\w*|inconsisten\w*|unverified|single-year|concentration|weakness)\b/i.test(sentence)
+  );
+  const followUps = [];
+
+  if (riskNotes.some((sentence) => /\b(?:discrepanc\w*|mismatch\w*|inconsisten\w*|differ\w*)\b/i.test(sentence))) {
+    followUps.push({
+      title: "Reconcile the figures flagged against the profile",
+      evidence: riskNotes.filter((sentence) => /\b(?:discrepanc\w*|mismatch\w*|inconsisten\w*|differ\w*)\b/i.test(sentence)),
+      body: "Verify each difference against the source statements and supporting records. Update the profile only to figures those records support, then re-run the analysis. This is a data-quality follow-up, not a promised score increase.",
+    });
+  }
+  if (riskNotes.some((sentence) => /\b(?:unverified|single-year|revenue growth|trend)\b/i.test(sentence))) {
+    followUps.push({
+      title: "Support the reported financial trend with comparable periods",
+      evidence: riskNotes.filter((sentence) => /\b(?:unverified|single-year|revenue growth|trend)\b/i.test(sentence)),
+      body: "Provide comparable financial statements for the periods needed to substantiate the trend. Do not infer growth where the analysis says the evidence is unverified.",
+    });
+  }
+  if (riskNotes.some((sentence) => /\bcustomer concentration\b/i.test(sentence))) {
+    followUps.push({
+      title: "Document customer concentration and mitigation",
+      evidence: riskNotes.filter((sentence) => /\bcustomer concentration\b/i.test(sentence)),
+      body: "Use actual sales records to document concentration and any mitigation or diversification plan. No customer figures or future outcomes are inferred here.",
+    });
+  }
+  if (riskNotes.length && !followUps.length) {
+    followUps.push({
+      title: "Review the reported risk with supporting records",
+      evidence: riskNotes,
+      body: "Check this finding against source records and document the corrective action or evidence that addresses it. Do not change profile answers unless the underlying records support the change.",
+    });
+  }
 
   return {
     source: "financial statements",
@@ -208,10 +245,11 @@ export function statementFindings(financialStatementsAnalysis) {
         severity: v <= 1 ? "critical" : v <= 2 ? "high" : "moderate",
         note: null,
       })),
+    riskNotes,
+    followUps,
     strongAreas: entries.filter(([, v]) => v >= 4).map(([k, v]) => ({ label: prettify(k), score: `${v}/5` })),
     improvements: [],
-    disclaimer:
-      "Read from the statements you uploaded. Improving these means the underlying numbers changing, then a re-upload.",
+    disclaimer: "Findings and follow-ups above come from the statements analysis already on file. They are qualitative and do not promise a score change.",
   };
 }
 

@@ -115,18 +115,18 @@ const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
     activeInterests: [],
     previousInterests: [],
     // Environment fields
-    exposureType: "none",
-    complianceRequired: "no",
-    permitsInPlace: "no",
-    incidents: "none",
-    controls: "none",
+    exposureType: "",
+    complianceRequired: "",
+    permitsInPlace: "",
+    incidents: "",
+    controls: "",
     // Social fields
-    employmentPractices: "no",
-    healthSafety: "no",
-    fairTreatment: "no",
-    skillsDevelopment: "no",
-    supplyChain: "no",
-    socialIncidents: "no",
+    employmentPractices: "",
+    healthSafety: "",
+    fairTreatment: "",
+    skillsDevelopment: "",
+    supplyChain: "",
+    socialIncidents: "",
   })
   const [isLoading, setIsLoading] = useState(true)
 
@@ -295,7 +295,8 @@ const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Environmental Exposure Type</label>
-            <select name="exposureType" value={formData.exposureType || "none"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="exposureType" value={formData.exposureType || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="none">None</option>
               <option value="indirect">Indirect</option>
               <option value="direct">Direct</option>
@@ -303,14 +304,16 @@ const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Environmental Compliance Required</label>
-            <select name="complianceRequired" value={formData.complianceRequired || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="complianceRequired" value={formData.complianceRequired || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Environmental Permits in Place</label>
-            <select name="permitsInPlace" value={formData.permitsInPlace || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="permitsInPlace" value={formData.permitsInPlace || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="no">No</option>
               <option value="partial">Partial</option>
               <option value="yes">Yes</option>
@@ -318,7 +321,8 @@ const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Environmental Incidents</label>
-            <select name="incidents" value={formData.incidents || "none"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="incidents" value={formData.incidents || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="none">None</option>
               <option value="minor">Minor</option>
               <option value="major">Major</option>
@@ -326,7 +330,8 @@ const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Environmental Controls</label>
-            <select name="controls" value={formData.controls || "none"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="controls" value={formData.controls || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="none">None</option>
               <option value="basic">Basic</option>
               <option value="formal">Formal</option>
@@ -344,42 +349,48 @@ const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Employment Practices</label>
-            <select name="employmentPractices" value={formData.employmentPractices || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="employmentPractices" value={formData.employmentPractices || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Health & Safety</label>
-            <select name="healthSafety" value={formData.healthSafety || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="healthSafety" value={formData.healthSafety || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Fair Treatment & Grievances</label>
-            <select name="fairTreatment" value={formData.fairTreatment || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="fairTreatment" value={formData.fairTreatment || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Skills & Development</label>
-            <select name="skillsDevelopment" value={formData.skillsDevelopment || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="skillsDevelopment" value={formData.skillsDevelopment || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Supply Chain</label>
-            <select name="supplyChain" value={formData.supplyChain || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="supplyChain" value={formData.supplyChain || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
           </div>
           <div className="bg-white border border-brown-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-brown-700 mb-1">Social Incidents</label>
-            <select name="socialIncidents" value={formData.socialIncidents || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+            <select name="socialIncidents" value={formData.socialIncidents || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+              <option value="">Select</option>
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
@@ -388,7 +399,8 @@ const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
             <>
               <div className="bg-white border border-brown-200 rounded-lg p-4">
                 <label className="block text-sm font-medium text-brown-700 mb-1">Beneficiary Safeguarding & Protection</label>
-                <select name="beneficiarySafeguarding" value={formData.beneficiarySafeguarding || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                <select name="beneficiarySafeguarding" value={formData.beneficiarySafeguarding || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                  <option value="">Select</option>
                   <option value="no">No</option>
                   <option value="partial">Partial</option>
                   <option value="yes">Yes</option>
@@ -396,14 +408,16 @@ const Governance = ({ data, updateData, isNGO: isNGOProp, allFormData }) => {
               </div>
               <div className="bg-white border border-brown-200 rounded-lg p-4">
                 <label className="block text-sm font-medium text-brown-700 mb-1">Beneficiary Complaints Mechanism</label>
-                <select name="complaintsMechanism" value={formData.complaintsMechanism || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                <select name="complaintsMechanism" value={formData.complaintsMechanism || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                  <option value="">Select</option>
                   <option value="no">No</option>
                   <option value="yes">Yes</option>
                 </select>
               </div>
               <div className="bg-white border border-brown-200 rounded-lg p-4">
                 <label className="block text-sm font-medium text-brown-700 mb-1">Volunteer Code of Conduct & Oversight</label>
-                <select name="volunteerConduct" value={formData.volunteerConduct || "no"} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                <select name="volunteerConduct" value={formData.volunteerConduct || ""} onChange={handleChange} className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                  <option value="">Select</option>
                   <option value="no">No</option>
                   <option value="yes">Yes</option>
                 </select>

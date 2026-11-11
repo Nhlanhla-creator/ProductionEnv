@@ -60,6 +60,7 @@ const DOCUMENTS_ROUTE = "/my-documents"
 export const SECTION_TARGETS = {
   // Universal profile
   "Financial Overview": `${PROFILE_ROUTE}?section=financialOverview`,
+  Governance: `${PROFILE_ROUTE}?section=governance`,
 
   // Funding application
   "Social Impact": `${FUNDING_ROUTE}?section=socialImpact`,
@@ -206,85 +207,252 @@ export const capitalAppealShares = ({ hasGovernance, hasEnvironmental, hasSocial
   return Object.fromEntries(CAPITAL_APPEAL_PILLARS.map((p) => [p.key, live.includes(p) ? (p.weight / total) * 100 : 0]))
 }
 
-const positiveText = (value) => String(value || "").trim().length >= 15
 const percentCredit = (value, target) => Math.min(Math.max(num(value) || 0, 0) / target, 1)
+const answerText = (value) => answered(value) ? cleanStr(value) : "Not answered"
+const textCredit = (value) => {
+  const text = cleanStr(value)
+  return text ? (text.length >= 15 ? 100 : 40) : null
+}
+const makeScoredRow = (key, label, value, score, reason) => ({
+  key,
+  label,
+  score,
+  available: answered(value),
+  evidence: answerText(value),
+  reason,
+})
+const scoreGroup = (rows, weights) => {
+  const available = rows.some((row) => row.available)
+  return {
+    available,
+    percent: available
+      ? rows.reduce((total, row, index) => total + (row.score || 0) * weights[index], 0) / 100
+      : null,
+    rows,
+    weights,
+  }
+}
+
+
+const impactMeta = (section, field, actionable, importance, fix) => ({ section, field, actionable, importance, fix })
+export const IMPACT_ROW_META = {
+  // Environmental
+  environmentalExposure: impactMeta("Governance", "exposureType", false, "Direct exposure raises unmanaged-risk questions; it is a fact about operations.", "Confirm your environmental exposure type under Governance → Environment."),
+  environmentalCompliance: impactMeta("Governance", "complianceRequired", true, "Funders check that required environmental permits are actually in place.", "State whether compliance is required and, if so, obtain and record your permits under Governance → Environment."),
+  environmentalIncidents: impactMeta("Governance", "incidents", false, "Incident history signals how well environmental risk is controlled.", "Update only if the incident record changes."),
+  environmentalControls: impactMeta("Governance", "controls", true, "Formal controls show environmental risk is managed, not just acknowledged.", "Document formal environmental controls and update this under Governance → Environment."),
+  environmentalImpact: impactMeta("Social Impact", "environmentalImpact", true, "Increasingly a screening question for DFIs and offshore capital.", "Describe your environmental impact in more detail under Social Impact on your funding application."),
+  sdgAlignment: impactMeta("Social Impact", "sdgAlignment", true, "Lets a fund map you to its own reporting framework.", "Describe which SDGs you align to under Social Impact on your funding application."),
+  // Social
+  employmentPractices: impactMeta("Governance", "employmentPractices", true, "Basic employment practices are a baseline social-risk check.", "Put employment practices in place and answer Yes under Governance → Social."),
+  healthSafety: impactMeta("Governance", "healthSafety", true, "Health and safety failures are a common due-diligence stopper.", "Put health and safety measures in place and answer Yes under Governance → Social."),
+  fairTreatment: impactMeta("Governance", "fairTreatment", true, "A grievance process shows workers have recourse.", "Establish a grievance process and answer Yes under Governance → Social."),
+  skillsDevelopment: impactMeta("Governance", "skillsDevelopment", true, "Evidence of investment in people.", "Document skills development and answer Yes under Governance → Social."),
+  supplyChain: impactMeta("Governance", "supplyChain", true, "Funders look for responsible supply-chain practice.", "Adopt supplier standards and answer Yes under Governance → Social."),
+  socialIncidents: impactMeta("Governance", "socialIncidents", false, "Reported social incidents are a fact, not a form entry.", "Update only if the incident record changes."),
+  beneficiarySafeguarding: impactMeta("Governance", "beneficiarySafeguarding", true, "Safeguarding is a precondition for most NGO funding.", "Implement safeguarding measures and update under Governance → Social."),
+  complaintsMechanism: impactMeta("Governance", "complaintsMechanism", true, "Beneficiaries need a way to raise complaints.", "Set up a complaints mechanism and update under Governance → Social."),
+  volunteerConduct: impactMeta("Governance", "volunteerConduct", true, "Volunteer oversight is a safeguarding control.", "Adopt a volunteer code of conduct and update under Governance → Social."),
+  jobs: impactMeta("Social Impact", "jobsToCreate", true, "Job creation is the outcome most funders are measured on.", "Record jobs to be created and local hires under Social Impact on your funding application."),
+  ownershipInclusion: impactMeta("Social Impact", "blackOwnership", false, "Ownership is a fact about the cap table, not a form entry.", "Update only if ownership changes."),
+  localValue: impactMeta("Social Impact", "localValueStrategy", true, "Local value creation is a scoring criterion for many programmes.", "Describe your local value strategy and local procurement under Social Impact on your funding application."),
+  communityInvestment: impactMeta("Social Impact", "socialInvestmentCommunities", true, "Shows the business reinvests in the communities it serves.", "Describe community investment and record CSI/CSR spend under Social Impact on your funding application."),
+  beneficiaries: impactMeta("Social Impact", "numberOfBeneficiaries", true, "Turns an impact claim into a reportable number.", "Record the number of beneficiaries under Social Impact on your funding application."),
+}
+
+const combineScoreGroups = (groups) => {
+  const activeGroups = groups.filter((group) => group.available)
+  if (!activeGroups.length) {
+    const groupWeight = groups.length ? 100 / groups.length : 0
+    const breakdown = groups.flatMap((group) =>
+      group.rows.map((row, index) => ({
+        key: row.key,
+        label: row.label,
+        percent: Math.round(row.score || 0),
+        weight: Math.round(groupWeight * group.weights[index] * 10) / 10,
+        evidence: row.evidence,
+        reason: row.reason,
+        available: row.available,
+        ...IMPACT_ROW_META[row.key],
+      }))
+    )
+    return { available: false, percent: null, breakdown }
+  }
+
+  const groupWeight = 100 / activeGroups.length
+  const breakdown = activeGroups.flatMap((group) =>
+    group.rows.map((row, index) => ({
+      key: row.key,
+      label: row.label,
+      percent: Math.round(row.score || 0),
+      weight: Math.round(groupWeight * group.weights[index] * 10) / 10,
+      evidence: row.evidence,
+      reason: row.reason,
+     ...IMPACT_ROW_META[row.key],
+    }))
+  )
+
+  return {
+    available: true,
+    percent: Math.round(activeGroups.reduce((total, group) => total + group.percent, 0) / activeGroups.length),
+    breakdown,
+  }
+}
 
 export const scoreEnvironmentalStrength = (profileData) => {
   const app = profileData?.socialImpact || {}
   const gov = profileData?.governance || {}
-  const profileFields = [
-    gov.exposureType && gov.exposureType !== "none" ? gov.exposureType === "indirect" ? 0.5 : 1 : 0,
-    gov.complianceRequired === "yes" ? (gov.permitsInPlace === "yes" ? 1 : gov.permitsInPlace === "partial" ? 0.5 : 0) : (gov.complianceRequired === "no" ? 1 : 0),
-    gov.permitsInPlace === "yes" ? 1 : gov.permitsInPlace === "partial" ? 0.5 : 0,
-    gov.incidents === "none" ? 1 : gov.incidents === "minor" ? 0.4 : 0,
-    gov.controls === "formal" ? 1 : gov.controls === "basic" ? 0.5 : 0,
+  const exposureScores = { none: 100, indirect: 50, direct: 0 }
+  const incidentScores = { none: 100, minor: 40, major: 0 }
+  const controlScores = { none: 0, basic: 50, formal: 100 }
+  const complianceRequired = cleanStr(gov.complianceRequired).toLowerCase()
+  const complianceScore = complianceRequired === "no"
+    ? 100
+    : complianceRequired === "yes"
+      ? ({ yes: 100, partial: 50, no: 0 }[cleanStr(gov.permitsInPlace).toLowerCase()] ?? 0)
+      : null
+  const complianceAnswer = answered(complianceRequired)
+    ? `${complianceRequired}; permits ${answerText(gov.permitsInPlace)}`
+    : ""
+  const profileRows = [
+    makeScoredRow(
+      "environmentalExposure",
+      "Environmental Exposure",
+      gov.exposureType,
+      exposureScores[cleanStr(gov.exposureType).toLowerCase()] ?? null,
+      "Lower exposure indicates less unmanaged environmental risk; exposure is not treated as positive evidence by itself."
+    ),
+    makeScoredRow(
+      "environmentalCompliance",
+      "Compliance & Permits",
+      complianceAnswer,
+      complianceScore,
+      complianceRequired === "no"
+        ? "No environmental compliance requirement was reported, so permits are not penalised."
+        : complianceRequired === "yes"
+          ? "Where compliance is required, permits in place score fully, partial permits score partially, and missing permits score zero."
+          : "Answer whether environmental compliance is required; if it is, report permit status."
+    ),
+    makeScoredRow(
+      "environmentalIncidents",
+      "Environmental Incidents",
+      gov.incidents,
+      incidentScores[cleanStr(gov.incidents).toLowerCase()] ?? null,
+      "No incidents scores fully; minor incidents score partially; major incidents score zero."
+    ),
+    makeScoredRow(
+      "environmentalControls",
+      "Environmental Controls",
+      gov.controls,
+      controlScores[cleanStr(gov.controls).toLowerCase()] ?? null,
+      "Formal controls score fully, basic controls score partially, and no controls score zero."
+    ),
   ]
-  const profileAnswered =
-    (gov.exposureType && gov.exposureType !== "none") ||
-    gov.complianceRequired === "yes" ||
-    (gov.permitsInPlace && gov.permitsInPlace !== "no") ||
-    (gov.incidents && gov.incidents !== "none") ||
-    (gov.controls && gov.controls !== "none")
-  const appCredit = positiveText(app.environmentalImpact) ? 1 : 0.4
-  const appAnswer = positiveText(app.environmentalImpact) || /environment/i.test(String(app.csrFocusAreas || "") || "")
-  const appScore = appAnswer ? (appCredit * 0.7 + (answered(app.sdgAlignment) ? 0.3 : 0)) : 0
-  const hasEvidence = profileAnswered || appAnswer
-  if (!hasEvidence) return { available: false, percent: null, breakdown: [] }
-  const score = profileAnswered
-    ? profileFields.reduce((sum, v) => sum + v, 0) / 5 * 100
-    : appScore * 100
-  const breakdown = profileAnswered ? [
-    { key: "environmentalExposure", label: "Environmental Exposure", percent: Math.round(profileFields[0] * 100), weight: 20 },
-    { key: "environmentalCompliance", label: "Environmental Compliance", percent: Math.round(profileFields[1] * 100), weight: 20 },
-    { key: "environmentalPermits", label: "Environmental Permits", percent: Math.round(profileFields[2] * 100), weight: 20 },
-    { key: "environmentalIncidents", label: "Incident Record", percent: Math.round(profileFields[3] * 100), weight: 20 },
-    { key: "environmentalControls", label: "Environmental Controls", percent: Math.round(profileFields[4] * 100), weight: 20 },
-  ] : [
-    { key: "environmentalImpact", label: "Environmental Impact Description", percent: Math.round(appCredit * 100), weight: 70 },
-    { key: "sdgAlignment", label: "SDG Alignment", percent: answered(app.sdgAlignment) ? 100 : 0, weight: 30 },
+  const profileGroup = scoreGroup(profileRows, [20, 30, 25, 25])
+
+  const environmentalTerms = /environment|climat|carbon|water|energy|waste|emission|conservation|sustainab/i
+  const impactText = [app.environmentalImpact, app.csrFocusAreas]
+    .map((value) => cleanStr(value))
+    .filter((value) => value && environmentalTerms.test(value))
+    .join(" | ")
+  const appRows = [
+    makeScoredRow(
+      "environmentalImpact",
+      "Environmental Impact Evidence",
+      impactText,
+      textCredit(impactText),
+      "A substantive environmental impact or environment-focused CSR description scores fully; a short description receives partial credit."
+    ),
+    makeScoredRow(
+      "sdgAlignment",
+      "SDG / ESD Alignment",
+      app.sdgAlignment,
+      textCredit(app.sdgAlignment),
+      "A substantive alignment description scores fully; a short description receives partial credit."
+    ),
   ]
-  return { available: true, percent: Math.round(score), breakdown }
+  const appGroup = scoreGroup(appRows, [50, 50])
+  return combineScoreGroups([profileGroup, appGroup])
 }
 
 export const scoreSocialStrength = (profileData) => {
   const app = profileData?.socialImpact || {}
   const gov = profileData?.governance || {}
-  const profileItems = [
-    gov.employmentPractices === "yes", gov.healthSafety === "yes", gov.fairTreatment === "yes",
-    gov.skillsDevelopment === "yes", gov.supplyChain === "yes", gov.socialIncidents === "no",
+  const yesNo = (value) => {
+    const normalized = cleanStr(value).toLowerCase()
+    return normalized === "yes" ? 100 : normalized === "no" ? 0 : null
+  }
+  const profileRows = [
+    makeScoredRow("employmentPractices", "Employment Practices", gov.employmentPractices, yesNo(gov.employmentPractices), "A reported employment practice scores positively only when the answer is Yes."),
+    makeScoredRow("healthSafety", "Health & Safety", gov.healthSafety, yesNo(gov.healthSafety), "Health and safety measures score positively only when the answer is Yes."),
+    makeScoredRow("fairTreatment", "Fair Treatment & Grievances", gov.fairTreatment, yesNo(gov.fairTreatment), "Fair treatment and grievance processes score positively only when the answer is Yes."),
+    makeScoredRow("skillsDevelopment", "Skills & Development", gov.skillsDevelopment, yesNo(gov.skillsDevelopment), "Skills and development measures score positively only when the answer is Yes."),
+    makeScoredRow("supplyChain", "Supply Chain", gov.supplyChain, yesNo(gov.supplyChain), "Socially responsible supply-chain practices score positively only when the answer is Yes."),
+    makeScoredRow("socialIncidents", "Social Incidents", gov.socialIncidents, yesNo(gov.socialIncidents) === null ? null : cleanStr(gov.socialIncidents).toLowerCase() === "no" ? 100 : 0, "No reported incidents scores fully; a reported incident scores zero."),
   ]
-  const profileAnswered =
-    gov.employmentPractices === "yes" || gov.healthSafety === "yes" || gov.fairTreatment === "yes" ||
-    gov.skillsDevelopment === "yes" || gov.supplyChain === "yes" || gov.socialIncidents === "yes"
-  const appCredits = [
-    Math.min((num(app.jobsToCreate) || 0) / 10, 1),
-    percentCredit(app.blackOwnership, 51) * 0.7 + percentCredit(app.womenOwnership, 30) * 0.3,
-    Math.min((num(app.localEmployeesHired) || 0) / 5, 1),
-    positiveText(app.socialInvestmentCommunities) ? 1 : 0,
-    positiveText(app.environmentalImpact) ? 1 : 0,
-    pos(app.numberOfBeneficiaries) ? 1 : 0,
+  const optionalProfileRows = [
+    ["beneficiarySafeguarding", "Beneficiary Safeguarding", { yes: 100, partial: 50, no: 0 }],
+    ["complaintsMechanism", "Beneficiary Complaints Mechanism", { yes: 100, no: 0 }],
+    ["volunteerConduct", "Volunteer Conduct & Oversight", { yes: 100, no: 0 }],
+  ].map(([key, label, values]) => {
+    const value = gov[key]
+    const normalized = cleanStr(value).toLowerCase()
+    return makeScoredRow(key, label, value, values[normalized] ?? null, "Positive beneficiary or volunteer safeguards score; partial safeguarding scores partially.")
+  })
+  const socialProfileRows = optionalProfileRows.some((row) => row.available)
+    ? [...profileRows, ...optionalProfileRows]
+    : profileRows
+  const profileGroup = scoreGroup(socialProfileRows, socialProfileRows.map(() => 100 / socialProfileRows.length))
+
+  const jobs = num(app.jobsToCreate)
+  const localHires = num(app.localEmployeesHired)
+  const blackOwnership = num(app.blackOwnership)
+  const womenOwnership = num(app.womenOwnership)
+  const socialInvestmentText = app.socialInvestmentCommunities
+  const localValueText = app.localValueStrategy
+  const spendValues = [app.csiCsrSpend, app.communityInvestmentAmount]
+  const appRows = [
+    makeScoredRow(
+      "jobs",
+      "Jobs & Local Employment",
+      [app.jobsToCreate, app.localEmployeesHired].filter(answered).join("; "),
+      Math.min(Math.max(jobs || 0, 0) / 10, 1) * 50 + Math.min(Math.max(localHires || 0, 0) / 5, 1) * 50,
+      "Jobs created are scored against 10 and local hires against 5; each contributes half of this category."
+    ),
+    makeScoredRow(
+      "ownershipInclusion",
+      "Ownership Inclusion",
+      [
+        answered(app.blackOwnership) ? `Black ownership ${app.blackOwnership}%` : "",
+        answered(app.womenOwnership) ? `Women ownership ${app.womenOwnership}%` : "",
+      ].filter(Boolean).join("; "),
+      percentCredit(blackOwnership, 51) * 70 + percentCredit(womenOwnership, 30) * 30,
+      "Black ownership is scored against 51% and women ownership against 30%, weighted 70/30."
+    ),
+    makeScoredRow(
+      "localValue",
+      "Local Value Creation",
+      [localValueText, app.localProcurementSpend ? `Local procurement spend ${app.localProcurementSpend}` : ""].filter(answered).join("; "),
+      Math.round((textCredit(localValueText) || 0) * 0.5 + (pos(app.localProcurementSpend) ? 50 : 0)),
+      "A substantive local-value strategy and reported local procurement each contribute half."
+    ),
+    makeScoredRow(
+      "communityInvestment",
+      "Community Investment",
+      [socialInvestmentText, ...spendValues.filter(answered)].filter(answered).join("; "),
+      Math.round((textCredit(socialInvestmentText) || 0) / 2 + (spendValues.some((value) => pos(value)) ? 50 : 0)),
+      "A substantive community-investment description and reported CSI/CSR or community spend each contribute half."
+    ),
+    makeScoredRow(
+      "beneficiaries",
+      "Beneficiaries",
+      app.numberOfBeneficiaries,
+      pos(app.numberOfBeneficiaries) ? 100 : answered(app.numberOfBeneficiaries) ? 0 : null,
+      "A positive beneficiary count is evidence of reach; zero or a negative count scores zero."
+    ),
   ]
-  const appAnswer = [app.jobsToCreate, app.blackOwnership, app.womenOwnership, app.localEmployeesHired, app.socialInvestmentCommunities, app.environmentalImpact, app.numberOfBeneficiaries]
-    .some((v) => answered(v))
-  if (!profileAnswered && !appAnswer) return { available: false, percent: null, breakdown: [] }
-  const profileScore = profileItems.filter(Boolean).length / profileItems.length * 100
-  const appScore = appCredits.reduce((sum, v) => sum + v, 0) / appCredits.length * 100
-  const percent = profileAnswered ? Math.round((profileScore + appScore) / 2) : Math.round(appScore)
-  const breakdown = profileAnswered ? [
-    { key: "employmentPractices", label: "Employment Practices", percent: profileItems[0] ? 100 : 0, weight: 16 },
-    { key: "healthSafety", label: "Health & Safety", percent: profileItems[1] ? 100 : 0, weight: 16 },
-    { key: "fairTreatment", label: "Fair Treatment & Grievances", percent: profileItems[2] ? 100 : 0, weight: 16 },
-    { key: "skillsDevelopment", label: "Skills & Development", percent: profileItems[3] ? 100 : 0, weight: 16 },
-    { key: "supplyChain", label: "Supply Chain", percent: profileItems[4] ? 100 : 0, weight: 16 },
-    { key: "socialIncidents", label: "Incident & Risk Record", percent: profileItems[5] ? 100 : 0, weight: 20 },
-  ] : [
-    { key: "jobs", label: "Jobs & Local Employment", percent: Math.round((appCredits[0] + appCredits[2]) / 2 * 100), weight: 25 },
-    { key: "ownershipInclusion", label: "Ownership Inclusion", percent: Math.round(appCredits[1] * 100), weight: 20 },
-    { key: "communityInvestment", label: "Community Investment", percent: Math.round(appCredits[3] * 100), weight: 20 },
-    { key: "socialImpact", label: "Social & Environmental Impact", percent: Math.round(appCredits[4] * 100), weight: 20 },
-    { key: "beneficiaries", label: "Beneficiaries", percent: Math.round(appCredits[5] * 100), weight: 15 },
-  ]
-  return { available: true, percent, breakdown }
+  const appGroup = scoreGroup(appRows, appRows.map(() => 100 / appRows.length))
+  return combineScoreGroups([profileGroup, appGroup])
 }
 
 // §9 — default Fundability sub-component weights by stage (v2.1 retained)
@@ -1111,6 +1279,9 @@ const buildFinancialResilience = (solvencyAnalysis, statementsAnalysis) => {
       importance: "Net asset value, equity ratio and gearing, weighted as the growth suite calculates them.",
       credit: valid ? (s.normalizedScore || 0) / 5 : 0,
       evidence: valid ? `NAV R${s.nav}M · equity ratio ${s.equityRatio}% · D:E ${s.debtToEquity}` : "",
+      fix: valid
+        ? "Review leverage, working capital and balance-sheet resilience with your finance lead. Update this assessment only after the underlying financial position or verified source data changes."
+        : "Complete the capital-structure measures in the Financial Overview and growth suite using verified financial records.",
       reason: valid && (s.normalizedScore || 0) < 5
         ? "These points follow your actual balance sheet. They move as the business strengthens, not as the form is edited."
         : null,
@@ -1451,7 +1622,39 @@ export const applicationSnapshot = (a) => {
     availablePoints: a.application.availablePoints,
     provisional: !!a.provisional,
   }
-  return { ...base, signature: cheapHash(JSON.stringify(base)) }
+  const scoredEvidence = {
+    financialStrength: a.financialStrength.subCategories.map((category) => ({
+      key: category.key,
+      percent: r1(category.percent),
+      items: category.items.map((item) => ({
+        key: item.key,
+        credit: r1(item.credit),
+        evidence: item.evidence,
+        reason: item.reason,
+      })),
+    })),
+    environmental: {
+      percent: a.capitalAppeal.environmentalPercent,
+      rows: a.capitalAppeal.environmentalBreakdown,
+    },
+    social: {
+      percent: a.capitalAppeal.socialPercent,
+      rows: a.capitalAppeal.socialBreakdown,
+    },
+    governancePercent: a.capitalAppeal.governancePercent,
+    statements: a.statements,
+    fundability: a.fundabilityComponents.map((component) => ({
+      key: component.key,
+      percent: r1(component.percent),
+      items: component.items.map((item) => ({
+        key: item.key,
+        credit: r1(item.credit),
+        evidence: item.evidence,
+        reason: item.reason,
+      })),
+    })),
+  }
+  return { ...base, signature: cheapHash(JSON.stringify({ base, scoredEvidence })) }
 }
 
 export const fmtPts = (n) => `${n >= 0 ? "+" : ""}${(Math.round(n * 10) / 10).toFixed(1)}%`
