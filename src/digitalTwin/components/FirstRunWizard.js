@@ -1,949 +1,143 @@
 "use client"
 
-/**
- * digitalTwin/components/FirstRunWizard.jsx
- *
- * Guided first-run setup. Turns the blank tile grid into a walk-through
- * that builds the user's operating structure step by step.
- */
-
-import { useEffect, useMemo, useState } from "react"
-import {
-  ChevronLeft, ChevronRight, Check, AlertTriangle, Loader2,
-  Target, MapPin, Wrench, Boxes, Calendar, Eye, Sparkles,
-} from "lucide-react"
-import { auth, db } from "../../firebaseConfig"
-import { doc, getDoc } from "firebase/firestore"
-import { ensureTenant, createNode, createRelation, getTenant } from "../services/hierarchyService"
-import { createGroup } from "../services/resourceService"
-import { getOnboardingState, saveOnboardingState, completeOnboarding } from "../services/onboardingState"
-import { listPacks, optionsFor } from "../services/taxonomyService"
-import { NODE_TYPES, RELATION_TYPES } from "../models/enums"
+import { useEffect, useState } from "react"
+import { listPacks } from "../services/taxonomyService"
+import { saveOnboardingState } from "../services/onboardingState"
+import { loadOperatingStructure, saveOperatingStructure } from "../services/operatingStructureService"
+import { changeWorkSelection, EMPTY_STRUCTURE, STRUCTURE_STEPS, structureOptions } from "../models/operatingStructure"
+import StructureMultiSelect from "./StructureMultiSelect"
 import TwinFlowDiagram from "./TwinFlowDiagram"
 
-const T = {
-  ink: "#2d201c", body: "#3b2b26", muted: "#6b5b55", faint: "#8a7a74",
-  line: "#ded8d4", lineSoft: "#e9e3df", lineStrong: "#b0a29b",
-  bg: "#ffffff", panel: "#faf8f7", raised: "#f2eeec",
-  accent: "#4a352f", accentSoft: "#6b4f47", accentTint: "#f4efec",
-  green: "#166534", greenBg: "#f0fdf4",
-  amber: "#92400e", amberBg: "#fffbeb",
-  red: "#991b1b", redBg: "#fef2f2",
-}
-
-const inputS = {
-  width: "100%", padding: "10px 12px",
-  border: `1px solid ${T.lineStrong}`, borderRadius: "9px",
-  fontSize: "14px", fontFamily: "inherit",
-  boxSizing: "border-box", color: T.ink,
-  background: T.bg, outline: "none",
-}
-const labelS = {
-  display: "block", fontSize: "12.5px", fontWeight: 600,
-  color: T.accent, marginBottom: "6px",
-}
-const cardS = {
-  background: T.bg, border: `1px solid ${T.line}`,
-  borderRadius: "14px", padding: "24px", marginBottom: "14px",
-}
-
-const STEPS = [
-  { id: "objective", title: "What do you want to improve?", icon: Target },
-  { id: "context",   title: "What kind of operation is this?", icon: Sparkles },
-  { id: "delivery",  title: "Where is the work delivered?", icon: MapPin },
-  { id: "service",   title: "What work is performed?", icon: Wrench },
-  { id: "resources", title: "What resources deliver the work?", icon: Boxes },
-  { id: "preview",   title: "Review and create", icon: Eye },
-]
-
-const OBJECTIVES = [
-  {
-    id: "asset_performance",
-    title: "Improve asset performance",
-    description: "Track availability, utilisation, productivity and downtime across your fleet or circuit.",
-    hint: "Best for: mining contractors, plant operators, equipment hire, maintenance providers.",
-  },
-  {
-    id: "tender_readiness",
-    title: "Prove readiness for a tender",
-    description: "Show verified capacity, compliance and credentials against a specific contract opportunity.",
-    hint: "Best for: any SME responding to a procurement or ESD opportunity.",
-  },
-]
-
 export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
+  const [loaded, setLoaded] = useState(null)
   const [step, setStep] = useState(0)
-  const [state, setState] = useState({
-    objective: null,
-    sectorPack: "mining",
-    environment: "surface",
-    siteName: "",
-    contractName: "",
-    clientName: "",
-    serviceValueChainId: null,
-    serviceId: null,
-    activityName: "",
-    equipmentGroupName: "",
-    equipmentGroupCapacity: "",
-  })
-  const [diagramData, setDiagramData] = useState(null)
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState(null)
-  const [resumeChecked, setResumeChecked] = useState(false)
+  const [form, setForm] = useState(EMPTY_STRUCTURE)
+  const [diagram, setDiagram] = useState(null)
+  const [tab, setTab] = useState("equipment")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [status, setStatus] = useState("")
 
   useEffect(() => {
-    (async () => {
-      const saved = await getOnboardingState(tenantId)
-      if (saved?.objective) setState((p) => ({ ...p, ...saved }))
-      if (typeof saved?.currentStep === "number" && saved?.currentStep > 0) setStep(Math.min(saved.currentStep, STEPS.length - 1))
-      setResumeChecked(true)
-    })()
+    let active = true
+    loadOperatingStructure(tenantId).then((data) => {
+      if (!active) return
+      const draft = data.state.structureDraft
+      const legacyPack = listPacks().some(({ key }) => key === data.state.sectorPack) ? data.state.sectorPack : ""
+      setForm({ ...EMPTY_STRUCTURE, sectorPack: legacyPack, ...draft })
+      setStep(draft ? Math.min(data.state.currentStep, STRUCTURE_STEPS.length - 1) : 0)
+      setDiagram(data.diagram)
+      setLoaded(data)
+    }).catch((failure) => { if (active) setError(failure.message) })
+    return () => { active = false }
   }, [tenantId])
 
-  useEffect(() => {
-    if (!resumeChecked) return
-    saveOnboardingState(tenantId, { ...state, currentStep: step }).catch(err=>setError(err.message))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, state, resumeChecked])
+  const options = structureOptions(form.sectorPack, form.valueChains, form.activities)
+  const sectorReady = !!form.sectorPack && (form.sectorPack !== "other" || !!form.sectorName.trim())
+  const pick = (key, label) => <StructureMultiSelect label={label} options={options[key]} selected={form[key]}
+    onChange={(values) => setForm((current) => changeWorkSelection(current, key, values))} />
 
-  // Build the flow diagram when entering the preview step
-  useEffect(() => {
-    if (STEPS[step]?.id === "preview" && !diagramData) {
-      setDiagramData(buildDiagramFromState(state))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step])
-
-  const canAdvance = useMemo(() => {
-    switch (STEPS[step].id) {
-      case "objective": return !!state.objective
-      case "context":   return !!state.sectorPack && !!state.environment
-      case "delivery":  return state.siteName.trim().length > 1 || state.contractName.trim().length > 1
-      case "service":   return !!state.serviceId && state.activityName.trim().length > 1
-      case "resources": return true
-      case "period":    return !!state.reportingPeriod
-      case "preview":   return true
-      default: return false
-    }
-  }, [step, state])
-
-  const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1))
-  const back = () => setStep((s) => Math.max(s - 1, 0))
-
-  const handleCreate = async () => {
-    setCreating(true); setError(null)
+  const move = async (next) => {
+    setBusy(true)
+    setError("")
+    setStatus("")
     try {
-      const user = auth.currentUser
-      const profileSnap = await getDoc(doc(db, "universalProfiles", user.uid))
-      const companyName = profileSnap.exists()
-        ? (profileSnap.data()?.entityOverview?.registeredName || user.email)
-        : user.email
-      await ensureTenant({ tenantId, displayName: companyName })
-
-      const existingTenant = await getTenant(tenantId)
-      let companyNodeId = existingTenant?.companyNodeId
-      if (!companyNodeId) {
-        const companies = await listNodesByType(tenantId, NODE_TYPES.COMPANY)
-        if (companies.length > 0) {
-          companyNodeId = companies[0].id
-        } else {
-          const c = await createNode(tenantId, {
-            nodeType: NODE_TYPES.COMPANY,
-            name: companyName,
-            attributes: { objective: state.objective },
-          })
-          companyNodeId = c.id
-          const { setDoc } = await import("firebase/firestore")
-          await setDoc(doc(db, "digitalTwinTenants", tenantId), { companyNodeId }, { merge: true })
-        }
-      }
-
-      let siteNodeId = null
-      if (state.siteName.trim()) {
-        const s = await createNode(tenantId, {
-          nodeType: NODE_TYPES.SITE,
-          name: state.siteName.trim(),
-          attributes: { environment: state.environment, sectorPack: state.sectorPack },
-        })
-        siteNodeId = s.id
-        await createRelation(tenantId, {
-          fromId: companyNodeId, toId: s.id,
-          relationType: RELATION_TYPES.CONTAINS, isPrimary: true,
-        })
-      }
-
-      let contractNodeId = null
-      if (state.contractName.trim()) {
-        const c = await createNode(tenantId, {
-          nodeType: NODE_TYPES.CONTRACT,
-          name: state.contractName.trim(),
-          attributes: { client: state.clientName || null },
-        })
-        contractNodeId = c.id
-        await createRelation(tenantId, {
-          fromId: companyNodeId, toId: c.id,
-          relationType: RELATION_TYPES.SCOPES, isPrimary: false,
-        })
-        if (siteNodeId) {
-          await createRelation(tenantId, {
-            fromId: c.id, toId: siteNodeId,
-            relationType: RELATION_TYPES.DELIVERED_AT, isPrimary: true,
-          })
-        }
-      }
-
-      const serviceNode = await createNode(tenantId, {
-        nodeType: NODE_TYPES.SERVICE,
-        name: labelOfService(state.serviceId),
-        attributes: { taxonomyId: state.serviceId },
-      })
-      const serviceParent = contractNodeId || siteNodeId
-      if (serviceParent) {
-        await createRelation(tenantId, {
-          fromId: serviceParent, toId: serviceNode.id,
-          relationType: RELATION_TYPES.SCOPES, isPrimary: true,
-        })
-      }
-
-      const activityNode = await createNode(tenantId, {
-        nodeType: NODE_TYPES.ACTIVITY,
-        name: state.activityName.trim(),
-      })
-      await createRelation(tenantId, {
-        fromId: serviceNode.id, toId: activityNode.id,
-        relationType: RELATION_TYPES.REALIZED_BY, isPrimary: true,
-      })
-
-      let groupId = null
-      if (state.equipmentGroupName.trim()) {
-        const g = await createGroup(tenantId, {
-          name: state.equipmentGroupName.trim(),
-          groupType: "fleet",
-          nominalCapacity: state.equipmentGroupCapacity ? Number(state.equipmentGroupCapacity) : null,
-          capacityUnit: "tonnes",
-        })
-        groupId = g.id
-        await createRelation(tenantId, {
-          fromId: g.id, toId: activityNode.id,
-          relationType: RELATION_TYPES.SUPPORTS, isPrimary: true,
-        })
-      }
-
-      // Persist any extra nodes/relations the user added in the diagram
-      if (diagramData) {
-        await createNodesFromDiagram(tenantId, diagramData, {
-          companyNodeId,
-          siteNodeId,
-          contractNodeId,
-          serviceNodeId: serviceNode.id,
-          activityNodeId: activityNode.id,
-          groupId,
-        })
-      }
-
-      await completeOnboarding(tenantId, {
-        objective: state.objective,
-        sectorPack: state.sectorPack,
-        companyNodeId,
-        siteNodeId,
-        contractNodeId,
-        serviceNodeId: serviceNode.id,
-        activityNodeId: activityNode.id,
-        groupId,
-      })
-
-      onComplete?.({
-        companyNodeId, siteNodeId, contractNodeId,
-        serviceNodeId: serviceNode.id, activityNodeId: activityNode.id, groupId,
-      })
-    } catch (err) {
-      console.error("Twin creation failed:", err)
-      setError(err.message || "Could not create your twin. Please try again.")
+      await saveOnboardingState(tenantId, { structureDraft: form, sectorPack: form.sectorPack, currentStep: next })
+      setStep(next)
+    } catch (failure) {
+      setError(failure.message)
     } finally {
-      setCreating(false)
+      setBusy(false)
     }
   }
-
-  if (!resumeChecked) {
-    return (
-      <div style={{ padding: "60px", textAlign: "center", color: T.muted }}>
-        <Loader2 className="animate-spin" size={22} style={{ marginBottom: 12 }} />
-        <div style={{ fontSize: 13 }}>Preparing your setup…</div>
-      </div>
-    )
-  }
-
-  const ActiveIcon = STEPS[step].icon
-
-  return (
-    <div style={{ maxWidth: "760px", margin: "0 auto" }}>
-      <div style={{ marginBottom: "22px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
-          <div style={{
-            display: "inline-flex", width: "36px", height: "36px",
-            borderRadius: "10px", background: T.accentTint,
-            alignItems: "center", justifyContent: "center",
-          }}>
-            <ActiveIcon size={18} color={T.accent} />
-          </div>
-          <div style={{
-            fontSize: "12.5px", color: T.muted, fontWeight: 600,
-            letterSpacing: "0.4px", textTransform: "uppercase",
-          }}>
-            Step {step + 1} of {STEPS.length}
-          </div>
-        </div>
-        <h2 style={{
-          margin: "0 0 6px", fontSize: "24px",
-          fontWeight: 700, color: T.accent, letterSpacing: "-0.4px",
-        }}>
-          {STEPS[step].title}
-        </h2>
-        <p style={{ margin: 0, fontSize: "14px", color: T.muted, lineHeight: 1.5 }}>
-          {stepCopy(STEPS[step].id)}
-        </p>
-      </div>
-
-      <div style={{ display: "flex", gap: "6px", marginBottom: "22px" }}>
-        {STEPS.map((s, i) => (
-          <div key={s.id} style={{
-            flex: 1, height: "4px", borderRadius: "2px",
-            background: i <= step ? T.accent : T.raised,
-            transition: "background 0.2s",
-          }} />
-        ))}
-      </div>
-
-      <div style={cardS}>
-        {STEPS[step].id === "objective" && (
-          <StepObjective value={state.objective} onChange={(objective) => setState({ ...state, objective })} />
-        )}
-        {STEPS[step].id === "context" && (
-          <StepContext
-            sectorPack={state.sectorPack}
-            environment={state.environment}
-            onSectorChange={(sectorPack) => setState({ ...state, sectorPack })}
-            onEnvironmentChange={(environment) => setState({ ...state, environment })}
-          />
-        )}
-        {STEPS[step].id === "delivery" && (
-          <StepDelivery value={state} onChange={(patch) => setState({ ...state, ...patch })} />
-        )}
-        {STEPS[step].id === "service" && (
-          <StepService
-            sectorPack={state.sectorPack}
-            valueChainId={state.serviceValueChainId}
-            serviceId={state.serviceId}
-            activityName={state.activityName}
-            onChange={(patch) => setState({ ...state, ...patch })}
-          />
-        )}
-        {STEPS[step].id === "resources" && (
-          <StepResources
-            objective={state.objective}
-            serviceId={state.serviceId}
-            equipmentGroupName={state.equipmentGroupName}
-            equipmentGroupCapacity={state.equipmentGroupCapacity}
-            onChange={(patch) => setState({ ...state, ...patch })}
-          />
-        )}
-        {STEPS[step].id === "preview" && (
-          <StepPreviewWithDiagram
-            state={state}
-            diagramData={diagramData}
-            onDiagramChange={(newData) => setDiagramData(newData)}
-          />
-        )}
-
-        {error && (
-          <div style={{
-            marginTop: "16px", padding: "12px 14px", borderRadius: "10px",
-            background: T.redBg, border: `1px solid ${T.red}33`,
-            color: T.red, fontSize: "13px",
-            display: "flex", alignItems: "flex-start", gap: "8px",
-          }}>
-            <AlertTriangle size={15} style={{ marginTop: 2, flexShrink: 0 }} />
-            {error}
-          </div>
-        )}
-      </div>
-
-      <div style={{
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginTop: "18px",
-      }}>
-        <button
-          type="button"
-          onClick={step === 0 ? onCancel : back}
-          style={{
-            padding: "10px 18px", borderRadius: "9px",
-            background: T.bg, color: T.body,
-            border: `1px solid ${T.lineStrong}`,
-            fontSize: "13.5px", fontWeight: 500,
-            cursor: "pointer", fontFamily: "inherit",
-            display: "inline-flex", alignItems: "center", gap: "6px",
-          }}>
-          <ChevronLeft size={14} />
-          {step === 0 ? "Cancel" : "Back"}
-        </button>
-
-        {step < STEPS.length - 1 ? (
-          <button
-            type="button"
-            disabled={!canAdvance}
-            onClick={next}
-            style={{
-              padding: "10px 20px", borderRadius: "9px",
-              background: T.accent, color: "#fff",
-              border: `1px solid ${T.accent}`,
-              fontSize: "13.5px", fontWeight: 600,
-              cursor: canAdvance ? "pointer" : "not-allowed",
-              opacity: canAdvance ? 1 : 0.5,
-              fontFamily: "inherit",
-              display: "inline-flex", alignItems: "center", gap: "6px",
-            }}>
-            Continue <ChevronRight size={14} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={creating}
-            onClick={handleCreate}
-            style={{
-              padding: "10px 22px", borderRadius: "9px",
-              background: T.accent, color: "#fff",
-              border: `1px solid ${T.accent}`,
-              fontSize: "13.5px", fontWeight: 600,
-              cursor: creating ? "not-allowed" : "pointer",
-              opacity: creating ? 0.6 : 1,
-              fontFamily: "inherit",
-              display: "inline-flex", alignItems: "center", gap: "7px",
-            }}>
-            {creating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            {creating ? "Creating your twin…" : "Create my twin"}
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-function currentMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-}
-
-async function listNodesByType(tenantId, nodeType) {
-  const { listNodes } = await import("../services/hierarchyService")
-  return listNodes(tenantId, { nodeType, status: "active" })
-}
-
-function labelOfService(serviceId) {
-  if (!serviceId) return "New service"
-  const { getTerm } = require("../services/taxonomyService")
-  return getTerm(serviceId)?.name || serviceId
-}
-
-function stepCopy(stepId) {
-  const map = {
-    objective: "We'll configure the smallest useful workspace around your goal.",
-    context: "This determines the recommended services, equipment and KPIs we'll suggest.",
-    delivery: "A site is a physical location. A contract is commercial scope. They are separate — you can have one, the other, or both.",
-    service: "Tell us what work is performed here. We'll pull the canonical taxonomy so your data lines up with the rest of the platform.",
-    resources: "If this service uses physical equipment, name the fleet. Skip if it's people, teams or consumables only.",
-    period: "We'll open a reporting period for you. This drives monthly KPI calculation.",
-    preview: "Nothing has been saved yet. Edit the flow diagram to add nodes or connections, then create your twin.",
-  }
-  return map[stepId] || ""
-}
-
-/**
- * Build the initial flow diagram data from the wizard state.
- */
-function buildDiagramFromState(state) {
-  const nodes = []
-  const relations = []
-  let idCounter = 0
-  const nextId = (prefix) => `${prefix}_${++idCounter}`
-
-  const companyId = nextId("company")
-  nodes.push({
-    id: companyId,
-    nodeType: "company",
-    name: "Your organisation",
-    _root: true,
-  })
-
-  let siteId = null
-  if (state.siteName?.trim()) {
-    siteId = nextId("site")
-    nodes.push({
-      id: siteId,
-      nodeType: "site",
-      name: state.siteName.trim(),
-      attributes: { environment: state.environment, sectorPack: state.sectorPack },
-    })
-    relations.push({
-      id: nextId("rel"),
-      fromId: companyId,
-      toId: siteId,
-      relationType: "contains",
-      isPrimary: true,
-    })
-  }
-
-  let contractId = null
-  if (state.contractName?.trim()) {
-    contractId = nextId("contract")
-    nodes.push({
-      id: contractId,
-      nodeType: "contract",
-      name: state.contractName.trim(),
-      attributes: { client: state.clientName || null },
-    })
-    relations.push({
-      id: nextId("rel"),
-      fromId: companyId,
-      toId: contractId,
-      relationType: "scopes",
-      isPrimary: false,
-    })
-    if (siteId) {
-      relations.push({
-        id: nextId("rel"),
-        fromId: contractId,
-        toId: siteId,
-        relationType: "delivered_at",
-        isPrimary: true,
-      })
-    }
-  }
-
-  let serviceId = null
-  if (state.serviceId) {
-    serviceId = nextId("service")
-    nodes.push({
-      id: serviceId,
-      nodeType: "service",
-      name: labelOfService(state.serviceId),
-      attributes: { taxonomyId: state.serviceId },
-    })
-    const serviceParent = contractId || siteId || companyId
-    relations.push({
-      id: nextId("rel"),
-      fromId: serviceParent,
-      toId: serviceId,
-      relationType: "scopes",
-      isPrimary: true,
-    })
-  }
-
-  let activityId = null
-  if (state.activityName?.trim() && serviceId) {
-    activityId = nextId("activity")
-    nodes.push({
-      id: activityId,
-      nodeType: "activity",
-      name: state.activityName.trim(),
-    })
-    relations.push({
-      id: nextId("rel"),
-      fromId: serviceId,
-      toId: activityId,
-      relationType: "realized_by",
-      isPrimary: true,
-    })
-  }
-
-  if (state.equipmentGroupName?.trim()) {
-    const groupId = nextId("group")
-    nodes.push({
-      id: groupId,
-      nodeType: "equipment_group",
-      name: state.equipmentGroupName.trim(),
-      attributes: {
-        nominalCapacity: state.equipmentGroupCapacity ? Number(state.equipmentGroupCapacity) : null,
-        capacityUnit: "tonnes",
-      },
-    })
-    const groupParent = activityId || serviceId || siteId || companyId
-    relations.push({
-      id: nextId("rel"),
-      fromId: groupId,
-      toId: groupParent,
-      relationType: "supports",
-      isPrimary: true,
-    })
-  }
-
-  return { nodes, relations }
-}
-
-/**
- * Persist any additional nodes and relations the user created in the
- * flow diagram. Maps temporary IDs to real Firestore IDs.
- */
-async function createNodesFromDiagram(tenantId, diagramData, existingIds) {
-  const { nodes, relations } = diagramData
-  const idMap = { ...existingIds }
-
-  for (const node of nodes) {
-    if (node._root || idMap[node.id]) continue
-
-    // Map known base nodes to their real IDs
-    if (node.id.startsWith("company_")) { idMap[node.id] = existingIds.companyNodeId; continue }
-    if (node.id.startsWith("site_") && existingIds.siteNodeId) { idMap[node.id] = existingIds.siteNodeId; continue }
-    if (node.id.startsWith("contract_") && existingIds.contractNodeId) { idMap[node.id] = existingIds.contractNodeId; continue }
-    if (node.id.startsWith("service_") && existingIds.serviceNodeId) { idMap[node.id] = existingIds.serviceNodeId; continue }
-    if (node.id.startsWith("activity_") && existingIds.activityNodeId) { idMap[node.id] = existingIds.activityNodeId; continue }
-
-    // Create genuinely new nodes
+  const save = async () => {
+    setBusy(true)
+    setError("")
+    setStatus("")
     try {
-      const created = await createNode(tenantId, {
-        nodeType: node.nodeType,
-        name: node.name,
-        attributes: node.attributes || {},
-      })
-      idMap[node.id] = created.id
-    } catch (err) {
-      console.warn("Node creation skipped:", err.message)
+      await saveOperatingStructure(tenantId, form, diagram, loaded)
+      const updated = await loadOperatingStructure(tenantId)
+      setLoaded(updated)
+      setDiagram(updated.diagram)
+      setStatus("Operating structure saved.")
+    } catch (failure) {
+      setError(failure.message)
+    } finally {
+      setBusy(false)
     }
   }
 
-  for (const rel of relations) {
-    const fromId = idMap[rel.fromId]
-    const toId = idMap[rel.toId]
-    if (!fromId || !toId) continue
+  if (!loaded) return <div className="dt-panel">{error
+    ? <p role="alert" className="dt-notice dt-notice-error">{error}</p> : "Loading Operating structure…"}</div>
 
-    const isBaseRelation =
-      (rel.fromId.startsWith("company_") && rel.toId.startsWith("site_")) ||
-      (rel.fromId.startsWith("company_") && rel.toId.startsWith("contract_")) ||
-      (rel.fromId.startsWith("contract_") && rel.toId.startsWith("site_")) ||
-      (rel.fromId.startsWith("contract_") && rel.toId.startsWith("service_")) ||
-      (rel.fromId.startsWith("service_") && rel.toId.startsWith("activity_"))
-
-    if (isBaseRelation) continue
-
-    try {
-      await createRelation(tenantId, {
-        fromId,
-        toId,
-        relationType: rel.relationType,
-        isPrimary: rel.isPrimary || false,
-      })
-    } catch (err) {
-      console.warn("Relation creation skipped:", err.message)
-    }
+  const savedNodes = (type) => loaded.nodes.filter((node) => node.nodeType === type)
+    .map(({ id, name }) => ({ id, name, hierarchyId: id }))
+  const graphChoices = {
+    value_chain: form.valueChains,
+    activity: form.activities,
+    service: form.services,
+    equipment_group: [...loaded.groups.map(({ id, name }) => ({ id, name, registerId: id })),
+      ...form.equipmentGroups.filter((choice) => !loaded.groups.some((item) => item.name.toLowerCase() === choice.name.toLowerCase()))],
+    asset: [...loaded.assets.filter(({ status: assetStatus }) => !["retired", "disposed"].includes(assetStatus))
+      .map(({ id, name, internalNumber }) => ({ id, name, label: `${name} (${internalNumber || id})`, registerId: id })), ...options.asset],
+    site: savedNodes("site"),
+    contract: savedNodes("contract"),
+    facility: savedNodes("facility"),
+    process_area: savedNodes("process_area"),
   }
-}
 
-// ── Step components ─────────────────────────────────────────────────────────
 
-function StepObjective({ value, onChange }) {
-  return (
-    <div style={{ display: "grid", gap: "10px" }}>
-      {OBJECTIVES.map((o) => {
-        const active = value === o.id
-        return (
-          <button key={o.id} type="button" onClick={() => onChange(o.id)}
-            style={{
-              textAlign: "left", padding: "16px 18px",
-              border: `1.5px solid ${active ? T.accent : T.line}`,
-              background: active ? T.accentTint : T.bg,
-              borderRadius: "12px", cursor: "pointer",
-              fontFamily: "inherit", transition: "all 0.12s",
-            }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
-              <div>
-                <div style={{ fontSize: "15.5px", fontWeight: 600, color: T.accent, marginBottom: "4px" }}>
-                  {o.title}
-                </div>
-                <div style={{ fontSize: "13px", color: T.body, lineHeight: 1.5 }}>
-                  {o.description}
-                </div>
-                <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "6px", fontStyle: "italic" }}>
-                  {o.hint}
-                </div>
-              </div>
-              {active && (
-                <div style={{
-                  width: 22, height: 22, borderRadius: "50%",
-                  background: T.accent, color: "#fff",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
-                }}>
-                  <Check size={12} />
-                </div>
-              )}
-            </div>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function StepContext({ sectorPack, environment, onSectorChange, onEnvironmentChange }) {
-  const packs = listPacks()
-  const envs = [
-    { id: "surface",      label: "Surface operations" },
-    { id: "underground",  label: "Underground" },
-    { id: "plant",        label: "Processing plant" },
-    { id: "workshop",     label: "Workshop or depot" },
-    { id: "remote_field", label: "Remote field work" },
-  ]
-  return (
-    <div>
-      <div style={{ marginBottom: "20px" }}>
-        <label style={labelS}>Sector pack</label>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-          {packs.map((p) => {
-            const active = sectorPack === p.key
-            return (
-              <button key={p.key} type="button" onClick={() => onSectorChange(p.key)}
-                style={{
-                  textAlign: "left", padding: "12px 14px",
-                  border: `1.5px solid ${active ? T.accent : T.line}`,
-                  background: active ? T.accentTint : T.bg,
-                  borderRadius: "10px", cursor: "pointer",
-                  fontFamily: "inherit",
-                }}>
-                <div style={{ fontSize: "13.5px", fontWeight: 600, color: T.accent }}>
-                  {humanizePack(p.key)}
-                </div>
-                <div style={{ fontSize: "11.5px", color: T.muted, marginTop: "2px" }}>
-                  v{p.version}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div>
-        <label style={labelS}>Environment</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {envs.map((e) => {
-            const active = environment === e.id
-            return (
-              <button key={e.id} type="button" onClick={() => onEnvironmentChange(e.id)}
-                style={{
-                  padding: "8px 14px", borderRadius: "999px",
-                  border: `1.5px solid ${active ? T.accent : T.lineStrong}`,
-                  background: active ? T.accent : T.bg,
-                  color: active ? "#fff" : T.body,
-                  fontSize: "13px", fontWeight: 500,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}>
-                {e.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function StepDelivery({ value, onChange }) {
-  return (
-    <div style={{ display: "grid", gap: "14px" }}>
-      <div>
-        <label style={labelS}>Site name</label>
-        <input value={value.siteName} onChange={(e) => onChange({ siteName: e.target.value })}
-          placeholder="e.g. Northern Pit" style={inputS} />
-        <p style={{ margin: "5px 0 0", fontSize: "11.5px", color: T.muted }}>
-          A physical location. Skip if the work isn't tied to one place.
-        </p>
-      </div>
-
-      <div>
-        <label style={labelS}>Contract name (optional)</label>
-        <input value={value.contractName} onChange={(e) => onChange({ contractName: e.target.value })}
-          placeholder="e.g. Northern Pit Load and Haul Contract" style={inputS} />
-        <p style={{ margin: "5px 0 0", fontSize: "11.5px", color: T.muted }}>
-          Commercial scope. A contract can span multiple sites — they are separate in the twin.
-        </p>
-      </div>
-
-      <div>
-        <label style={labelS}>Client (optional)</label>
-        <input value={value.clientName} onChange={(e) => onChange({ clientName: e.target.value })}
-          placeholder="e.g. Northern Pit Mine" style={inputS} />
-      </div>
-    </div>
-  )
-}
-
-function StepService({ sectorPack, valueChainId, serviceId, activityName, onChange }) {
-  const valueChains = optionsFor({ packKey: sectorPack, domain: "value_chain" })
-  const services = valueChainId
-    ? optionsFor({ packKey: sectorPack, domain: "service", parentId: valueChainId })
-    : []
-
-  return (
-    <div style={{ display: "grid", gap: "14px" }}>
-      <div>
-        <label style={labelS}>Value chain stage</label>
-        <select
-          value={valueChainId || ""}
-          onChange={(e) => onChange({ serviceValueChainId: e.target.value || null, serviceId: null })}
-          style={inputS}>
-          <option value="">— Select a stage —</option>
-          {valueChains.map((vc) => <option key={vc.id} value={vc.id}>{vc.name}</option>)}
-        </select>
-      </div>
-
-      {valueChainId && (
-        <div>
-          <label style={labelS}>Service</label>
-          <select
-            value={serviceId || ""}
-            onChange={(e) => onChange({ serviceId: e.target.value || null })}
-            style={inputS}>
-            <option value="">— Select a service —</option>
-            {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+  return <section className="dt-workspace">
+    <div className="dt-topline">Setup / Operating structure</div>
+    <div className="dt-heading"><div><h2>{STRUCTURE_STEPS[step]}</h2><p>Step {step + 1} of {STRUCTURE_STEPS.length}</p></div></div>
+    {error && <div role="alert" className="dt-notice dt-notice-error">{error}</div>}
+    {status && <div role="status" className="dt-notice dt-notice-success">{status}</div>}
+    <fieldset className="dt-panel" disabled={busy}>
+      {step === 0 && <>
+        <label className="dt-field"><span>Sector pack</span>
+          <select value={form.sectorPack} onChange={(event) => {
+            const sectorPack = event.target.value
+            setForm({ ...EMPTY_STRUCTURE, sectorPack })
+          }}>
+            <option value="">Select a sector</option>
+            {listPacks().map(({ key, sector }) => <option key={key} value={key}>{sector.name}</option>)}
+            <option value="other">Other</option>
           </select>
+        </label>
+        {form.sectorPack === "other" && <label className="dt-field"><span>Specify your sector</span>
+          <input maxLength={120} value={form.sectorName} onChange={(event) => setForm({ ...form, sectorName: event.target.value })} />
+        </label>}
+      </>}
+      {step === 1 && <>
+        <p>Choose the value chains, activities and services that apply to your operation.</p>
+        {pick("valueChains", "Value chain")}
+        {pick("activities", "Activities")}
+        {pick("services", "Services")}
+      </>}
+      {step === 2 && <>
+        <div className="dt-actions" aria-label="Asset structure">
+          {[["equipment", "Equipment group"], ["people", "People"]].map(([key, label]) =>
+            <button type="button" key={key} aria-pressed={tab === key} className={`dt-button ${tab === key ? "dt-button-primary" : ""}`}
+              onClick={() => setTab(key)}>{label}</button>)}
         </div>
-      )}
-
-      <div>
-        <label style={labelS}>First activity</label>
-        <input value={activityName} onChange={(e) => onChange({ activityName: e.target.value })}
-          placeholder="e.g. Haul ore from loading area to primary crusher" style={inputS} />
-        <p style={{ margin: "5px 0 0", fontSize: "11.5px", color: T.muted }}>
-          The operational work that produces the service output. You can add more later.
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function StepResources({ objective, serviceId, equipmentGroupName, equipmentGroupCapacity, onChange }) {
-  const isAssetBased = objective === "asset_performance"
-
-  if (!isAssetBased) {
-    return (
-      <div style={{
-        padding: "16px 18px", background: T.panel,
-        borderRadius: "10px", border: `1px solid ${T.lineSoft}`,
-        fontSize: "13.5px", color: T.body, lineHeight: 1.6,
-      }}>
-        <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-          <Boxes size={15} style={{ marginTop: 2, flexShrink: 0, color: T.muted }} />
-          <div>
-            This objective doesn't require an equipment fleet. Your twin will track
-            people, teams and service outputs. You can add equipment later if your
-            delivery model changes.
-          </div>
+        <div style={{ marginTop: 16 }}>
+          {tab === "equipment" ? pick("equipmentGroups", "Equipment groups") : <>
+            {pick("technical", "Technical roles")}
+            {pick("nonTechnical", "Non-technical roles")}
+          </>}
         </div>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ display: "grid", gap: "14px" }}>
-      <div>
-        <label style={labelS}>Equipment group name</label>
-        <input value={equipmentGroupName} onChange={(e) => onChange({ equipmentGroupName: e.target.value })}
-          placeholder="e.g. 100 tonne haul fleet" style={inputS} />
-      </div>
-
-      <div>
-        <label style={labelS}>Nominal capacity (optional)</label>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <input type="number" value={equipmentGroupCapacity}
-            onChange={(e) => onChange({ equipmentGroupCapacity: e.target.value })}
-            placeholder="e.g. 200" style={{ ...inputS, flex: 1 }} />
-          <div style={{
-            padding: "10px 14px", borderRadius: "9px",
-            background: T.panel, border: `1px solid ${T.lineSoft}`,
-            fontSize: "13px", color: T.muted, display: "flex", alignItems: "center",
-          }}>tonnes</div>
-        </div>
-      </div>
-
-      <p style={{ margin: 0, fontSize: "12px", color: T.muted, lineHeight: 1.5 }}>
-        You'll add individual assets (trucks, rigs, etc.) to this group after setup.
-        You can skip this step and import your fleet later.
-      </p>
-    </div>
-  )
-}
-
-function StepPeriod({ reportingPeriod, targetKpiId, targetValue, onChange }) {
-  return (
-    <div style={{ display: "grid", gap: "14px" }}>
-      <div>
-        <label style={labelS}>First reporting period</label>
-        <input type="month" value={reportingPeriod}
-          onChange={(e) => onChange({ reportingPeriod: e.target.value })} style={inputS} />
-      </div>
-
-      <div>
-        <label style={labelS}>Primary target KPI</label>
-        <select value={targetKpiId || ""}
-          onChange={(e) => onChange({ targetKpiId: e.target.value })} style={inputS}>
-          <option value="kpi.physical_availability">Physical availability</option>
-          <option value="kpi.utilisation">Utilisation of available time</option>
-          <option value="kpi.productivity">Productivity</option>
-          <option value="kpi.cost_per_unit">Cost per tonne</option>
-          <option value="kpi.pm_adherence">PM adherence</option>
-        </select>
-      </div>
-
-      <div>
-        <label style={labelS}>Target value</label>
-        <input type="number" value={targetValue}
-          onChange={(e) => onChange({ targetValue: e.target.value })}
-          placeholder="e.g. 90" style={inputS} />
-        <p style={{ margin: "5px 0 0", fontSize: "11.5px", color: T.muted }}>
-          We'll compare everything you capture against this target and flag when you drift.
-        </p>
+      </>}
+      {step === 3 && <TwinFlowDiagram {...diagram} onChange={(value) => { setDiagram(value); setStatus("") }}
+        choices={graphChoices} roster={loaded.roster} peopleRoles={{ technical: form.technical, nonTechnical: form.nonTechnical }} />}
+    </fieldset>
+    <div className="dt-actions dt-structure-footer">
+      <button type="button" className="dt-button" disabled={busy} onClick={() => step ? move(step - 1) : onCancel?.()}>Back</button>
+      <div className="dt-actions">
+        {status && onComplete && <button type="button" className="dt-button" onClick={onComplete}>Finish</button>}
+        {step < 3
+          ? <button type="button" className="dt-button dt-button-primary" disabled={busy || !sectorReady} onClick={() => move(step + 1)}>Continue</button>
+          : <button type="button" className="dt-button dt-button-primary" disabled={busy || !sectorReady} onClick={save}>{busy ? "Saving…" : "Save operating structure"}</button>}
       </div>
     </div>
-  )
-}
-
-function StepPreviewWithDiagram({ state, diagramData, onDiagramChange }) {
-  return (
-    <div>
-      <div style={{
-        fontSize: "13px", color: T.body, lineHeight: 1.6,
-        marginBottom: "16px",
-      }}>
-        Nothing has been saved yet. This is the structure we'll create.
-        <strong> Click any node to rename it, add children, or create connections between any two nodes.</strong>
-      </div>
-
-      <TwinFlowDiagram
-        nodes={diagramData?.nodes || []}
-        relations={diagramData?.relations || []}
-        onChange={onDiagramChange}
-      />
-
-
-      <div style={{
-        marginTop: "16px", padding: "14px 16px",
-        background: T.panel, borderRadius: "10px",
-        border: `1px solid ${T.lineSoft}`,
-        fontSize: "12.5px", color: T.body, lineHeight: 1.6,
-      }}>
-        <strong style={{ color: T.accent }}>What happens next:</strong> after
-        creation, open KPI Summary under Operations Performance. Add assets and
-        capture shift data to start generating KPIs.
-      </div>
-    </div>
-  )
-}
-
-function humanizePack(key) {
-  const map = {
-    mining: "Mining & mineral processing",
-    industrial_support: "Industrial support services",
-    construction: "Construction & infrastructure",
-    manufacturing: "Manufacturing & processing",
-  }
-  return map[key] || key
+  </section>
 }

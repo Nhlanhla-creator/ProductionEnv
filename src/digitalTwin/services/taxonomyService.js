@@ -22,10 +22,14 @@ import {
 } from "firebase/firestore";
 import { MINING_PACK_VERSION, MINING_SECTOR, MINING_VALUE_CHAIN, MINING_CONTEXT_RULES, MINING_KPI_PACKS, MINING_COMMODITIES, MINING_METHODS } from "../taxonomy/miningPack";
 import { INDUSTRIAL_SUPPORT_PACK_VERSION, SUPPORT_SECTOR, SUPPORT_SERVICES, NON_ASSET_RESOURCES, SUPPORT_KPI_PACKS } from "../taxonomy/industrialSupportPack";
+import { MANUFACTURING_PACK_VERSION, MANUFACTURING_SECTOR, MANUFACTURING_VALUE_CHAIN } from "../taxonomy/manufacturingPack";
+import { AGRICULTURE_SECTOR, AGRICULTURE_VALUE_CHAIN } from "../taxonomy/agriculturePack";
 import { APPLICABILITY_DECISION } from "../models/enums";
 
 // ── In-memory pack registry (loaded once per session) ─────────────────────
 const PACKS = {
+  agriculture: { version: "1.0.0", sector: AGRICULTURE_SECTOR, valueChain: AGRICULTURE_VALUE_CHAIN },
+  manufacturing: { version: MANUFACTURING_PACK_VERSION, sector: MANUFACTURING_SECTOR, valueChain: MANUFACTURING_VALUE_CHAIN },
   mining: {
     version: MINING_PACK_VERSION,
     sector: MINING_SECTOR,
@@ -104,7 +108,10 @@ const buildTermIndex = () => {
     if (pack.valueChain) {
       pack.valueChain.forEach((vc) => {
         index.set(vc.id, { ...vc, kind: "value_chain" });
-        (vc.services || []).forEach((svc) => index.set(svc.id, { ...svc, kind: "service", parentId: vc.id }));
+        (vc.services || []).forEach((svc) => {
+          index.set(svc.id, { ...svc, kind: "service", parentId: vc.id });
+          (svc.activities || []).forEach((activity) => index.set(activity.id, { ...activity, kind: "activity", parentId: svc.id }));
+        });
         (vc.equipmentFamilies || []).forEach((fam) => {
           index.set(fam.id, { ...fam, kind: "equipment_family", parentId: vc.id });
           (fam.types || []).forEach((t) => index.set(t.id, { ...t, kind: "equipment_type", parentId: fam.id }));

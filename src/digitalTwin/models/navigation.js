@@ -12,15 +12,17 @@ export const TWIN_ROUTES = Object.freeze({
 });
 export function twinPath(key,context={}) {
   const params=new URLSearchParams();
+  if(key==='shiftDefinitions')params.set('view','definitions');
   for(const k of ['assetId','eventId','from','to','siteId','shiftId','groupId','contractId','activityId','serviceId','crew','view'])if(context[k])params.set(k,context[k]);
-  return (TWIN_ROUTES[key]||TWIN_ROUTES.home)+(params.size?'?'+params:'');
+  return (TWIN_ROUTES[key==='shiftDefinitions'?'shiftSetup':key]||TWIN_ROUTES.home)+(params.size?'?'+params:'');
 }
 export function twinView(pathname,search='',initialActive=null) {
   pathname=pathname.replace(/\/+$/, '')||'/';
   const q=new URLSearchParams(search);
   if(pathname==='/digital-twin'&&q.get('setup')==='true')return 'guide';
   if(pathname==='/digital-twin'&&q.get('view'))return ({capture:'measurements',downtime:'capture',setup:'guide'}[q.get('view')]||q.get('view'));
-  const aliases={'/digital-twin/operations/performance':'performance','/digital-twin/operations/performance/kpis':'kpis','/digital-twin/operations/performance/capacity':'capacity','/digital-twin/operations/performance/capture':'measurements','/digital-twin/operations/performance/grid':'grid','/digital-twin/packs':'packs','/digital-twin/convert':'convert','/digital-twin/dashboard':'performance','/digital-twin/assets':'assets','/digital-twin/downtime':'capture','/digital-twin/imports':'import'};
+  if(pathname===TWIN_ROUTES.shiftSetup&&q.get('view')==='definitions')return 'shiftDefinitions';
+  const aliases={'/digital-twin/operations/performance':'performance','/digital-twin/operations/performance/kpis':'kpis','/digital-twin/operations/performance/capacity':'capacity','/digital-twin/operations/performance/capture':'grid','/digital-twin/operations/performance/grid':'grid','/digital-twin/packs':'packs','/digital-twin/convert':'convert','/digital-twin/dashboard':'performance','/digital-twin/assets':'assets','/digital-twin/downtime':'capture','/digital-twin/imports':'import'};
   if(aliases[pathname])return aliases[pathname];
   const match=Object.entries(TWIN_ROUTES).find(([,path])=>path===pathname);
   if(match&&match[0]!=='home')return match[0];

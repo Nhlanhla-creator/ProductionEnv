@@ -76,12 +76,13 @@ export const periodToWindow = (periodLabel, { grain = "month" } = {}) => {
 const DRILL_RELATION_TYPES = {
   [NODE_TYPES.COMPANY]:         ["contains", "owns_or_controls", "scopes"],
   [NODE_TYPES.SITE]:            ["contains", "delivered_at"],
-  [NODE_TYPES.CONTRACT]:        ["scopes", "realized_by", "delivered_at"],
+  [NODE_TYPES.CONTRACT]:        ["scopes", "realized_by", "delivered_at", "contains"],
   [NODE_TYPES.FACILITY]:        ["has_area", "contains"],
   [NODE_TYPES.PROCESS_AREA]:    ["contains"],
-  [NODE_TYPES.SERVICE]:         ["realized_by"],
-  [NODE_TYPES.ACTIVITY]:        ["performed_in", "supports"],
-  [NODE_TYPES.EQUIPMENT_GROUP]: ["member_of", "supports"],
+  [NODE_TYPES.VALUE_CHAIN]:     ["contains", "scopes"],
+  [NODE_TYPES.SERVICE]:         ["realized_by", "contains"],
+  [NODE_TYPES.ACTIVITY]:        ["performed_in", "supports", "contains"],
+  [NODE_TYPES.EQUIPMENT_GROUP]: ["member_of", "supports", "contains"],
   [NODE_TYPES.EQUIPMENT_FAMILY]: ["classified_as"],
 };
 

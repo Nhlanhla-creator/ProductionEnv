@@ -52,26 +52,31 @@ const assignmentRef = (tenantId, id) => doc(db, "digitalTwinTenants", tenantId, 
 
 // ── Asset / Resource CRUD ────────────────────────────────────────────────
 
-export const createResource = async (tenantId, input, { legacyChecked = false } = {}) => {
+export const prepareResource = (tenantId, input, resourceId, now = nowIso()) => {
   if (!tenantId || !auth.currentUser) throw new Error("Select an organisation and sign in first.");
   const resource = { ...createEmptyResource(tenantId, input), tenantId };
   if (resource.resourceKind === RESOURCE_KIND.ASSET) resource.internalNumber = normalAssetNumber(resource.internalNumber);
   const { ok, errors, warnings } = validateResource(resource, { isCreate: true });
   if (!ok) { const err = new Error(errors.map(e => e.message).join(" ")); err.validationErrors = errors; throw err; }
-  // Legacy documents may predate the identifier index. Check them before reserving an ID.
-  if (resource.resourceKind === RESOURCE_KIND.ASSET && !legacyChecked) {
-    const all = await getDocs(query(resourcesCol(tenantId), where("resourceKind", "==", RESOURCE_KIND.ASSET)));
-    if (all.docs.some(d => String(d.data().internalNumber || "").trim().toUpperCase() === resource.internalNumber)) throw new Error(`Asset ID ${resource.internalNumber} is already registered.`);
-  }
-  const ref = doc(resourcesCol(tenantId)), now = nowIso();
-  const payload = { ...resource, assetId: ref.id, resourceVersion: 1, createdAt: now, createdBy: actor(), updatedAt: now, updatedBy: actor(), _warnings: warnings.map(w => w.message) };
+  const payload = { ...resource, assetId: resourceId, resourceVersion: 1, createdAt: now, createdBy: actor(), updatedAt: now, updatedBy: actor(), _warnings: warnings.map(w => w.message) };
   delete payload.id;
+  return payload;
+};
+
+export const createResource = async (tenantId, input, { legacyChecked = false } = {}) => {
+  const ref = doc(resourcesCol(tenantId)), now = nowIso();
+  const payload = prepareResource(tenantId, input, ref.id, now);
+  // Legacy documents may predate the identifier index. Check them before reserving an ID.
+  if (payload.resourceKind === RESOURCE_KIND.ASSET && !legacyChecked) {
+    const all = await getDocs(query(resourcesCol(tenantId), where("resourceKind", "==", RESOURCE_KIND.ASSET)));
+    if (all.docs.some(d => String(d.data().internalNumber || "").trim().toUpperCase() === payload.internalNumber)) throw new Error(`Asset ID ${payload.internalNumber} is already registered.`);
+  }
   await runTransaction(db, async tx => {
-    if (resource.resourceKind === RESOURCE_KIND.ASSET) {
-      const key = doc(db, "digitalTwinTenants", tenantId, "assetIdentifiers", resource.internalNumber);
+    if (payload.resourceKind === RESOURCE_KIND.ASSET) {
+      const key = doc(db, "digitalTwinTenants", tenantId, "assetIdentifiers", payload.internalNumber);
       const reserved = await tx.get(key);
-      if (reserved.exists()) throw new Error(`Asset ID ${resource.internalNumber} is already reserved. Use a new ID.`);
-      tx.set(key, { resourceId: ref.id, internalNumber: resource.internalNumber, createdAt: now, createdBy: actor() });
+      if (reserved.exists()) throw new Error(`Asset ID ${payload.internalNumber} is already reserved. Use a new ID.`);
+      tx.set(key, { resourceId: ref.id, internalNumber: payload.internalNumber, createdAt: now, createdBy: actor() });
     }
     tx.set(ref, payload);
   });
@@ -178,7 +183,7 @@ export const countDistinctActiveAssets = async (tenantId, { groupId = null, equi
 
 // ── Equipment groups ─────────────────────────────────────────────────────
 
-export const createGroup = async (tenantId, input) => {
+export const prepareGroup = (tenantId, input, groupId, now = nowIso()) => {
   if (!tenantId) throw new Error("tenantId is required");
   const group = { ...createEmptyGroup(tenantId, input), tenantId };
 
@@ -189,15 +194,12 @@ export const createGroup = async (tenantId, input) => {
     throw err;
   }
 
+  return { ...group, groupId, createdAt: now, createdBy: actor(), updatedAt: now, updatedBy: actor() };
+};
+
+export const createGroup = async (tenantId, input) => {
   const ref = doc(groupsCol(tenantId));
-  const payload = {
-    ...group,
-    groupId: ref.id,
-    createdAt: nowIso(),
-    createdBy: actor(),
-    updatedAt: nowIso(),
-    updatedBy: actor(),
-  };
+  const payload = prepareGroup(tenantId, input, ref.id);
   await setDoc(ref, payload);
   return { id: ref.id, ...payload };
 };

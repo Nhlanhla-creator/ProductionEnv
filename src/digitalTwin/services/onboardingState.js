@@ -8,7 +8,7 @@
  */
 
 import { db } from "../../firebaseConfig"
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, runTransaction, serverTimestamp } from "firebase/firestore"
 
 const ref = (tenantId) => doc(db, "digitalTwinTenants", tenantId, "onboarding", "state")
 
@@ -34,19 +34,22 @@ export const getOnboardingState = async (tenantId) => {
   }
 }
 
-const FORM_KEYS = ['environment','siteName','contractName','clientName','serviceValueChainId','serviceId','activityName','equipmentGroupName','equipmentGroupCapacity','companyNodeId','siteNodeId','contractNodeId','serviceNodeId','activityNodeId','groupId'];
+const FORM_KEYS = ['structureDraft','environment','siteName','contractName','clientName','serviceValueChainId','serviceId','activityName','equipmentGroupName','equipmentGroupCapacity','companyNodeId','siteNodeId','contractNodeId','serviceNodeId','activityNodeId','groupId'];
 export const saveOnboardingState = async (tenantId, patch) => {
   if (!tenantId) return;
-  const existing = await getOnboardingState(tenantId);
-  const form = {...(existing.form || {})};
-  for (const key of FORM_KEYS) if (patch[key] !== undefined) form[key] = patch[key];
-  const value = Object.fromEntries(Object.keys(DEFAULT_STATE).map(key=>[key,patch[key] !== undefined ? patch[key] : existing[key] ?? DEFAULT_STATE[key]]));
-  value.currentStep = Math.max(0, Math.min(5, Number(value.currentStep) || 0));
-  value.startedAt = existing.startedAt || new Date().toISOString();
-  value.lastUpdated = serverTimestamp();
-  value.form = form;
-  await setDoc(ref(tenantId), value, {merge:true});
-  return value;
+  return runTransaction(db, async (transaction) => {
+    const target = ref(tenantId);
+    const existing = (await transaction.get(target)).data() || DEFAULT_STATE;
+    const form = {...(existing.form || {})};
+    for (const key of FORM_KEYS) if (patch[key] !== undefined) form[key] = patch[key];
+    const value = Object.fromEntries(Object.keys(DEFAULT_STATE).map(key=>[key,patch[key] !== undefined ? patch[key] : existing[key] ?? DEFAULT_STATE[key]]));
+    value.currentStep = Math.max(0, Math.min(5, Number(value.currentStep) || 0));
+    value.startedAt = existing.startedAt || new Date().toISOString();
+    value.lastUpdated = serverTimestamp();
+    value.form = form;
+    transaction.set(target, value, {merge:true});
+    return value;
+  });
 };
 
 export const completeOnboarding = async (tenantId, meta = {}) => {

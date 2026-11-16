@@ -13,6 +13,7 @@ import { createEmptyResource, validateResource, RESOURCE_KIND, OWNERSHIP_TYPE, C
 import { ASSET_STATUS, DATA_CONFIDENCE } from "../models/enums"
 import { UNITS, unitLabel, CANONICAL_UNIT } from "../models/units"
 import { optionsFor } from "../services/taxonomyService"
+import { getOnboardingState } from "../services/onboardingState"
 import { listGroups, listOperatingSites } from "../services/resourceService"
 import { normalAssetNumber } from "../models/assetIdentity"
 import "../styles/Downtime.css"
@@ -58,11 +59,12 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
   const [saving, setSaving] = useState(false)
   const [groups, setGroups] = useState([])
   const [sites, setSites] = useState([])
+  const [packKey, setPackKey] = useState("mining")
   const [customType, setCustomType] = useState(false)
   useEffect(() => {
     let live = true
     if (!tenantId) return undefined
-    Promise.all([listGroups(tenantId), listOperatingSites(tenantId)]).then(([g, s]) => { if (live) { setGroups(g); setSites(s) } }).catch(e => { if (live) setErrors([{ field: "_references", message: e.message }]) })
+    Promise.all([listGroups(tenantId), listOperatingSites(tenantId), getOnboardingState(tenantId)]).then(([g, s, setup]) => { if (live) { setGroups(g); setSites(s); setPackKey(setup.sectorPack || "mining") } }).catch(e => { if (live) setErrors([{ field: "_references", message: e.message }]) })
     return () => { live = false }
   }, [tenantId])
 
@@ -71,13 +73,14 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
 
   const set = (patch) => setForm((p) => ({ ...p, ...patch }))
 
-  // Equipment-type options — mining pack by default
+  // Use the organisation’s selected sector for equipment options.
   const equipmentTypeOptions = (() => {
-    const families = optionsFor({ packKey: "mining", domain: "equipment_family" })
+    const families = optionsFor({ packKey, domain: "equipment_family" })
     const types = []
     families.forEach((f) => {
-      const children = optionsFor({ packKey: "mining", domain: "equipment_type", parentId: f.id })
-      children.forEach((t) => types.push({ id: t.id, name: `${f.name} › ${t.name}` }))
+      const children = optionsFor({ packKey, domain: "equipment_type", parentId: f.id })
+      if (children.length) children.forEach((t) => types.push({ id: t.id, name: `${f.name} › ${t.name}` }))
+      else types.push(f)
     })
     return types
   })()
@@ -203,6 +206,10 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
               <input type="number" value={form.year ?? ""} onChange={(e) => set({ year: e.target.value ? Number(e.target.value) : null })} style={inputS} />
             </Field>
           </Row>
+          <Field errors={errors} warnings={warnings} label="Model group" name="modelGroup">
+            <input value={form.modelGroup || ""} onChange={(event) => set({ modelGroup: event.target.value })}
+              style={inputS} maxLength={120} />
+          </Field>
           <Field errors={errors} warnings={warnings} label="Configuration" name="configuration">
             <input value={form.configuration || ""} onChange={(e) => set({ configuration: e.target.value })} style={inputS}
               placeholder="Body type, engine, attachments" />

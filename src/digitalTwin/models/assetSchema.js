@@ -56,7 +56,7 @@ export const ASSET_FIELD_GROUPS = Object.freeze({
   },
   classification: {
     label: "Classification",
-    fields: ["equipmentTypeId", "equipmentGroupId", "make", "model", "year", "configuration", "criticality"],
+    fields: ["equipmentTypeId", "equipmentGroupId", "make", "model", "modelGroup", "year", "configuration", "criticality"],
   },
   ownership: {
     label: "Ownership & commercial",
@@ -111,6 +111,7 @@ export const createEmptyResource = (tenantId, overrides = {}) => {
     location: "",
     make: "",
     model: "",
+    modelGroup: "",
     year: null,
     configuration: "",
     criticality: CRITICALITY.MEDIUM,

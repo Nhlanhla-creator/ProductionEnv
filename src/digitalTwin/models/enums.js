@@ -17,6 +17,7 @@ export const NODE_TYPES = Object.freeze({
   FACILITY:     "facility",          // facility or operation
   PROCESS_AREA: "process_area",      // area / circuit / process stage
   SERVICE:      "service",           // Service Level 1 (what is sold)
+  VALUE_CHAIN:  "value_chain",
   ACTIVITY:     "activity",          // Activity Level 2 (work performed)
   EQUIPMENT_GROUP:  "equipment_group",
   EQUIPMENT_FAMILY: "equipment_family",

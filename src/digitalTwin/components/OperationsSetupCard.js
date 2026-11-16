@@ -19,6 +19,7 @@ import { useEffect, useState } from "react"
 import { Boxes, Check, ChevronRight, TrendingUp, Sparkles, ArrowRight } from "lucide-react"
 import { auth } from "../../firebaseConfig"
 import { getOnboardingState } from "../services/onboardingState"
+import { STRUCTURE_STEPS } from "../models/operatingStructure"
 
 const T = {
   accent: "#4a352f", accentSoft: "#6b4f47", accentTint: "#f4efec",
@@ -48,8 +49,8 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
 
   const started = !!state.startedAt
   const completed = state.completed
-  const currentStep = Math.min(state.currentStep || 0, 5)
-  const totalSteps = 6
+  const totalSteps = STRUCTURE_STEPS.length
+  const currentStep = state.structureDraft ? Math.min(state.currentStep, totalSteps - 1) : 0
 
   const handleClick = (target) => {
     onNavigate?.(target)
@@ -93,10 +94,10 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
               </h3>
               <p style={{ margin: 0, fontSize: "14px", color: "#D7CCC8", lineHeight: 1.55, maxWidth: "620px" }}>
                 {completed
-                  ? "Your sites, contracts, services and equipment groups are configured. You can re-run the wizard to add more structure, or jump straight to the KPI Summary."
+                  ? "Open Operating Structure to edit your diagram or go to KPI Summary."
                   : started
-                    ? `You're on step ${currentStep + 1} of ${totalSteps}. Nothing is saved until the final step — pick up where you left off.`
-                    : "The guided setup takes about 5 minutes and builds your sites, contracts, services and equipment groups. You can pause at any time."}
+                    ? `You're on step ${currentStep + 1} of ${totalSteps}. Continue from your saved step.`
+                    : "Choose your sector and build your operating diagram."}
               </p>
 
               {/* Progress bar */}
@@ -196,36 +197,10 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
             gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
             gap: "12px",
           }}>
-            <SetupItem
-              num={1}
-              title="Objective & context"
-              description="What you want to improve, which sector pack applies, and what environment you operate in."
-              done={completed || currentStep > 1}
-            />
-            <SetupItem
-              num={2}
-              title="Site & contract"
-              description="Where the work happens and which commercial scope it sits under. You can have one, the other, or both."
-              done={completed || currentStep > 2}
-            />
-            <SetupItem
-              num={3}
-              title="Service & activity"
-              description="The canonical service and the operational activity it delivers, pulled from the sector taxonomy."
-              done={completed || currentStep > 3}
-            />
-            <SetupItem
-              num={4}
-              title="Equipment groups"
-              description="If your service uses physical equipment, name the fleet. Skip if it's people, teams or consumables only."
-              done={completed || currentStep > 4}
-            />
-            <SetupItem
-              num={5}
-              title="Review & create"
-              description="See the full structure as an interactive flow diagram, add connections, then create everything."
-              done={completed}
-            />
+            {STRUCTURE_STEPS.map((title, index) => <SetupItem key={title} num={index + 1} title={title}
+              description={["Choose the sector for your operation.", "Select value chains, activities and services.",
+                "Choose equipment groups and roles.", "Add and connect nodes manually."][index]}
+              done={completed || currentStep > index} />)}
           </div>
         </div>
 
@@ -413,7 +388,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
               You're on step {currentStep + 1} of {totalSteps}
             </div>
             <div style={{ fontSize: "12.5px", color: T.muted }}>
-              Pick up where you left off — nothing is saved until the final step.
+              Continue from your saved step.
             </div>
           </div>
         </div>
