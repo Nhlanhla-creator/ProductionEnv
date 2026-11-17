@@ -21,3 +21,27 @@
 .dt-attendance-buttons { display: flex; gap: .4rem; white-space: nowrap; }
 .dt-people-list { margin-top: 1rem; }
 .dt-people-list summary { cursor: pointer; font-weight: 600; }
+
+.dt-register-filter-actions { justify-content: flex-end; margin-bottom: .75rem; }
+.dt-register-table th {
+  background: var(--dt-brown);
+  color: #fff;
+  vertical-align: top;
+}
+.dt-register-table th input,
+.dt-register-table th select {
+  display: block;
+  width: 100%;
+  min-width: 8rem;
+  margin-top: .55rem;
+  border: 1px solid #e7dfd9;
+  border-radius: 6px;
+  padding: .45rem .55rem;
+  background: #fff;
+  color: var(--dt-ink);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.dt-register-table th input { min-width: 13rem; }

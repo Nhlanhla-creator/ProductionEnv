@@ -39,9 +39,7 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
           color: T.body, lineHeight: 1.6, maxWidth: "440px",
           marginLeft: "auto", marginRight: "auto",
         }}>
-          We've built your operating structure. The next step is adding the
-          equipment and work that fills it — then your performance dashboard starts
-          producing insights.
+          Your structure is saved. Open the Asset Register to review the equipment from your diagram or add more.
         </p>
 
         <div style={{
@@ -59,9 +57,9 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
 
           <StepItem
             num={1}
-            title="Add your first asset"
-            description="Register a truck, rig or machine so we can track its availability, utilisation and cost."
-            action={{ label: "Add asset", onClick: onOpenAssets, icon: Plus }}
+            title="Review your equipment"
+            description="Check equipment names, asset IDs, groups and locations."
+            action={{ label: "Open Asset Register", onClick: onOpenAssets, icon: Plus }}
           />
 
           <StepItem
@@ -96,7 +94,7 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
               display: "inline-flex", alignItems: "center", gap: "7px",
             }}>
             <Boxes size={15} />
-            Add your first asset
+            Open Asset Register
           </button>
           <button
             type="button"
@@ -109,7 +107,7 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
               cursor: "pointer", fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: "7px",
             }}>
-            Skip for now
+            Open KPI Summary
             <ChevronRight size={14} />
           </button>
         </div>

@@ -1,28 +1,8 @@
 "use client"
 
-/**
- * digitalTwin/components/TwinFlowDiagram.jsx
- *
- * Professional flow diagram for the operating twin structure.
- *
- * Renders nodes on a layered graph with:
- *   - SVG bezier arrows between connected nodes
- *   - Directional arrowheads and coloured edge labels
- *   - Drag-to-connect: click a node, then click a target to link them
- *   - Auto hierarchical layout (roots at top, children below)
- *   - Pan, zoom, fit-to-view
- *   - Hover highlighting of a node and its incident edges
- *   - Node selection, rename inline, add children, remove
- *
- * The parent (FirstRunWizard) supplies `nodes` and `relations` arrays and
- * receives edits via `onChange({ nodes, relations })`.
- */
-
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  useCallback, useEffect, useMemo, useRef, useState,
-} from "react"
-import {
-  Plus, X, Link2, Trash2, ZoomIn, ZoomOut, Maximize2,
+  Plus, Link2, Trash2, ZoomIn, ZoomOut, Maximize2,
   Building2, MapPin, FileText, Wrench, Boxes, Activity,
   Layers, Zap, MousePointerClick,
 } from "lucide-react"
@@ -55,180 +35,93 @@ const NODE_VISUALS = {
   facility:        { icon: Zap,       accent: "#b45309", soft: "#fffbeb", label: "Facility" },
 }
 
-// ── Valid relation types per source node type ─────────────────────────────
-const VALID_CONNECTIONS = {
-  value_chain:     ["contains", "scopes"],
-  asset:           ["member_of", "supports"],
-  company:         ["contains", "owns_or_controls", "scopes"],
-  site:            ["contains", "delivered_at", "has_area"],
-  contract:        ["scopes", "realized_by", "delivered_at"],
-  service:         ["realized_by"],
-  activity:        ["performed_in", "supports"],
-  equipment_group: ["member_of", "supports"],
-  process_area:    ["contains"],
-  facility:        ["has_area", "contains"],
-}
-
-// ── Relation type colour palette ──────────────────────────────────────────
-const RELATION_COLORS = {
-  contains:         "#4a352f",
-  owns_or_controls: "#4a352f",
-  scopes:           "#b45309",
-  delivered_at:     "#0e7490",
-  has_area:         "#0e7490",
-  realized_by:      "#166534",
-  performed_in:     "#6d28d9",
-  supports:         "#1e40af",
-  member_of:        "#1e40af",
-}
-
-const RELATION_LABELS = {
-  contains: "contains",
-  owns_or_controls: "owns / controls",
-  scopes: "scopes",
-  delivered_at: "delivered at",
-  has_area: "has area",
-  realized_by: "realized by",
-  performed_in: "performed in",
-  supports: "supports",
-  member_of: "member of",
-}
-
-// ── Layout constants ──────────────────────────────────────────────────────
 const NODE_W = 200
 const NODE_H = 68
-const H_GAP = 40
-const V_GAP = 90
+const H_GAP = 52
+const V_GAP = 54
 
-// ── Layout algorithm: hierarchical top-down tree ──────────────────────────
-/**
- * Assigns (x, y) to each node so the graph reads top-down.
- * Levels are computed from a BFS rooted at all roots (nodes with no parent).
- * Within a level, nodes are ordered so children stay near their parent.
- */
-const computeLayout = (nodes, relations) => {
-  if (nodes.length === 0) return { positions: {}, width: 0, height: 0 }
+const relationTypeFor = (source, target) => {
+  if (source === "service" && target === "activity") return "realized_by"
+  if (source === "contract" && target === "service") return "scopes"
+  return "contains"
+}
 
-  const childrenOf = {}
-  const parentOf = {}
-  relations.forEach((r) => {
-    if (!childrenOf[r.fromId]) childrenOf[r.fromId] = []
-    childrenOf[r.fromId].push(r.toId)
-    parentOf[r.toId] = r.fromId
-  })
+const sameConnection = (relation, from, to) =>
+  (relation.fromId === from && relation.toId === to) ||
+  (relation.fromId === to && relation.toId === from)
 
-  // Roots = nodes with no parent relation (and that exist in the node list)
-  const nodeIds = new Set(nodes.map((n) => n.id))
-  const roots = nodes
-    .filter((n) => !parentOf[n.id] || !nodeIds.has(parentOf[n.id]))
-    .map((n) => n.id)
+function collectConnections(relations) {
+  const byPair = new Map()
+  for (const relation of relations) {
+    const key = JSON.stringify([relation.fromId, relation.toId].sort())
+    const existing = byPair.get(key)
+    if (!existing || relation.isPrimary) byPair.set(key, relation)
+  }
+  return [...byPair.values()]
+}
 
-  // BFS to assign levels. Multi-parent nodes go to the level of their
-  // earliest (shallowest) parent so they read naturally.
-  const level = {}
-  const queue = []
-  roots.forEach((id) => { level[id] = 0; queue.push(id) })
+function computeLayout(nodes, relations, horizontal) {
+  if (!nodes.length) return { positions: {}, width: 0, height: 0 }
+  const ids = new Set(nodes.map(({ id }) => id))
+  const parents = new Map()
+  const children = new Map()
+  for (const edge of relations) {
+    if (!edge.isPrimary || !ids.has(edge.fromId) || !ids.has(edge.toId) || parents.has(edge.toId)) continue
+    parents.set(edge.toId, edge.fromId)
+    const branch = children.get(edge.fromId) || []
+    branch.push(edge.toId)
+    children.set(edge.fromId, branch)
+  }
 
   const visited = new Set()
-  while (queue.length > 0) {
-    const id = queue.shift()
-    if (visited.has(id)) continue
-    visited.add(id)
-    const kids = childrenOf[id] || []
-    kids.forEach((kid) => {
-      if (level[kid] === undefined || level[kid] < level[id] + 1) {
-        level[kid] = level[id] + 1
-      }
-      queue.push(kid)
-    })
-  }
-
-  // Any node not reached (isolated) gets level 0
-  nodes.forEach((n) => {
-    if (level[n.id] === undefined) level[n.id] = 0
-  })
-
-  // Group nodes by level
-  const levels = {}
-  nodes.forEach((n) => {
-    const l = level[n.id]
-    if (!levels[l]) levels[l] = []
-    levels[l].push(n.id)
-  })
-
-  // Position within each level.
-  // Use a running X cursor, and stagger children so they cluster near parent.
   const positions = {}
-  const levelKeys = Object.keys(levels).map(Number).sort((a, b) => a - b)
-
-  // Simple, robust layout: order each level by parent's X where possible.
-  // We do two passes: (1) assign provisional X by index in level,
-  // (2) nudge children toward their parent's average X.
-  const byIndex = {}
-  levelKeys.forEach((l) => {
-    levels[l].forEach((id, idx) => {
-      byIndex[id] = idx
-    })
-  })
-
-  // Provisional X: index * (NODE_W + H_GAP)
-  levelKeys.forEach((l) => {
-    levels[l].forEach((id, idx) => {
-      positions[id] = {
-        x: idx * (NODE_W + H_GAP),
-        y: l * (NODE_H + V_GAP),
-      }
-    })
-  })
-
-  // Nudge: for each non-root level, sort nodes by their parent's provisional X
-  for (let i = 1; i < levelKeys.length; i++) {
-    const l = levelKeys[i]
-    const ids = levels[l]
-    ids.sort((a, b) => {
-      const pa = parentOf[a] ? positions[parentOf[a]].x : 0
-      const pb = parentOf[b] ? positions[parentOf[b]].x : 0
-      return pa - pb
-    })
-    ids.forEach((id, idx) => {
-      positions[id].x = idx * (NODE_W + H_GAP)
-    })
+  const lanes = []
+  for (const root of [...nodes.filter(({ id }) => !parents.has(id)), ...nodes]) {
+    if (visited.has(root.id)) continue
+    const queue = [{ id: root.id, depth: 0 }]
+    for (let cursor = 0; cursor < queue.length; cursor++) {
+      const { id, depth } = queue[cursor]
+      if (visited.has(id)) continue
+      visited.add(id)
+      const lane = (lanes[depth] ||= [])
+      lane.push(id)
+      for (const child of children.get(id) || []) queue.push({ id: child, depth: depth + 1 })
+    }
   }
-
-  // Compute bounds
-  const xs = Object.values(positions).map((p) => p.x)
-  const ys = Object.values(positions).map((p) => p.y)
-  const minX = Math.min(...xs, 0)
-  const maxX = Math.max(...xs, 0) + NODE_W
-  const maxY = Math.max(...ys, 0) + NODE_H
-
-  // Normalise so minX is 0
-  Object.keys(positions).forEach((id) => {
-    positions[id].x -= minX
-  })
-
+  const largestLane = Math.max(...lanes.map((lane) => lane.length))
+  lanes.forEach((lane, depth) => lane.forEach((id, index) => {
+    const offset = index + (largestLane - lane.length) / 2
+    positions[id] = horizontal
+      ? { x: depth * (NODE_W + H_GAP), y: offset * (NODE_H + V_GAP) }
+      : { x: offset * (NODE_W + H_GAP), y: depth * (NODE_H + V_GAP) }
+  }))
   return {
     positions,
-    width: maxX - minX,
-    height: maxY,
+    width: (horizontal ? lanes.length - 1 : largestLane - 1) * (NODE_W + H_GAP) + NODE_W,
+    height: (horizontal ? largestLane - 1 : lanes.length - 1) * (NODE_H + V_GAP) + NODE_H,
   }
 }
 
-// ── Edge path builder: smooth bezier from bottom of source to top of target
-const buildEdgePath = (from, to) => {
-  const x1 = from.x + NODE_W / 2
-  const y1 = from.y + NODE_H
-  const x2 = to.x + NODE_W / 2
-  const y2 = to.y
-
-  // Route down, then across. Two control points give a clean S-curve.
-  const dy = Math.max(30, Math.abs(y2 - y1) / 2)
-  const c1x = x1
-  const c1y = y1 + dy
-  const c2x = x2
-  const c2y = y2 - dy
-
-  return `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`
+function buildEdgePath(from, to, horizontal) {
+  const source = horizontal
+    ? { x: from.x + (to.x >= from.x ? NODE_W : 0), y: from.y + NODE_H / 2 }
+    : { x: from.x + NODE_W / 2, y: from.y + (to.y >= from.y ? NODE_H : 0) }
+  const target = horizontal
+    ? { x: to.x + (to.x >= from.x ? 0 : NODE_W), y: to.y + NODE_H / 2 }
+    : { x: to.x + NODE_W / 2, y: to.y + (to.y >= from.y ? 0 : NODE_H) }
+  if (horizontal && from.x === to.x) {
+    const x = from.x + NODE_W / 2
+    return `M ${x} ${from.y + (to.y > from.y ? NODE_H : 0)} L ${x} ${to.y + (to.y > from.y ? 0 : NODE_H)}`
+  }
+  if (!horizontal && from.y === to.y) {
+    const y = from.y + NODE_H / 2
+    return `M ${from.x + (to.x > from.x ? NODE_W : 0)} ${y} L ${to.x + (to.x > from.x ? 0 : NODE_W)} ${y}`
+  }
+  const midX = (source.x + target.x) / 2
+  const midY = (source.y + target.y) / 2
+  return horizontal
+    ? `M ${source.x} ${source.y} C ${midX} ${source.y}, ${midX} ${target.y}, ${target.x} ${target.y}`
+    : `M ${source.x} ${source.y} C ${source.x} ${midY}, ${target.x} ${midY}, ${target.x} ${target.y}`
 }
 
 // ── Main component ────────────────────────────────────────────────────────
@@ -245,7 +138,7 @@ export default function TwinFlowDiagram({
   const [renaming, setRenaming] = useState(null)
   const [hoveredNode, setHoveredNode] = useState(null)
   const [linkingFrom, setLinkingFrom] = useState(null)
-  const [linkRelationType, setLinkRelationType] = useState("")
+  const [direction, setDirection] = useState("vertical")
   const [showAddNode, setShowAddNode] = useState(null) // parentId | "root" | null
   const [newNodeType, setNewNodeType] = useState("activity")
   const [newNodeName, setNewNodeName] = useState("")
@@ -256,8 +149,6 @@ export default function TwinFlowDiagram({
   const [personCategory, setPersonCategory] = useState("nonTechnical")
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 20, y: 20 })
-  const [dragging, setDragging] = useState(null)
-  const [hoveredEdge, setHoveredEdge] = useState(null)
   const [confirmRemoveNode, setConfirmRemoveNode] = useState(null)
 
   const canvasRef = useRef(null)
@@ -265,7 +156,10 @@ export default function TwinFlowDiagram({
   const panStartRef = useRef(null)
 
   // ── Layout
-  const layout = useMemo(() => computeLayout(nodes, relations), [nodes, relations])
+  const horizontal = direction === "horizontal"
+  const layout = useMemo(() => computeLayout(nodes, relations, horizontal), [nodes, relations, horizontal])
+  const connections = useMemo(() => collectConnections(relations), [relations])
+  const selectedConnections = connections.filter(({ fromId, toId }) => fromId === selectedNode || toId === selectedNode)
 
   const nodeById = useMemo(() => {
     const map = {}
@@ -273,25 +167,17 @@ export default function TwinFlowDiagram({
     return map
   }, [nodes])
 
-  // ── Fit-to-view on first render and when node count changes drastically
-  useEffect(() => {
-    if (layout.width === 0 || layout.height === 0) return
-    const el = canvasRef.current
-    if (!el) return
-    const pad = 40
-    const availW = el.clientWidth - pad * 2
-    const availH = el.clientHeight - pad * 2
-    if (availW <= 0 || availH <= 0) return
-    const sx = availW / layout.width
-    const sy = availH / layout.height
-    const s = Math.min(1, Math.max(0.35, Math.min(sx, sy)))
-    setZoom(s)
-    setPan({
-      x: (el.clientWidth - layout.width * s) / 2,
-      y: pad,
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout.width, layout.height, nodes.length])
+  const fitToView = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !layout.width || !layout.height) return
+    const scale = Math.min(1, Math.max(1, canvas.clientWidth - 52) / layout.width,
+      Math.max(1, canvas.clientHeight - 52) / layout.height)
+    setZoom(scale)
+    setPan({ x: (canvas.clientWidth - layout.width * scale) / 2,
+      y: (canvas.clientHeight - layout.height * scale) / 2 })
+  }, [layout.width, layout.height])
+
+  useEffect(() => { fitToView() }, [fitToView, direction])
 
   // ── Panning via middle-click or space+drag or background drag
   const onCanvasMouseDown = (e) => {
@@ -323,21 +209,7 @@ export default function TwinFlowDiagram({
     if (!e.ctrlKey && !e.metaKey) return
     e.preventDefault()
     const delta = -e.deltaY * 0.0015
-    setZoom((z) => Math.max(0.3, Math.min(2.5, z + delta)))
-  }
-
-  const fitToView = () => {
-    const el = canvasRef.current
-    if (!el || layout.width === 0) return
-    const pad = 40
-    const availW = el.clientWidth - pad * 2
-    const availH = el.clientHeight - pad * 2
-    const s = Math.min(1.2, Math.max(0.35, Math.min(availW / layout.width, availH / layout.height)))
-    setZoom(s)
-    setPan({
-      x: (el.clientWidth - layout.width * s) / 2,
-      y: pad,
-    })
+    setZoom((z) => Math.max(Math.min(0.03, z), Math.min(2.5, z * Math.exp(delta))))
   }
 
   // ── Mutations ────────────────────────────────────────────────────────────
@@ -394,9 +266,7 @@ export default function TwinFlowDiagram({
         if (!picked) attributes.equipmentType = equipmentType.trim()
       }
       const newNode = { id: structureId(), nodeType: newNodeType, name, attributes }
-      const parentType = nodeById[parentId]?.nodeType
-      const relType = parentType === "service" && newNodeType === "activity" ? "realized_by"
-        : parentType === "contract" && newNodeType === "service" ? "scopes" : "contains"
+      const relType = relationTypeFor(nodeById[parentId]?.nodeType, newNodeType)
       const edge = parentId ? [{
         id: structureId(), fromId: parentId, toId: newNode.id, relationType: relType, isPrimary: true,
       }] : []
@@ -419,44 +289,29 @@ export default function TwinFlowDiagram({
     setSelectedNode(null)
   }
 
-  const handleRemoveRelation = (relId) => {
-    onChange?.({ nodes, relations: relations.filter((r) => r.id !== relId) })
-  }
-
-  const handleStartLink = (nodeId) => {
-    setLinkingFrom(nodeId)
-    const node = nodeById[nodeId]
-    const validTypes = VALID_CONNECTIONS[node?.nodeType] || []
-    setLinkRelationType(validTypes[0] || "contains")
+  const disconnect = (targetId) => {
+    onChange?.({ nodes, relations: relations.filter((r) => !sameConnection(r, selectedNode, targetId)) })
   }
 
   const handleCompleteLink = (targetId) => {
-    if (!linkingFrom || linkingFrom === targetId) {
-      setLinkingFrom(null)
-      return
-    }
-    const relType = linkRelationType || "contains"
-    const exists = relations.some(
-      (r) => r.fromId === linkingFrom && r.toId === targetId && r.relationType === relType
-    )
-    if (exists) {
-      setLinkingFrom(null)
-      return
-    }
-    const newRel = {
-      id: `rel_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      fromId: linkingFrom,
-      toId: targetId,
-      relationType: relType,
-      isPrimary: false,
-      _new: true,
-    }
-    onChange?.({ nodes, relations: [...relations, newRel] })
+    const fromId = linkingFrom
     setLinkingFrom(null)
+    if (!fromId || fromId === targetId || relations.some((edge) => sameConnection(edge, fromId, targetId))) return
+    const primaryParents = new Map(relations.filter((edge) => edge.isPrimary).map((edge) => [edge.toId, edge.fromId]))
+    const ancestors = new Set([fromId])
+    let parent = primaryParents.get(fromId)
+    while (parent && !ancestors.has(parent)) {
+      ancestors.add(parent)
+      parent = primaryParents.get(parent)
+    }
+    const target = nodeById[targetId]
+    const isPrimary = target.nodeType !== "company" && !primaryParents.has(targetId) && !ancestors.has(targetId)
+    const edge = { id: structureId(), fromId, toId: targetId,
+      relationType: relationTypeFor(nodeById[fromId].nodeType, target.nodeType), isPrimary }
+    onChange?.({ nodes, relations: [...relations, edge] })
   }
 
   const onNodeClick = (node) => {
-    if (readOnly) return
     if (linkingFrom && linkingFrom !== node.id) {
       handleCompleteLink(node.id)
       return
@@ -475,12 +330,6 @@ export default function TwinFlowDiagram({
     return relations.some(
       (r) => (r.fromId === hoveredNode && r.toId === id) || (r.toId === hoveredNode && r.fromId === id)
     )
-  }
-
-  const isEdgeHighlighted = (rel) => {
-    if (hoveredEdge === rel.id) return true
-    if (!hoveredNode) return false
-    return rel.fromId === hoveredNode || rel.toId === hoveredNode
   }
 
   return (
@@ -505,10 +354,16 @@ export default function TwinFlowDiagram({
           </>
         )}
 
-        <button onClick={() => setZoom((z) => Math.min(2.5, z + 0.15))} style={toolbarIconBtn} title="Zoom in">
+        <div role="group" aria-label="Diagram view" className="dt-actions">
+          {[["vertical", "Top to bottom"], ["horizontal", "Left to right"]].map(([value, label]) =>
+            <button type="button" key={value} aria-pressed={direction === value}
+              className={`dt-button dt-button-small ${direction === value ? "dt-button-primary" : ""}`}
+              onClick={() => setDirection(value)}>{label}</button>)}
+        </div>
+        <button onClick={() => setZoom((z) => Math.min(2.5, z * 1.25))} style={toolbarIconBtn} title="Zoom in">
           <ZoomIn size={14} />
         </button>
-        <button onClick={() => setZoom((z) => Math.max(0.3, z - 0.15))} style={toolbarIconBtn} title="Zoom out">
+        <button onClick={() => setZoom((z) => Math.max(Math.min(0.03, z), z / 1.25))} style={toolbarIconBtn} title="Zoom out">
           <ZoomOut size={14} />
         </button>
         <button onClick={fitToView} style={toolbarIconBtn} title="Fit to view">
@@ -520,7 +375,7 @@ export default function TwinFlowDiagram({
 
         <span style={{ marginLeft: "auto", fontSize: "11.5px", color: T.muted }}>
           <strong style={{ color: T.ink }}>{nodes.length}</strong> nodes ·{" "}
-          <strong style={{ color: T.ink }}>{relations.length}</strong> links
+          <strong style={{ color: T.ink }}>{connections.length}</strong> links
         </span>
       </div>
 
@@ -535,15 +390,6 @@ export default function TwinFlowDiagram({
           <span style={{ fontSize: "13px", color: T.accent }}>
             Connecting from <strong>{nodeById[linkingFrom]?.name}</strong> — click any other node to link
           </span>
-          <select
-            value={linkRelationType}
-            onChange={(e) => setLinkRelationType(e.target.value)}
-            style={{ ...miniInput, marginLeft: "auto" }}
-          >
-            {(VALID_CONNECTIONS[nodeById[linkingFrom]?.nodeType] || []).map((rt) => (
-              <option key={rt} value={rt}>{RELATION_LABELS[rt] || rt}</option>
-            ))}
-          </select>
           <button onClick={() => setLinkingFrom(null)} style={toolbarBtn}>
             Cancel
           </button>
@@ -642,107 +488,14 @@ export default function TwinFlowDiagram({
             height={Math.max(1, layout.height + 200)}
             style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", overflow: "visible" }}
           >
-            <defs>
-              {Object.entries(RELATION_COLORS).map(([type, color]) => (
-                <marker
-                  key={type}
-                  id={`arrow-${type}`}
-                  viewBox="0 0 10 10"
-                  refX="9"
-                  refY="5"
-                  markerWidth="7"
-                  markerHeight="7"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 0 L 10 5 L 0 10 z" fill={color} />
-                </marker>
-              ))}
-              <marker
-                id="arrow-highlight"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="8"
-                markerHeight="8"
-                orient="auto-start-reverse"
-              >
-                <path d="M 0 0 L 10 5 L 0 10 z" fill={T.accent} />
-              </marker>
-            </defs>
-
-            {relations.map((rel) => {
-              const from = layout.positions[rel.fromId]
-              const to = layout.positions[rel.toId]
-              if (!from || !to) return null
-
-              const path = buildEdgePath(from, to)
-              const isHi = isEdgeHighlighted(rel)
-              const baseColor = RELATION_COLORS[rel.relationType] || T.accentSoft
-              const color = isHi ? T.accent : baseColor
-              const strokeW = isHi ? 2.5 : 1.6
-              const midX = (from.x + to.x) / 2 + NODE_W / 2
-              const midY = (from.y + NODE_H + to.y) / 2
-
-              return (
-                <g key={rel.id} style={{ pointerEvents: "auto" }}>
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth={strokeW}
-                    strokeLinecap="round"
-                    markerEnd={`url(#arrow-${isHi ? "highlight" : rel.relationType})`}
-                    opacity={isHi ? 1 : 0.75}
-                  />
-
-                  {/* Edge label */}
-                  <g
-                    transform={`translate(${midX}, ${midY})`}
-                    style={{ cursor: "pointer" }}
-                    onMouseEnter={() => setHoveredEdge(rel.id)}
-                    onMouseLeave={() => setHoveredEdge(null)}
-                  >
-                    <rect
-                      x={-RELATION_LABELS[rel.relationType].length * 3.4 - 10}
-                      y={-9}
-                      width={RELATION_LABELS[rel.relationType].length * 6.8 + 20}
-                      height={18}
-                      rx={9}
-                      fill={T.bg}
-                      stroke={color}
-                      strokeWidth={1}
-                      opacity={0.98}
-                    />
-                    <text
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize="10"
-                      fontWeight={600}
-                      fill={color}
-                      style={{ letterSpacing: "0.2px", userSelect: "none" }}
-                    >
-                      {RELATION_LABELS[rel.relationType] || rel.relationType}
-                    </text>
-                  </g>
-
-                  {/* Remove button on hover */}
-                  {isHi && !readOnly && (
-                    <g
-                      transform={`translate(${midX + RELATION_LABELS[rel.relationType].length * 3.4 + 16}, ${midY})`}
-                      style={{ cursor: "pointer" }}
-                      onClick={(e) => { e.stopPropagation(); handleRemoveRelation(rel.id) }}
-                    >
-                      <circle r={8} fill={T.redBg} stroke={T.red} strokeWidth={1} />
-                      <path
-                        d="M -3 -3 L 3 3 M 3 -3 L -3 3"
-                        stroke={T.red}
-                        strokeWidth={1.6}
-                        strokeLinecap="round"
-                      />
-                    </g>
-                  )}
-                </g>
-              )
+            {connections.map((edge) => {
+              const from = layout.positions[edge.fromId]
+              const to = layout.positions[edge.toId]
+              if (!from || !to || edge.fromId === edge.toId) return null
+              const highlighted = [edge.fromId, edge.toId].some((id) => id === hoveredNode || id === selectedNode)
+              return <path key={edge.id} d={buildEdgePath(from, to, horizontal)} fill="none"
+                stroke={highlighted ? T.accent : T.lineStrong} strokeWidth={highlighted ? 2.6 : 2}
+                strokeLinecap="round" />
             })}
           </svg>
 
@@ -761,13 +514,22 @@ export default function TwinFlowDiagram({
             return (
               <div
                 key={node.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault()
+                    onNodeClick(node)
+                  }
+                }}
                 style={{
                   position: "absolute",
                   left: pos.x,
                   top: pos.y,
                   width: NODE_W,
                   height: NODE_H,
-                  cursor: readOnly ? "default" : (linkingFrom ? "crosshair" : "pointer"),
+                  cursor: linkingFrom ? "crosshair" : "pointer",
                   userSelect: "none",
                 }}
                 onMouseEnter={() => setHoveredNode(node.id)}
@@ -860,7 +622,7 @@ export default function TwinFlowDiagram({
               zIndex: 10,
             }}>
               <button
-                onClick={() => handleStartLink(selectedNode)}
+                onClick={() => setLinkingFrom(selectedNode)}
                 style={popoverBtn}
               >
                 <Link2 size={11} /> Connect
@@ -946,85 +708,20 @@ export default function TwinFlowDiagram({
           </table></div>
         </details>}
 
-      {/* ── Legend ── */}
-      <div style={{
-        marginTop: "12px",
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: "12px",
-      }}>
-        {/* Node types */}
-        <div style={{
-          padding: "12px 14px", background: T.panel,
-          borderRadius: "10px", border: `1px solid ${T.lineSoft}`,
-        }}>
-          <div style={{
-            fontSize: "11px", fontWeight: 700, color: T.muted,
-            textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px",
-          }}>
-            Node types
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-            {Object.entries(NODE_VISUALS).map(([key, v]) => {
-              const Icon = v.icon
-              return (
-                <span key={key} style={{
-                  display: "inline-flex", alignItems: "center", gap: "5px",
-                  fontSize: "11.5px", color: T.body,
-                }}>
-                  <span style={{
-                    width: 20, height: 20, borderRadius: "5px",
-                    background: v.soft, color: v.accent,
-                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    <Icon size={11} />
-                  </span>
-                  {v.label}
-                </span>
-              )
-            })}
-          </div>
-        </div>
+      {!readOnly && selectedConnections.length > 0 && <details key={selectedNode} className="dt-panel dt-people-list">
+        <summary>Connections · {nodeById[selectedNode]?.name}</summary>
+        <ul>
+          {selectedConnections.map((edge) => {
+            const id = edge.fromId === selectedNode ? edge.toId : edge.fromId
+            if (!nodeById[id]) return null
+            return <li key={id} className="dt-actions">
+              <span>{nodeById[id].name}</span>
+              <button type="button" className="dt-button dt-button-small" onClick={() => disconnect(id)}>Remove connection</button>
+            </li>
+          })}
+        </ul>
+      </details>}
 
-        {/* Relation types */}
-        <div style={{
-          padding: "12px 14px", background: T.panel,
-          borderRadius: "10px", border: `1px solid ${T.lineSoft}`,
-        }}>
-          <div style={{
-            fontSize: "11px", fontWeight: 700, color: T.muted,
-            textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px",
-          }}>
-            Connection types
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-            {Object.entries(RELATION_LABELS).map(([key, label]) => {
-              const color = RELATION_COLORS[key] || T.accentSoft
-              return (
-                <span key={key} style={{
-                  display: "inline-flex", alignItems: "center", gap: "5px",
-                  fontSize: "11.5px", color: T.body,
-                }}>
-                  <span style={{
-                    display: "inline-block", width: 20, height: 0,
-                    borderTop: `2px solid ${color}`,
-                    position: "relative",
-                  }}>
-                    <span style={{
-                      position: "absolute", right: -3, top: -3.5,
-                      width: 0, height: 0,
-                      borderLeft: `5px solid ${color}`,
-                      borderTop: "3px solid transparent",
-                      borderBottom: "3px solid transparent",
-                    }} />
-                  </span>
-                  {label}
-                </span>
-              )
-            })}
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

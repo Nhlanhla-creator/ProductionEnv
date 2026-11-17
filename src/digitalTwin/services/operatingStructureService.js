@@ -24,10 +24,15 @@ export async function loadOperatingStructure(tenantId) {
   const company = activeNodes.find((node) => node.id === state.companyNodeId) || activeNodes.find((node) => node.nodeType === "company")
   const name = profile.data()?.entityOverview?.registeredName || tenant?.displayName || company?.name || "Your organisation"
   const root = { id: company?.id || structureId(), nodeType: "company", name, attributes: company?.attributes || {}, _root: true }
+  const assetsById = new Map(assets.map((asset) => [asset.id, asset]))
   const saved = state.form?.operatingDiagram
   const diagram = saved ? {
     ...saved,
-    nodes: saved.nodes.map((node) => node._root ? { ...node, name } : node),
+    nodes: saved.nodes.map((node) => {
+      if (node._root) return { ...node, name }
+      const asset = node.nodeType === "asset" && assetsById.get(node.attributes?.registerId)
+      return asset?.name ? { ...node, name: asset.name } : node
+    }),
   } : { nodes: [root], relations: [] }
   return { state, tenant, company, diagram, nodes: activeNodes, allNodes: nodes, groups, assets, roster }
 }
@@ -89,6 +94,9 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
     }
   }
 
+  const assetsById = new Map(loaded.assets.map((asset) => [asset.id, asset]))
+  const loadedNodes = new Map(loaded.diagram.nodes.map((node) => [node.id, node]))
+  const resourceEdits = []
   const assetsByNumber = new Set(loaded.assets.map((asset) => String(asset.internalNumber || "").trim().toUpperCase()))
   const reservations = []
   const newPeople = new Map()
@@ -143,23 +151,43 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
       reservations.push(asset)
       set("resources", node.id, asset)
     }
-    if (node.nodeType === "asset" && attributes.registerId === node.id) {
-      const context = ancestorContext(node.id, nodes, edges)
-      const oldContext = previous ? ancestorContext(node.id, expected.nodes, expected.relations) : {}
-      if (JSON.stringify(oldContext) !== JSON.stringify(context)) {
-        if (attributes.assignmentId) {
-          closePlacement(attributes)
-          delete attributes.assignmentId
-          delete attributes.assignmentStart
+    if (node.nodeType === "asset") {
+      const registered = assetsById.get(attributes.registerId)
+      const originalName = loadedNodes.get(node.id)?.name ?? registered?.name
+      const patch = {}
+      if (registered && node.name !== originalName && node.name !== registered.name) patch.name = node.name
+
+      if (attributes.registerId === node.id) {
+        const context = ancestorContext(node.id, nodes, edges)
+        const oldContext = previous ? ancestorContext(node.id, expected.nodes, expected.relations) : {}
+        if (JSON.stringify(oldContext) !== JSON.stringify(context)) {
+          if (attributes.assignmentId) {
+            closePlacement(attributes)
+            delete attributes.assignmentId
+            delete attributes.assignmentStart
+          }
+          if (Object.keys(context).length) {
+            const assignmentId = structureId()
+            attributes.assignmentId = assignmentId
+            attributes.assignmentStart = day
+            set("assignments", assignmentId, createEmptyAssignment(tenantId, node.id, {
+              ...context, assignmentId, state: "active", isPrimary: true, ...resourceAudit,
+            }))
+          }
+          // The diagram owns placement of its new assets. Preserve independently edited register fields.
+          if (registered) {
+            for (const [field, key] of [["equipmentGroupId", "groupId"], ["siteId", "siteId"]]) {
+              if ((registered[field] ?? null) === (oldContext[key] ?? null) &&
+                  (context[key] ?? null) !== (oldContext[key] ?? null)) patch[field] = context[key] ?? null
+            }
+          }
         }
-        if (Object.keys(context).length) {
-          const assignmentId = structureId()
-          attributes.assignmentId = assignmentId
-          attributes.assignmentStart = day
-          set("assignments", assignmentId, createEmptyAssignment(tenantId, node.id, {
-            ...context, assignmentId, state: "active", isPrimary: true, ...resourceAudit,
-          }))
-        }
+      }
+
+      if (registered && Object.keys(patch).length) {
+        resourceEdits.push(registered)
+        update("resources", registered.id, { ...patch, resourceVersion: (registered.resourceVersion || 0) + 1,
+          updatedAt: now, updatedBy: actor })
       }
     }
     if (attributes.hierarchyId) continue
@@ -212,10 +240,11 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
 
   await runTransaction(db, async (tx) => {
     const tenantRef = doc(db, "digitalTwinTenants", tenantId)
-    const [snapshot, tenant, ...reserved] = await Promise.all([
+    const [snapshot, tenant, reserved, registeredSnapshots] = await Promise.all([
       tx.get(onboarding),
       tx.get(tenantRef),
-      ...reservations.map((asset) => tx.get(ref(tenantId, "assetIdentifiers", asset.internalNumber))),
+      Promise.all(reservations.map((asset) => tx.get(ref(tenantId, "assetIdentifiers", asset.internalNumber)))),
+      Promise.all(resourceEdits.map((asset) => tx.get(ref(tenantId, "resources", asset.id)))),
     ])
     const old = snapshot.data() || {}
     if ((old.form?.operatingDiagram?.revision || null) !== (expected?.revision || null)) {
@@ -223,6 +252,13 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
     }
     const used = reserved.findIndex((entry) => entry.exists())
     if (used >= 0) throw new Error(`Asset ID ${reservations[used].internalNumber} is already reserved.`)
+    registeredSnapshots.forEach((snapshot, index) => {
+      const asset = resourceEdits[index]
+      const current = snapshot.data()
+      if (!current || current.updatedAt !== asset.updatedAt || (current.resourceVersion || 0) !== (asset.resourceVersion || 0)) {
+        throw new Error(`${asset.name} changed in the Asset Register. Reopen Operating structure and try again.`)
+      }
+    })
     if (!tenant.exists()) {
       tx.set(tenantRef, { displayName: root.name, legalName: null, registrationNumber: null,
         createdAt: timestamp, createdBy: actor, status: "active", schemaVersion: 1 })

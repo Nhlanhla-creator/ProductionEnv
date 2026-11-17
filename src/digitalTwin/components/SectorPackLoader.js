@@ -51,6 +51,11 @@ const PACK_META = {
     description: "Building, civil, roads, MEP and specialist subcontracting. Includes CIDB/SACPCMP compliance hints and earthworks KPI pack.",
     accent: "#b45309",
   },
+  agriculture: {
+    displayName: "Agriculture",
+    description: "Crop and livestock production, harvesting, post-harvest handling and distribution.",
+    accent: "#166534",
+  },
   manufacturing: {
     displayName: "Manufacturing & processing",
     description: "Discrete, batch, continuous, foundry and packaging. Adds OEE, yield and throughput KPI packs.",
@@ -58,7 +63,7 @@ const PACK_META = {
   },
 }
 
-export default function SectorPackLoader({ tenantId, onBack }) {
+export default function SectorPackLoader({ tenantId, onBack, selectedKey, onPackSelect, onActivationPending }) {
   const [packs, setPacks] = useState([])
   const [activeKeys, setActiveKeys] = useState(new Set())
   const [loading, setLoading] = useState(true)
@@ -89,6 +94,7 @@ export default function SectorPackLoader({ tenantId, onBack }) {
 
   const activate = async (packKey) => {
     setBusyKey(packKey); setError(null)
+    onActivationPending?.(true)
     try {
       const pack = getPack(packKey)
       if (!pack) throw new Error(`Unknown pack: ${packKey}`)
@@ -102,9 +108,13 @@ export default function SectorPackLoader({ tenantId, onBack }) {
         deactivatedBy: null,
       }, { merge: true })
       setActiveKeys((prev) => new Set([...prev, packKey]))
+      onPackSelect?.(packKey)
     } catch (err) {
       setError(err.message)
-    } finally { setBusyKey(null) }
+    } finally {
+      setBusyKey(null)
+      onActivationPending?.(false)
+    }
   }
 
   const deactivate = async (packKey) => {
@@ -130,14 +140,14 @@ export default function SectorPackLoader({ tenantId, onBack }) {
     <div>
       {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back</button>}
 
-      <div style={{ marginBottom: "18px" }}>
+      {!onPackSelect && <div style={{ marginBottom: "18px" }}>
         <h2 style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 700, color: T.accent, letterSpacing: "-0.3px" }}>
           Sector packs
         </h2>
         <p style={{ margin: 0, fontSize: "13.5px", color: T.muted }}>
           A pack extends your tenant with sectors, service and activity taxonomies, equipment classes, compliance obligations and KPI applicability. Loading a pack never modifies the core model.
         </p>
-      </div>
+      </div>}
 
       {error && (
         <div style={{ padding: "12px 14px", background: T.redBg, border: `1px solid ${T.red}33`, borderRadius: "10px",
@@ -151,8 +161,9 @@ export default function SectorPackLoader({ tenantId, onBack }) {
       ) : (
         <div style={{ display: "grid", gap: "14px" }}>
           {packs.map((pack) => {
-            const meta = PACK_META[pack.key] || { displayName: pack.key, description: "", accent: T.accent }
+            const meta = PACK_META[pack.key] || { displayName: pack.sector.name, description: "", accent: T.accent }
             const active = activeKeys.has(pack.key)
+            const selected = !!onPackSelect && selectedKey === pack.key
             const fullPack = getPack(pack.key)
             const stats = computePackStats(fullPack)
 
@@ -163,10 +174,10 @@ export default function SectorPackLoader({ tenantId, onBack }) {
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
                       <Layers size={18} color={meta.accent} />
                       <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: T.accent }}>{meta.displayName}</h3>
-                      {active && (
+                      {(active || selected) && (
                         <span style={{ padding: "3px 10px", borderRadius: "999px", background: T.greenBg, color: T.green,
                           fontSize: "11px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                          <Check size={10} /> Active
+                          <Check size={10} /> {selected ? "Selected for setup" : "Active"}
                         </span>
                       )}
                     </div>
@@ -183,13 +194,17 @@ export default function SectorPackLoader({ tenantId, onBack }) {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    {active ? (
-                      <button onClick={() => deactivate(pack.key)} disabled={busyKey === pack.key}
+                    {active && onPackSelect ? (
+                      <button type="button" onClick={() => onPackSelect(pack.key)} disabled={selected || !!busyKey} style={btnGhost}>
+                        {selected ? "Selected" : "Use this pack"}
+                      </button>
+                    ) : active ? (
+                      <button type="button" onClick={() => deactivate(pack.key)} disabled={!!busyKey}
                         style={{ ...btnGhost, opacity: busyKey === pack.key ? 0.6 : 1 }}>
                         Deactivate
                       </button>
                     ) : (
-                      <button onClick={() => activate(pack.key)} disabled={busyKey === pack.key}
+                      <button type="button" onClick={() => activate(pack.key)} disabled={!!busyKey}
                         style={{ ...btnPrimary, opacity: busyKey === pack.key ? 0.6 : 1 }}>
                         {busyKey === pack.key ? "Activating…" : "Activate pack"}
                       </button>
@@ -213,6 +228,14 @@ export default function SectorPackLoader({ tenantId, onBack }) {
               </div>
             )
           })}
+          {onPackSelect && <div style={{ ...cardS, borderLeft: `4px solid ${T.lineStrong}` }}>
+            <div className="dt-panel-head" style={{ marginBottom: 0 }}>
+              <div><h3>Other</h3><p className="dt-muted">Enter your sector and add your own operating structure.</p></div>
+              <button type="button" style={btnGhost} disabled={selectedKey === "other" || !!busyKey} onClick={() => onPackSelect("other")}>
+                {selectedKey === "other" ? "Selected" : "Select Other"}
+              </button>
+            </div>
+          </div>}
         </div>
       )}
 
@@ -232,7 +255,9 @@ export default function SectorPackLoader({ tenantId, onBack }) {
 const computePackStats = (pack) => {
   if (!pack) return { valueChains: 0, services: 0, activities: 0, equipmentFamilies: 0, kpiPacks: 0 }
   const vcs = pack.valueChain || []
-  let services = 0, activities = 0, equipmentFamilies = 0
+  let services = pack.services?.length || 0
+  let activities = (pack.services || []).reduce((sum, service) => sum + (service.activities?.length || 0), 0)
+  let equipmentFamilies = 0
   vcs.forEach((vc) => {
     services += (vc.services || []).length
     activities += (vc.services || []).reduce((sum, s) => sum + (s.activities?.length || 0), 0)

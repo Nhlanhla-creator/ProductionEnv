@@ -693,7 +693,6 @@ export const smeMenuItems = [
         subItems: [
           { id: "operations-setup-guide", label: "Operating structure", icon: <Rocket size={16} />, route: "/digital-twin/setup/guide" },
           { id: "operations-asset-setup", label: "Asset Setup", icon: <Truck size={16} />, route: "/digital-twin/setup/asset-setup" },
-          { id: "operations-equipment-groups", label: "Equipment Groups", icon: <Truck size={16} />, route: "/digital-twin/setup/groups" },
           { id: "operations-master-codes", label: "Master Codes", icon: <Settings size={16} />, route: "/digital-twin/setup/master-codes" },
           { id: "operations-shift-setup", label: "Team Setup", icon: <Calendar size={16} />, route: "/digital-twin/setup/shifts" },
           { id: "operations-imports", label: "Data imports", icon: <Upload size={16} />, route: "/digital-twin/setup/imports" },

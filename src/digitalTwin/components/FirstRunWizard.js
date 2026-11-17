@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { listPacks } from "../services/taxonomyService"
 import { saveOnboardingState } from "../services/onboardingState"
 import { loadOperatingStructure, saveOperatingStructure } from "../services/operatingStructureService"
 import { changeWorkSelection, EMPTY_STRUCTURE, STRUCTURE_STEPS, structureOptions } from "../models/operatingStructure"
+import SectorPackLoader from "./SectorPackLoader"
 import StructureMultiSelect from "./StructureMultiSelect"
 import TwinFlowDiagram from "./TwinFlowDiagram"
 
@@ -15,8 +16,12 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
   const [diagram, setDiagram] = useState(null)
   const [tab, setTab] = useState("equipment")
   const [busy, setBusy] = useState(false)
+  const [packBusy, setPackBusy] = useState(false)
   const [error, setError] = useState("")
   const [status, setStatus] = useState("")
+  const [draftStorageError, setDraftStorageError] = useState(false)
+  const draftKey = `digitalTwin.operatingDiagramDraft:${tenantId}`
+  const activeSave = useRef(false)
 
   useEffect(() => {
     let active = true
@@ -25,12 +30,38 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
       const draft = data.state.structureDraft
       const legacyPack = listPacks().some(({ key }) => key === data.state.sectorPack) ? data.state.sectorPack : ""
       setForm({ ...EMPTY_STRUCTURE, sectorPack: legacyPack, ...draft })
-      setStep(draft ? Math.min(data.state.currentStep, STRUCTURE_STEPS.length - 1) : 0)
-      setDiagram(data.diagram)
+      const savedStep = draft ? Math.min(data.state.currentStep, STRUCTURE_STEPS.length - 1) : 0
+      let localDraft = null
+      try {
+        const stored = JSON.parse(window.localStorage.getItem(draftKey) || "null")
+        if (stored?.revision === (data.diagram.revision ?? null) &&
+            Array.isArray(stored.diagram?.nodes) && Array.isArray(stored.diagram?.relations)) {
+          const draftRoot = stored.diagram.nodes.find((node) => node._root)
+          const savedRoot = data.diagram.nodes.find((node) => node._root)
+          if (draftRoot && savedRoot) {
+            const rootId = data.company || data.diagram.revision ? savedRoot.id : draftRoot.id
+            const replaceRoot = (id) => id === draftRoot.id ? rootId : id
+            const latestNodes = new Map(data.diagram.nodes.map((node) => [node.id, node]))
+            localDraft = {
+              nodes: stored.diagram.nodes.map((node) => {
+                if (node._root) return { ...node, id: rootId, name: savedRoot.name }
+                const latest = latestNodes.get(node.id)
+                return latest && node.name === stored.assetNames?.[node.id] ? { ...node, name: latest.name } : node
+              }),
+              relations: stored.diagram.relations.map((edge) => ({ ...edge, fromId: replaceRoot(edge.fromId), toId: replaceRoot(edge.toId) })),
+            }
+          }
+        }
+      } catch {
+        setDraftStorageError(true)
+      }
+      setStep(savedStep)
+      setDiagram(localDraft || data.diagram)
+      if (localDraft) setStatus("Diagram draft restored from this browser.")
       setLoaded(data)
     }).catch((failure) => { if (active) setError(failure.message) })
     return () => { active = false }
-  }, [tenantId])
+  }, [tenantId, draftKey])
 
   const options = structureOptions(form.sectorPack, form.valueChains, form.activities)
   const sectorReady = !!form.sectorPack && (form.sectorPack !== "other" || !!form.sectorName.trim())
@@ -50,12 +81,41 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
       setBusy(false)
     }
   }
+  const changeDiagram = (next) => {
+    setDiagram(next)
+    try {
+      window.localStorage.setItem(draftKey, JSON.stringify({
+        revision: loaded.diagram.revision ?? null,
+        assetNames: Object.fromEntries(loaded.diagram.nodes.filter((node) => node.nodeType === "asset")
+          .map(({ id, name }) => [id, name])),
+        diagram: next,
+      }))
+      setDraftStorageError(false)
+      setStatus("Draft saved in this browser.")
+    } catch {
+      setDraftStorageError(true)
+      setStatus("")
+    }
+  }
+
   const save = async () => {
+    if (activeSave.current) return
+    activeSave.current = true
     setBusy(true)
     setError("")
     setStatus("")
     try {
       await saveOperatingStructure(tenantId, form, diagram, loaded)
+      try {
+        window.localStorage.removeItem(draftKey)
+      } catch {
+        // The committed revision prevents an old draft from being restored.
+      }
+      setDraftStorageError(false)
+      if (onComplete) {
+        onComplete()
+        return
+      }
       const updated = await loadOperatingStructure(tenantId)
       setLoaded(updated)
       setDiagram(updated.diagram)
@@ -63,6 +123,7 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
     } catch (failure) {
       setError(failure.message)
     } finally {
+      activeSave.current = false
       setBusy(false)
     }
   }
@@ -94,16 +155,9 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
     {status && <div role="status" className="dt-notice dt-notice-success">{status}</div>}
     <fieldset className="dt-panel" disabled={busy}>
       {step === 0 && <>
-        <label className="dt-field"><span>Sector pack</span>
-          <select value={form.sectorPack} onChange={(event) => {
-            const sectorPack = event.target.value
-            setForm({ ...EMPTY_STRUCTURE, sectorPack })
-          }}>
-            <option value="">Select a sector</option>
-            {listPacks().map(({ key, sector }) => <option key={key} value={key}>{sector.name}</option>)}
-            <option value="other">Other</option>
-          </select>
-        </label>
+        <SectorPackLoader tenantId={tenantId} selectedKey={form.sectorPack} onActivationPending={setPackBusy}
+          onPackSelect={(sectorPack) => setForm((current) =>
+            current.sectorPack === sectorPack ? current : { ...EMPTY_STRUCTURE, sectorPack })} />
         {form.sectorPack === "other" && <label className="dt-field"><span>Specify your sector</span>
           <input maxLength={120} value={form.sectorName} onChange={(event) => setForm({ ...form, sectorName: event.target.value })} />
         </label>}
@@ -127,15 +181,20 @@ export default function FirstRunWizard({ tenantId, onComplete, onCancel }) {
           </>}
         </div>
       </>}
-      {step === 3 && <TwinFlowDiagram {...diagram} onChange={(value) => { setDiagram(value); setStatus("") }}
-        choices={graphChoices} roster={loaded.roster} peopleRoles={{ technical: form.technical, nonTechnical: form.nonTechnical }} />}
+      {step === 3 && <>
+        <p className="dt-muted">Save operating structure to publish your diagram and add its equipment to the Asset Register.</p>
+        {draftStorageError && <p role="status" className="dt-notice">Draft storage is unavailable in this browser. Save operating structure before leaving.</p>}
+        <TwinFlowDiagram {...diagram} onChange={changeDiagram}
+          choices={graphChoices} roster={loaded.roster} peopleRoles={{ technical: form.technical, nonTechnical: form.nonTechnical }} />
+      </>}
     </fieldset>
     <div className="dt-actions dt-structure-footer">
-      <button type="button" className="dt-button" disabled={busy} onClick={() => step ? move(step - 1) : onCancel?.()}>Back</button>
+      <button type="button" className="dt-button" disabled={busy || packBusy} onClick={() => step ? move(step - 1) : onCancel?.()}>
+        {step === 3 ? "Edit asset structure" : "Back"}
+      </button>
       <div className="dt-actions">
-        {status && onComplete && <button type="button" className="dt-button" onClick={onComplete}>Finish</button>}
         {step < 3
-          ? <button type="button" className="dt-button dt-button-primary" disabled={busy || !sectorReady} onClick={() => move(step + 1)}>Continue</button>
+          ? <button type="button" className="dt-button dt-button-primary" disabled={busy || packBusy || !sectorReady} onClick={() => move(step + 1)}>Continue</button>
           : <button type="button" className="dt-button dt-button-primary" disabled={busy || !sectorReady} onClick={save}>{busy ? "Saving…" : "Save operating structure"}</button>}
       </div>
     </div>
