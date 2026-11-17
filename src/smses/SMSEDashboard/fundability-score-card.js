@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ChevronDown, AlertCircle, DollarSign, RefreshCw } from "lucide-react";
 import { db, auth } from "../../firebaseConfig";
-import { doc, onSnapshot, updateDoc, setDoc, getDoc, deleteField } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, getDoc, deleteField, writeBatch } from "firebase/firestore";
 import { logAnalysisFailure } from "./analysis-failure-log";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { useFirebaseFunctions } from "./hooks";
@@ -259,6 +259,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
   const [selectedAppId, setSelectedAppId] = useState(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationError, setEvaluationError] = useState("");
+  const [lastValidScore, setLastValidScore] = useState(null);
 
   const [businessPlanAnalysis, setBusinessPlanAnalysis] = useState(null);
   const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null);
@@ -284,6 +285,7 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
   const profileDataRef = useRef(profileData);
   const runAiEvaluationRef = useRef(null);
   const triggerTried = useRef(false);
+  const pendingTriggerApplicationId = useRef(null);
 
   // Live copies for code that runs outside a render (the trigger listener and
   // the AI run), so they never score against stale state.
@@ -524,12 +526,14 @@ export function FundabilityScoreCard({ styles = {}, profileData, onScoreUpdate, 
     [results, selectedAppId]
   );
   const a = selected?.assessment || null;
-  const fundabilityScore = a?.totalScore ?? 0;
+  const fundabilityScore = Number.isFinite(a?.totalScore) ? a.totalScore : (lastValidScore ?? 0);
   const currentSnapshotSignature = a ? applicationSnapshot(a).signature : null;
 
   useEffect(() => {
-    if (a && onScoreUpdate) onScoreUpdate(a.totalScore);
-  }, [a?.totalScore]);
+    if (!Number.isFinite(a?.totalScore)) return;
+    setLastValidScore(a.totalScore);
+    onScoreUpdate?.(a.totalScore);
+  }, [a?.totalScore, onScoreUpdate]);
 
   // The narrative shown is the one written for THIS application. A narrative written
   // for another application would describe the wrong instrument, so none is shown.
@@ -859,7 +863,6 @@ ${esgOutputFormat}
         ...sections.map((section) => section.title),
         ...impactRows.map((row) => row.label),
         "Governance Strength",
-        "Overall Assessment",
       ];
       const parsedReport = parseAnalysisByElement(content);
       const missingSections = [...new Set(expectedLabels)].filter(
@@ -945,8 +948,14 @@ ${esgOutputFormat}
     if (!userId || !content) return;
     const iso = new Date().toISOString();
     const meta = metaFor(target);
+    const clearPendingTrigger =
+      auto ||
+      (triggerTried.current &&
+        (pendingTriggerApplicationId.current == null ||
+          pendingTriggerApplicationId.current === (target?.id ?? null)));
 
-    await setDoc(
+    const batch = writeBatch(db);
+    batch.set(
       doc(db, "aiFundabilityEvaluations", userId),
       {
         result: content, ...meta, timestamp: new Date(),
@@ -956,7 +965,7 @@ ${esgOutputFormat}
       { merge: true }
     );
     if (target?.app) {
-      await setDoc(
+      batch.set(
         doc(db, "fundingApplicationsV2", target.id),
         {
           fundabilityNarrative: {
@@ -968,6 +977,15 @@ ${esgOutputFormat}
         { merge: true }
       );
     }
+    if (clearPendingTrigger) {
+      batch.update(
+        doc(db, "universalProfiles", userId),
+        { triggerFundabilityEvaluation: false, "analysisFailures.fundability": deleteField() }
+      );
+    }
+    await batch.commit();
+    if (clearPendingTrigger) pendingTriggerApplicationId.current = null;
+
     setLocalNarratives((prev) => ({
       ...prev,
       [target?.id || "profile"]: { result: content, timestamp: iso, snapshotSignature: meta.snapshotSignature },
@@ -1004,24 +1022,26 @@ ${esgOutputFormat}
     const unsubscribe = onSnapshot(docRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+         if (data.triggerFundabilityEvaluation !== true) {
+           triggerTried.current = false;
+           pendingTriggerApplicationId.current = null;
+         }
            // One attempt per mount: the failure log writes to this same doc and
        // would re-fire this listener. A failed run leaves the trigger set, so
         // the next page open tries again.
         if (data.triggerFundabilityEvaluation === true && !isEvaluatingRef.current && !isSavingEvaluation.current && !triggerTried.current) {
           triggerTried.current = true;
+           pendingTriggerApplicationId.current = data.fundabilityEvaluationApplicationId || null;
           isSavingEvaluation.current = true;
-          let ok = false;
           try {
             const out = await runAiEvaluationRef.current(data.fundabilityEvaluationApplicationId || null);
             if (out?.content) {
               await saveNarrativeRef.current(out.content, out.target, { auto: true });
-              ok = true;
             } // else: runAiEvaluation already logged why
           } catch (error) {
            setEvaluationError(`Auto evaluation failed: ${error.message}`);
             await logAnalysisFailure(db, userId, "fundability", error, { stage: "save" });
           } finally {
-            if (ok) await updateDoc(docRef, { triggerFundabilityEvaluation: false, "analysisFailures.fundability": deleteField() });
             isSavingEvaluation.current = false;
           }
           return;

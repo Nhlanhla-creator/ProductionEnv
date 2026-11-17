@@ -286,6 +286,10 @@ export default function UniversalProfile() {
       ethicsTrainingFrequency: "", lastEthicsTrainingDate: "",
       strategicClarity: {}, riskManagement: {}, transparencyReporting: {},
       adverseListings: "", adverseListingsDetails: "", courtNotices: "", courtNoticesDetails: "",
+      exposureType: "", complianceRequired: "", permitsInPlace: "", incidents: "", controls: "",
+      employmentPractices: "", healthSafety: "", fairTreatment: "", skillsDevelopment: "",
+      supplyChain: "", socialIncidents: "", beneficiarySafeguarding: "",
+      complaintsMechanism: "", volunteerConduct: "",
     },
     productsServices: {
       offeringType: "", offerings: [], targetMarket: "", keyClients: [], customerTypes: [],

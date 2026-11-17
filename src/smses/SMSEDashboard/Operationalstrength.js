@@ -714,6 +714,7 @@ export function OperationalStrengthScoreCard({
     const unsubscribe = onSnapshot(profileRef, async (snap) => {
       if (snap.exists()) {
         const data = snap.data();
+        if (data.triggerOperationalEvaluation !== true) triggerTried.current = false;
         // Shares the Leadership & Governance trigger for now — one flag fires
         // the evaluations together. Give this its own flag when that exists.
         // One attempt per mount (the failure log writes to this doc and would

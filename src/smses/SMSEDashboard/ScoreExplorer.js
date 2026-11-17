@@ -539,6 +539,9 @@ function ElementRow({ element, fmtPts, onOpen, openPop, setOpenPop }) {
 
   const preview = (tab) => {
     if (element.excluded) return <em>Excluded at this tier — it carries no weight and costs nothing.</em>;
+    const imps = element.improvements || [];
+    const docImps = element.findings?.improvements || [];
+    const actions = actionLines(element.analysis);
     if (tab === "breakdown") {
       const items = element.breakdown || [];
       const counted = items.filter((i) => i.state === "counted").length;
@@ -592,9 +595,6 @@ function ElementRow({ element, fmtPts, onOpen, openPop, setOpenPop }) {
         </>
       );
     }
-    const imps = element.improvements || [];
-    const docImps = element.findings?.improvements || [];
-    const actions = actionLines(element.analysis);
     if (!imps.length && !docImps.length && !actions.length && !element.qualitativeAction) {
       return element.extraImprovements ? (
         <em>Open the full view — this element's actions are listed there.</em>

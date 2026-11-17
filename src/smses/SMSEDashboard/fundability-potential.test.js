@@ -20,6 +20,8 @@ describe("Environmental and Social Strength scoring", () => {
       percent: 100,
       evidence: "no; permits Not answered",
     })
+    expect(result.breakdown.reduce((total, row) => total + row.weight, 0)).toBeCloseTo(100)
+    expect(result.breakdown.every((row) => row.weight <= 100)).toBe(true)
   })
 
   test("scores missing permits as zero when compliance is required", () => {
@@ -53,6 +55,7 @@ describe("Environmental and Social Strength scoring", () => {
 
     expect(result.percent).toBe(17)
     expect(result.breakdown.find((row) => row.key === "socialIncidents").percent).toBe(100)
+    expect(result.breakdown.reduce((total, row) => total + row.weight, 0)).toBeCloseTo(100)
   })
 
   test("does not count environmental impact text as social impact evidence", () => {
@@ -85,6 +88,31 @@ describe("Environmental and Social Strength scoring", () => {
       actionable: true,
     })
     expect(result.breakdown.every((row) => row.percent === 0)).toBe(true)
+    expect(result.breakdown.reduce((total, row) => total + row.weight, 0)).toBeCloseTo(100)
+  })
+
+  test("normalizes Environmental and Social row weights across active source groups", () => {
+    const environmental = scoreEnvironmentalStrength({
+      governance: {
+        exposureType: "none",
+        complianceRequired: "no",
+        incidents: "none",
+        controls: "formal",
+      },
+      socialImpact: {
+        environmentalImpact: "Solar energy reduces emissions.",
+        sdgAlignment: "SDG 7 and SDG 13",
+      },
+    })
+    const social = scoreSocialStrength({
+      governance: { employmentPractices: "yes" },
+      socialImpact: { jobsToCreate: 10, localEmployeesHired: 5 },
+    })
+
+    for (const result of [environmental, social]) {
+      expect(result.breakdown.reduce((total, row) => total + row.weight, 0)).toBeCloseTo(100)
+      expect(result.breakdown.every((row) => row.weight <= 100)).toBe(true)
+    }
   })
 
   test("routes missing social evidence to the application section or its true profile field", () => {
@@ -101,6 +129,57 @@ describe("Environmental and Social Strength scoring", () => {
       section: "Governance",
       field: "employmentPractices",
       actionable: true,
+    })
+  })
+
+  test("includes saved Governance environment and social answers in the detailed breakdown", () => {
+    const governance = {
+      exposureType: "indirect",
+      complianceRequired: "yes",
+      permitsInPlace: "partial",
+      incidents: "minor",
+      controls: "basic",
+      employmentPractices: "yes",
+      healthSafety: "yes",
+      fairTreatment: "no",
+      skillsDevelopment: "yes",
+      supplyChain: "no",
+      socialIncidents: "yes",
+      beneficiarySafeguarding: "partial",
+      complaintsMechanism: "yes",
+      volunteerConduct: "no",
+    }
+    const environmental = scoreEnvironmentalStrength({ governance })
+    const social = scoreSocialStrength({ governance })
+
+    expect(environmental.breakdown.map((row) => row.key)).toEqual(expect.arrayContaining([
+      "environmentalExposure",
+      "environmentalCompliance",
+      "environmentalIncidents",
+      "environmentalControls",
+    ]))
+    expect(environmental.breakdown.find((row) => row.key === "environmentalCompliance")).toMatchObject({
+      evidence: "yes; permits partial",
+      percent: 50,
+    })
+    expect(social.breakdown.map((row) => row.key)).toEqual(expect.arrayContaining([
+      "employmentPractices",
+      "healthSafety",
+      "fairTreatment",
+      "skillsDevelopment",
+      "supplyChain",
+      "socialIncidents",
+      "beneficiarySafeguarding",
+      "complaintsMechanism",
+      "volunteerConduct",
+    ]))
+    expect(social.breakdown.find((row) => row.key === "beneficiarySafeguarding")).toMatchObject({
+      evidence: "partial",
+      percent: 50,
+    })
+    expect(social.breakdown.find((row) => row.key === "socialIncidents")).toMatchObject({
+      evidence: "yes",
+      percent: 0,
     })
   })
 })

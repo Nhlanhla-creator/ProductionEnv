@@ -623,6 +623,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
       if (docSnap.exists()) {
         const data = docSnap.data()
         const needsRun = data[triggerFlag] === true
+        if (!needsRun) triggerTried.current = false
         // One attempt per mount: the failure log below writes to this same doc,
         // which re-fires this listener. A failed run leaves the trigger set, so
         // the next page open tries again.

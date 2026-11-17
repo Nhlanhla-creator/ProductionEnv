@@ -1071,9 +1071,19 @@ const handleFileUpload = async (docLabel, file) => {
 
     const fileName = `${documentId}.${fileExtension}`;
     const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
+    
+console.info("Profile document upload", {
+  projectId: storage.app.options.projectId,
+  bucket: storageRef.bucket,
+  path: storageRef.fullPath,
+  uid: getAuth(storage.app).currentUser?.uid ?? null,
+});
 
-    await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(storageRef);
+await uploadBytes(storageRef, file);
+console.info("File uploaded successfully");
+
+const downloadURL = await getDownloadURL(storageRef);
+console.info("Download URL retrieved successfully");
 
     const validationResult = await validateDocumentWithAI(docLabel, file, registeredName, downloadURL);
 

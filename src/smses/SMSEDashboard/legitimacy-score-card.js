@@ -289,6 +289,9 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     const profileRef = doc(db, "universalProfiles", userId)
     const aiEvalRef = doc(db, "aiLegitimacyEvaluation", userId)
     const unsub = onSnapshot(profileRef, async (snap) => {
+      if (snap.exists() && snap.data().triggerLegitimacyEvaluation !== true) {
+        triggerTried.current = false
+      }
       // One attempt per mount (the failure log writes to this doc and would
       // re-fire this listener). A failed run leaves the trigger set, so the
       // next page open tries again.

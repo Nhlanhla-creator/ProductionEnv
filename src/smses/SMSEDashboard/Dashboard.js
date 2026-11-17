@@ -11,7 +11,7 @@ import { GovernanceLeadershipScoreCard } from "./governance-leadership-score-car
 import { OperationalStrengthScoreCard } from "./Operationalstrength"
 import { CustomerReviewsCard } from "./customer-reviews-card"
 import ShopToolsPage from "../../smses/MyGrowthTools/shop"
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, onSnapshot, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { resolveProfileContext } from "../../utils/profile-context";
 import { X, ChevronRight, Info, Smile, Star, ShieldCheck, ChevronDown, ChevronUp, FileText, TrendingUp, AlertCircle, CheckCircle, Download, Calendar, Bus, ArrowLeft } from 'lucide-react'
@@ -84,18 +84,21 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
       setError(null);
 
       try {
+        const existingSummary = await loadSummaryFromFirebase(userId);
+        if (existingSummary?.reportData) {
+          setReportData(existingSummary.reportData);
+          setTopPriorities(existingSummary.topPriorities || []);
+          setImprovementSummary(existingSummary.improvementSummary || "");
+        }
+
         const shouldTriggerNew = await checkAnyEvaluationTrigger(userId);
 
         if (shouldTriggerNew) {
           console.log("Trigger detected → generating new evaluation");
           setIsGeneratingNew(true);
           await generateNewEvaluation(userId);
-          await resetTrigger(userId);
-          setIsGeneratingNew(false);
           return;
         }
-
-        const existingSummary = await loadSummaryFromFirebase(userId);
 
         if (existingSummary && existingSummary.reportData) {
           const summaryIsFallback = isFallbackSummary(existingSummary.improvementSummary);
@@ -180,10 +183,11 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         ...summaryData,
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
-      });
+      }, { merge: true });
       console.log("Summary saved to Firebase");
     } catch (error) {
       console.error("saveSummaryToFirebase error:", error);
+      throw error;
     }
   };
 
@@ -206,16 +210,6 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     } catch (error) {
       console.error("checkAnyEvaluationTrigger error:", error);
       return false;
-    }
-  };
-
-  const resetTrigger = async (userId) => {
-    try {
-      const profileRef = doc(db, "universalProfiles", userId);
-      const resetPayload = Object.fromEntries(ALL_TRIGGER_FLAGS.map((flag) => [flag, false]));
-      await setDoc(profileRef, resetPayload, { merge: true });
-    } catch (error) {
-      console.error("resetTrigger error:", error);
     }
   };
 
@@ -524,8 +518,6 @@ if (bigEvalSnap.exists()) {
         });
       }
 
-      setReportData(newReportData);
-
       const hasAnyData = Object.values(availableData).some((v) => v);
       if (hasAnyData) {
         await generateAIInsights(newReportData, userId);
@@ -560,15 +552,9 @@ if (bigEvalSnap.exists()) {
     const basicSummary =
       "### Complete Your Profile\n- Fill out all business profile sections\n- Upload required documents\n- Provide financial information\n\n### Next Steps\n- Complete document upload for compliance\n- Submit leadership structure for review\n- Ensure all compliance requirements are met";
 
-    setTopPriorities(fallbackPriorities);
-    setImprovementSummary(basicSummary);
-
-    await saveSummaryToFirebase(userId, {
-      reportData,
-      topPriorities: fallbackPriorities,
-      improvementSummary: basicSummary,
-      userId,
-    });
+    setReportData((previous) => previous || reportData);
+    setTopPriorities((previous) => previous.length ? previous : fallbackPriorities);
+    setImprovementSummary((previous) => previous || basicSummary);
   };
 
   const generateAIInsights = async (reportData, userId) => {
@@ -661,8 +647,6 @@ Respond only with valid JSON.
         newTopPriorities = generateIntelligentFallback(reportData);
       }
 
-      setTopPriorities(newTopPriorities);
-
       const summaryPrompt = `
 You are an expert business analyst. Summarize key improvement areas grouped under each heading below.
 
@@ -699,7 +683,9 @@ Keep it concise, professional, and actionable.
       const summaryResponse = await sendMessageToChatGPT(
         summaryPrompt + "\n\n" + combinedText
       );
-      setImprovementSummary(summaryResponse);
+      if (!summaryResponse.trim()) {
+        throw new Error("The summary service returned an empty summary.");
+      }
 
       await saveSummaryToFirebase(userId, {
         reportData,
@@ -707,22 +693,12 @@ Keep it concise, professional, and actionable.
         improvementSummary: summaryResponse,
         userId,
       });
+      setReportData(reportData);
+      setTopPriorities(newTopPriorities);
+      setImprovementSummary(summaryResponse);
     } catch (err) {
       console.error("generateAIInsights error:", err);
-
-      const fallbackPriorities = generateIntelligentFallback(reportData);
-      const fallbackSummary =
-        "### Evaluation Summary\n- Complete all profile sections for a detailed analysis.\n- Provide financial documentation to improve your fundability score.\n- Strengthen governance and leadership documentation.";
-
-      setTopPriorities(fallbackPriorities);
-      setImprovementSummary(fallbackSummary);
-
-      await saveSummaryToFirebase(userId, {
-        reportData,
-        topPriorities: fallbackPriorities,
-        improvementSummary: fallbackSummary,
-        userId,
-      });
+      throw err;
     } finally {
       setPrioritiesLoading(false);
     }
@@ -939,7 +915,20 @@ Keep it concise, professional, and actionable.
     window.URL.revokeObjectURL(url);
   };
 
-  if (loading) {
+  const retrySummaryGeneration = async () => {
+    if (!userId || isGeneratingNew) return;
+    setError(null);
+    setIsGeneratingNew(true);
+    try {
+      await generateNewEvaluation(userId);
+    } catch (err) {
+      setError(err.message || "Failed to generate a new summary.");
+    } finally {
+      setIsGeneratingNew(false);
+    }
+  };
+
+  if (loading && !reportData) {
     return (
       <div style={{ padding: 20, color: "#5D4037" }}>
         {isGeneratingNew
@@ -949,7 +938,16 @@ Keep it concise, professional, and actionable.
     );
   }
 
-  if (error) return <div style={{ padding: 20, color: "red" }}>Error: {error}</div>;
+  if (error && !reportData) {
+    return (
+      <div style={{ padding: 20, color: "red" }}>
+        Error: {error}
+        <button onClick={retrySummaryGeneration} disabled={isGeneratingNew} style={{ marginLeft: 12 }}>
+          {isGeneratingNew ? "Retrying…" : "Retry summary"}
+        </button>
+      </div>
+    );
+  }
 
   if (!reportData) {
     return (
@@ -987,6 +985,15 @@ Keep it concise, professional, and actionable.
         }}
       >
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "4px", background: "linear-gradient(90deg, #8D6E63, #A1887F, #BCAAA4)" }} />
+
+        {error && (
+          <div role="status" style={{ margin: "14px 0", padding: "10px 12px", borderRadius: "8px", background: "rgba(255,255,255,0.12)", color: "#EFEBE9", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 12 }}>
+            <span>Could not generate a new summary. Showing the last saved version. {error}</span>
+            <button onClick={retrySummaryGeneration} disabled={isGeneratingNew}>
+              {isGeneratingNew ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+        )}
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1132,11 +1139,11 @@ export function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [activeTab, setActiveTab] = useState("bigscore")
 
-  const [complianceScore, setComplianceScore] = useState(0)
-  const [legitimacyScore, setLegitimacyScore] = useState(0)
-  const [leadershipScore, setLeadershipScore] = useState(0)
-  const [operationalScore, setOperationalScore] = useState(0)
-  const [fundabilityScore, setFundabilityScore] = useState(0)
+  const [complianceScore, setComplianceScore] = useState(null)
+  const [legitimacyScore, setLegitimacyScore] = useState(null)
+  const [leadershipScore, setLeadershipScore] = useState(null)
+  const [operationalScore, setOperationalScore] = useState(null)
+  const [fundabilityScore, setFundabilityScore] = useState(null)
 
 const [companyOwnerId, setCompanyOwnerId] = useState(null);
 const [isCompanyMember, setIsCompanyMember] = useState(false);
@@ -1269,34 +1276,31 @@ useEffect(() => {
  useEffect(() => {
   if (!isAuthenticated || !targetUserId) return;
 
-  const fetchProfileData = async () => {
-    try {
-      const userId = targetUserId;
-
-      const docRef = doc(db, "universalProfiles", userId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        setProfileData({ id: userId, formData: docSnap.data() });
-      } else {
-        console.error("No profile found");
-      }
-
-      if (!isBigScoreOnlyView) {
-        const hasSeenDashboardPopup = localStorage.getItem(getUserSpecificKey("hasSeenDashboardPopup")) === "true";
-        if (!hasSeenDashboardPopup) {
-          setShowDashboardPopup(true);
-        }
-      }
-
-      setLoading(false);
-    } catch (err) {
-      console.error("Error fetching profile data:", err);
-      setLoading(false);
+  setLoading(true);
+  const userId = targetUserId;
+  const docRef = doc(db, "universalProfiles", userId);
+  const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists()) {
+      setProfileData({ id: userId, formData: docSnap.data() });
+    } else {
+      setProfileData(null);
+      console.error("No profile found");
     }
-  };
 
-  fetchProfileData();
+    if (!isBigScoreOnlyView) {
+      const hasSeenDashboardPopup = localStorage.getItem(getUserSpecificKey("hasSeenDashboardPopup")) === "true";
+      if (!hasSeenDashboardPopup) {
+        setShowDashboardPopup(true);
+      }
+    }
+
+    setLoading(false);
+  }, (err) => {
+    console.error("Error fetching profile data:", err);
+    setLoading(false);
+  });
+
+  return unsubscribe;
 }, [isAuthenticated, targetUserId, isBigScoreOnlyView]);
 
 

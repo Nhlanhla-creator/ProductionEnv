@@ -261,15 +261,26 @@ export const IMPACT_ROW_META = {
 }
 
 const combineScoreGroups = (groups) => {
+  const distributeWeights = (group, groupWeight) => {
+    const weights = group.weights.map((weight) =>
+      Math.round((groupWeight * weight / 100) * 10) / 10
+    )
+    if (weights.length) {
+      const allocated = weights.slice(0, -1).reduce((total, weight) => total + weight, 0)
+      weights[weights.length - 1] = Math.round((groupWeight - allocated) * 10) / 10
+    }
+    return group.rows.map((row, index) => ({ ...row, weight: weights[index] }))
+  }
+
   const activeGroups = groups.filter((group) => group.available)
   if (!activeGroups.length) {
     const groupWeight = groups.length ? 100 / groups.length : 0
     const breakdown = groups.flatMap((group) =>
-      group.rows.map((row, index) => ({
+      distributeWeights(group, groupWeight).map((row) => ({
         key: row.key,
         label: row.label,
         percent: Math.round(row.score || 0),
-        weight: Math.round(groupWeight * group.weights[index] * 10) / 10,
+        weight: row.weight,
         evidence: row.evidence,
         reason: row.reason,
         available: row.available,
@@ -281,14 +292,14 @@ const combineScoreGroups = (groups) => {
 
   const groupWeight = 100 / activeGroups.length
   const breakdown = activeGroups.flatMap((group) =>
-    group.rows.map((row, index) => ({
+    distributeWeights(group, groupWeight).map((row) => ({
       key: row.key,
       label: row.label,
       percent: Math.round(row.score || 0),
-      weight: Math.round(groupWeight * group.weights[index] * 10) / 10,
+      weight: row.weight,
       evidence: row.evidence,
       reason: row.reason,
-     ...IMPACT_ROW_META[row.key],
+      ...IMPACT_ROW_META[row.key],
     }))
   )
 
