@@ -139,11 +139,14 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
     const { attributes } = node
     if (node.nodeType === "asset" && !previous && attributes.registerId === node.id) {
       const context = ancestorContext(node.id, nodes, edges)
+      const selectedGroup = (form.equipment || []).find(({ id }) => id === attributes.taxonomyId)?.equipmentGroupChoiceId
+      const defaultGroup = groupIds.get(selectedGroup)
+      if (defaultGroup) attributes.defaultEquipmentGroupId = defaultGroup
       const asset = prepareResource(tenantId, {
         name: node.name,
         internalNumber: attributes.internalNumber,
         equipmentTypeId: attributes.taxonomyId || attributes.equipmentType,
-        equipmentGroupId: context.groupId || null,
+        equipmentGroupId: context.groupId || defaultGroup || null,
         siteId: context.siteId || null,
       }, node.id, now)
       if (assetsByNumber.has(asset.internalNumber)) throw new Error(`Asset ID ${asset.internalNumber} is already registered.`)
@@ -177,8 +180,10 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
           // The diagram owns placement of its new assets. Preserve independently edited register fields.
           if (registered) {
             for (const [field, key] of [["equipmentGroupId", "groupId"], ["siteId", "siteId"]]) {
-              if ((registered[field] ?? null) === (oldContext[key] ?? null) &&
-                  (context[key] ?? null) !== (oldContext[key] ?? null)) patch[field] = context[key] ?? null
+              const fallback = key === "groupId" ? attributes.defaultEquipmentGroupId ?? null : null
+              const oldValue = oldContext[key] ?? fallback
+              const newValue = context[key] ?? fallback
+              if ((registered[field] ?? null) === oldValue && newValue !== oldValue) patch[field] = newValue
             }
           }
         }

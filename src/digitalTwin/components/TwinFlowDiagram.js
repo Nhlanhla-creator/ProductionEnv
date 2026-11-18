@@ -6,6 +6,7 @@ import {
   Building2, MapPin, FileText, Wrench, Boxes, Activity,
   Layers, Zap, MousePointerClick,
 } from "lucide-react"
+import { workLabel } from "../models/operatingStructure"
 import { structureId } from "../services/operatingStructureService"
 
 // ── Design tokens ─────────────────────────────────────────────────────────
@@ -28,7 +29,7 @@ const NODE_VISUALS = {
   company:         { icon: Building2, accent: "#4a352f", soft: "#f4efec", label: "Company" },
   site:            { icon: MapPin,    accent: "#0e7490", soft: "#ecfeff", label: "Site" },
   contract:        { icon: FileText,  accent: "#b45309", soft: "#fffbeb", label: "Contract" },
-  service:         { icon: Wrench,    accent: "#166534", soft: "#f0fdf4", label: "Service" },
+  service:         { icon: Wrench,    accent: "#166534", soft: "#f0fdf4", label: "Support Service" },
   activity:        { icon: Activity,  accent: "#6d28d9", soft: "#f5f3ff", label: "Activity" },
   equipment_group: { icon: Boxes,     accent: "#1e40af", soft: "#eff6ff", label: "Equipment group" },
   process_area:    { icon: Layers,    accent: "#0e7490", soft: "#ecfeff", label: "Process area" },
@@ -225,9 +226,16 @@ export default function TwinFlowDiagram({
   const parentId = showAddNode === "root" ? companyId : showAddNode
   const personOptions = [...new Map([...nodes.flatMap((node) => node.attributes?.people || []).filter((person) => person.name), ...roster]
     .map((person) => [person.id, person])).values()]
+  const selectedPeople = [...new Map((nodeById[selectedNode]?.attributes?.people || [])
+    .map((person) => [person.id, person])).values()]
+  const parent = nodeById[parentId]
+  const parentGroupChoice = parent?.nodeType === "equipment_group"
+    ? parent.attributes?.taxonomyId || choices.equipment_group?.find((item) => item.registerId === parent.attributes?.registerId)?.equipmentGroupChoiceId
+    : null
   const nodeOptions = newNodeType === "person"
     ? personOptions.filter((person) => !nodeById[parentId]?.attributes?.people?.some(({ id }) => id === person.id))
     : (choices[newNodeType] || []).filter((choice) =>
+      (newNodeType !== "asset" || !parentGroupChoice || !choice.equipmentGroupChoiceId || choice.equipmentGroupChoiceId === parentGroupChoice) &&
       !nodes.some((node) =>
         (choice.registerId && node.attributes?.registerId === choice.registerId) ||
         (choice.hierarchyId && node.attributes?.hierarchyId === choice.hierarchyId) ||
@@ -250,18 +258,18 @@ export default function TwinFlowDiagram({
 
   const handleAddNode = () => {
     if (!canAdd) return
-    const name = picked?.name || newNodeName.trim()
+    const name = (newAsset && newNodeName.trim()) || picked?.name || newNodeName.trim()
     if (newNodeType === "person") {
       const person = picked || { id: structureId(), name, role: personRole.trim(), category: personCategory }
-      onChange?.({ nodes: nodes.map((node) => node.id === parentId
-        ? { ...node, attributes: { ...node.attributes, people: [...(node.attributes?.people || []), person] } }
-        : node), relations })
+      const people = nodeById[parentId]?.attributes?.people || []
+      if (!people.some(({ id }) => id === person.id)) updatePeople(parentId, [...people, person])
     } else {
       const attributes = {}
       if (picked?.registerId) attributes.registerId = picked.registerId
       else if (picked?.hierarchyId) attributes.hierarchyId = picked.hierarchyId
       else if (picked) attributes.taxonomyId = picked.id
       if (newAsset) {
+        if (picked?.equipmentGroupChoiceId) attributes.equipmentGroupChoiceId = picked.equipmentGroupChoiceId
         attributes.internalNumber = assetNumber.trim()
         if (!picked) attributes.equipmentType = equipmentType.trim()
       }
@@ -422,6 +430,8 @@ export default function TwinFlowDiagram({
             onChange={(event) => setNewNodeName(event.target.value)}
             placeholder={newNodeType === "person" ? "Person’s name" : "Name"} style={miniInput} />}
           {newAsset && choiceId && <>
+            {picked && <input aria-label="Equipment name" value={newNodeName} maxLength={120}
+              onChange={(event) => setNewNodeName(event.target.value)} placeholder={picked.name} style={miniInput} />}
             <input aria-label="Asset ID" value={assetNumber} maxLength={80}
               onChange={(event) => setAssetNumber(event.target.value)} placeholder="Asset ID" style={miniInput} />
             {choiceId === "__other__" && <input aria-label="Equipment type" value={equipmentType}
@@ -574,8 +584,8 @@ export default function TwinFlowDiagram({
                     <div style={{
                       fontSize: "12.5px", fontWeight: 600, color: T.ink,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }} title={node.name}>
-                      {node.name}
+                    }} title={["activity", "service", "value_chain"].includes(node.nodeType) ? workLabel(node.name) : node.name}>
+                      {["activity", "service", "value_chain"].includes(node.nodeType) ? workLabel(node.name) : node.name}
                     </div>
                   </div>
 
@@ -691,24 +701,23 @@ export default function TwinFlowDiagram({
         <button type="button" className="dt-button" onClick={() => setRenaming(null)}>Cancel</button>
       </form>}
 
-      {selectedNode && nodeById[selectedNode]?.attributes?.people?.length > 0 &&
-        <details key={selectedNode} className="dt-panel dt-people-list">
-          <summary>People · {nodeById[selectedNode].name} ({nodeById[selectedNode].attributes.people.length})</summary>
+      {selectedPeople.length > 0 &&
+        <details key={`people:${selectedNode}`} className="dt-panel dt-people-list">
+          <summary>People · {nodeById[selectedNode].name} ({selectedPeople.length})</summary>
           <div className="dt-table-wrap"><table className="dt-table">
             <thead><tr><th>Name</th><th>Role</th><th>Category</th>{!readOnly && <th>Actions</th>}</tr></thead>
-            <tbody>{nodeById[selectedNode].attributes.people.map((person) => {
+            <tbody>{selectedPeople.map((person) => {
               const record = roster.find(({ id }) => id === person.id) || person
               return <tr key={person.id}><td>{record.name || "Person unavailable"}</td><td>{record.role || "—"}</td>
                 <td>{record.category === "technical" ? "Technical" : "Non-technical"}</td>
                 {!readOnly && <td><button type="button" className="dt-button dt-button-small"
-                  onClick={() => updatePeople(selectedNode, nodeById[selectedNode].attributes.people
-                    .filter(({ id }) => id !== person.id))}>Remove from node</button></td>}
+                  onClick={() => updatePeople(selectedNode, selectedPeople.filter(({ id }) => id !== person.id))}>Remove from node</button></td>}
               </tr>
             })}</tbody>
           </table></div>
         </details>}
 
-      {!readOnly && selectedConnections.length > 0 && <details key={selectedNode} className="dt-panel dt-people-list">
+      {!readOnly && selectedConnections.length > 0 && <details key={`connections:${selectedNode}`} className="dt-panel dt-people-list">
         <summary>Connections · {nodeById[selectedNode]?.name}</summary>
         <ul>
           {selectedConnections.map((edge) => {

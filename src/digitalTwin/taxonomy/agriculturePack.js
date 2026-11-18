@@ -4,6 +4,23 @@ export const AGRICULTURE_SECTOR = {
   name: "Agriculture",
 }
 
+const equipmentTypes = {
+  tractors: ["Utility tractor", "Row-crop tractor"],
+  planters: ["Precision planter", "Grain seed drill"],
+  tillage: ["Disc harrow", "Mouldboard plough"],
+  irrigation: ["Centrifugal irrigation pump", "Centre-pivot irrigation system"],
+  sprayers: ["Boom sprayer", "Fertiliser spreader"],
+  feeding: ["Feed mixer wagon", "Automatic feeder"],
+  handling: ["Cattle crush", "Livestock weighing platform"],
+  milking: ["Herringbone milking parlour", "Rotary milking parlour"],
+  harvesters: ["Combine harvester", "Forage harvester"],
+  trailers: ["Grain trailer", "Front-end loader"],
+  sorting: ["Produce grader", "Carton packer"],
+  cold_storage: ["Walk-in cold room", "Blast chiller"],
+  vehicles: ["Refrigerated delivery truck", "Light delivery van"],
+  handling_equipment: ["Forklift", "Pallet jack"],
+}
+
 const stage = (id, name, serviceNames, equipmentNames) => ({
   id: `ag.vc.${id}`,
   code: id,
@@ -18,6 +35,10 @@ const stage = (id, name, serviceNames, equipmentNames) => ({
   })),
   equipmentFamilies: equipmentNames.map(([code, label]) => ({
     id: `ag.eq.${code}`, code, name: label,
+    types: (equipmentTypes[code] || []).map((name) => {
+      const typeCode = name.toLowerCase().replace(/[^a-z0-9]+/g, "_")
+      return { id: `ag.eq.${code}.${typeCode}`, code: typeCode, name }
+    }),
   })),
 })
 

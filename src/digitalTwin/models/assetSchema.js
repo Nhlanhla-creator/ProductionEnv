@@ -72,7 +72,7 @@ export const ASSET_FIELD_GROUPS = Object.freeze({
   },
   metering: {
     label: "Metering",
-    fields: ["hourMeter", "odometer", "cycleMeter", "fuelMeter", "lastMeterReadingDate"],
+    fields: ["hourMeter", "operatingHours", "odometer", "cycleMeter", "fuelMeter", "lastMeterReadingDate"],
   },
   maintenance: {
     label: "Maintenance",
@@ -139,6 +139,7 @@ export const createEmptyResource = (tenantId, overrides = {}) => {
 
     // Metering
     hourMeter: null,
+    operatingHours: null,
     odometer: null,
     cycleMeter: null,
     fuelMeter: null,
@@ -200,6 +201,12 @@ export const validateResource = (resource, { isCreate = false } = {}) => {
   if (resource.resourceKind === RESOURCE_KIND.ASSET) {
     if (isCreate || resource.internalNumber) {
       try { normalAssetNumber(resource.internalNumber); } catch (e) { errors.push({ field: "internalNumber", message: e.message }); }
+    }
+    for (const [field, label] of [["hourMeter", "Machine hours"], ["operatingHours", "Operating hours"]]) {
+      const value = resource[field];
+      if (value != null && value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0)) {
+        errors.push({ field, message: `${label} must be zero or greater.` });
+      }
     }
     if (!resource.equipmentTypeId) {
       errors.push({ field: "equipmentTypeId", message: "Canonical equipment type is required for physical assets." });

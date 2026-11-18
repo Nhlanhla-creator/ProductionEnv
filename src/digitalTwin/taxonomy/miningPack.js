@@ -46,9 +46,24 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.sampling", code: "sampling_and_logging", name: "Sampling and logging" },
     ],
     equipmentFamilies: [
-      { id: "eq.exploration_rigs", code: "exploration_drill_rigs", name: "Exploration drill rigs" },
-      { id: "eq.support_vehicles", code: "support_vehicles", name: "Support vehicles" },
-      { id: "eq.survey_equipment", code: "survey_and_sampling_equipment", name: "Survey and sampling equipment" },
+      { id: "eq.exploration_rigs", code: "exploration_drill_rigs", name: "Exploration drill rigs",
+        types: [
+          { id: "eq.exploration_rigs.diamond_core_rig", code: "diamond_core_rig", name: "Diamond core rig" },
+          { id: "eq.exploration_rigs.reverse_circulation_rig", code: "reverse_circulation_rig", name: "Reverse-circulation rig" },
+        ],
+      },
+      { id: "eq.support_vehicles", code: "support_vehicles", name: "Support vehicles",
+        types: [
+          { id: "eq.support_vehicles.service_truck", code: "service_truck", name: "Service truck" },
+          { id: "eq.support_vehicles.crew_transport_vehicle", code: "crew_transport_vehicle", name: "Crew transport vehicle" },
+        ],
+      },
+      { id: "eq.survey_equipment", code: "survey_and_sampling_equipment", name: "Survey and sampling equipment",
+        types: [
+          { id: "eq.survey_equipment.total_station", code: "total_station", name: "Total station" },
+          { id: "eq.survey_equipment.gnss_rover", code: "gnss_rover", name: "GNSS rover" },
+        ],
+      },
     ],
   },
   {
@@ -61,11 +76,36 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.declines", code: "declines_and_box_cuts", name: "Declines and box cuts" },
     ],
     equipmentFamilies: [
-      { id: "eq.dozers", code: "dozers", name: "Dozers" },
-      { id: "eq.excavators", code: "excavators", name: "Excavators" },
-      { id: "eq.bolters", code: "roof_bolters", name: "Roof bolters" },
-      { id: "eq.jumbos", code: "jumbos", name: "Jumbos" },
-      { id: "eq.graders", code: "graders", name: "Graders" },
+      { id: "eq.dozers", code: "dozers", name: "Dozers",
+        types: [
+          { id: "eq.dozers.crawler_dozer", code: "crawler_dozer", name: "Crawler dozer" },
+          { id: "eq.dozers.wheel_dozer", code: "wheel_dozer", name: "Wheel dozer" },
+        ],
+      },
+      { id: "eq.excavators", code: "excavators", name: "Excavators",
+        types: [
+          { id: "eq.excavators.tracked_excavator", code: "tracked_excavator", name: "Tracked excavator" },
+          { id: "eq.excavators.wheeled_excavator", code: "wheeled_excavator", name: "Wheeled excavator" },
+        ],
+      },
+      { id: "eq.bolters", code: "roof_bolters", name: "Roof bolters",
+        types: [
+          { id: "eq.bolters.single_boom_roof_bolter", code: "single_boom_roof_bolter", name: "Single-boom roof bolter" },
+          { id: "eq.bolters.twin_boom_roof_bolter", code: "twin_boom_roof_bolter", name: "Twin-boom roof bolter" },
+        ],
+      },
+      { id: "eq.jumbos", code: "jumbos", name: "Jumbos",
+        types: [
+          { id: "eq.jumbos.single_boom_jumbo", code: "single_boom_jumbo", name: "Single-boom jumbo" },
+          { id: "eq.jumbos.twin_boom_jumbo", code: "twin_boom_jumbo", name: "Twin-boom jumbo" },
+        ],
+      },
+      { id: "eq.graders", code: "graders", name: "Graders",
+        types: [
+          { id: "eq.graders.articulated_motor_grader", code: "articulated_motor_grader", name: "Articulated motor grader" },
+          { id: "eq.graders.rigid_frame_motor_grader", code: "rigid_frame_motor_grader", name: "Rigid-frame motor grader" },
+        ],
+      },
     ],
   },
   {
@@ -86,10 +126,27 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.raise_boring", code: "raise_boring", name: "Raise boring" },
     ],
     equipmentFamilies: [
-      { id: "eq.rotary_drills", code: "rotary_drills", name: "Rotary blast-hole drills" },
-      { id: "eq.dth_drills", code: "dth_drills", name: "Down-the-hole (DTH) drills" },
-      { id: "eq.tophammer_drills", code: "tophammer_drills", name: "Top-hammer drills" },
-      { id: "eq.ug_drill_rigs", code: "underground_drill_rigs", name: "Underground drill rigs" },
+      { id: "eq.rotary_drills", code: "rotary_drills", name: "Rotary blast-hole drills",
+        types: [
+          { id: "eq.rotary_drills.track_mounted_rotary_drill", code: "track_mounted_rotary_drill", name: "Track-mounted rotary drill" },
+        ],
+      },
+      { id: "eq.dth_drills", code: "dth_drills", name: "Down-the-hole (DTH) drills",
+        types: [
+          { id: "eq.dth_drills.crawler_mounted_dth_drill", code: "crawler_mounted_dth_drill", name: "Crawler-mounted DTH drill" },
+        ],
+      },
+      { id: "eq.tophammer_drills", code: "tophammer_drills", name: "Top-hammer drills",
+        types: [
+          { id: "eq.tophammer_drills.cab_mounted_top_hammer_rig", code: "cab_mounted_top_hammer_rig", name: "Cab-mounted top-hammer rig" },
+        ],
+      },
+      { id: "eq.ug_drill_rigs", code: "underground_drill_rigs", name: "Underground drill rigs",
+        types: [
+          { id: "eq.ug_drill_rigs.underground_production_drill", code: "underground_production_drill", name: "Underground production drill" },
+          { id: "eq.ug_drill_rigs.underground_development_rig", code: "underground_development_rig", name: "Underground development rig" },
+        ],
+      },
     ],
   },
   {
@@ -110,10 +167,28 @@ export const MINING_VALUE_CHAIN = [
       },
     ],
     equipmentFamilies: [
-      { id: "eq.mmu_trucks", code: "mmu_trucks", name: "Mobile manufacturing units (MMU)" },
-      { id: "eq.charging_units", code: "charging_units", name: "Charging units" },
-      { id: "eq.stemming_units", code: "stemming_units", name: "Stemming units" },
-      { id: "eq.monitoring_equipment", code: "blast_monitoring_equipment", name: "Blast monitoring equipment" },
+      { id: "eq.mmu_trucks", code: "mmu_trucks", name: "Mobile manufacturing units (MMU)",
+        types: [
+          { id: "eq.mmu_trucks.truck_mounted_mmu", code: "truck_mounted_mmu", name: "Truck-mounted MMU" },
+        ],
+      },
+      { id: "eq.charging_units", code: "charging_units", name: "Charging units",
+        types: [
+          { id: "eq.charging_units.truck_mounted_charging_unit", code: "truck_mounted_charging_unit", name: "Truck-mounted charging unit" },
+          { id: "eq.charging_units.underground_charging_vehicle", code: "underground_charging_vehicle", name: "Underground charging vehicle" },
+        ],
+      },
+      { id: "eq.stemming_units", code: "stemming_units", name: "Stemming units",
+        types: [
+          { id: "eq.stemming_units.truck_mounted_stemming_unit", code: "truck_mounted_stemming_unit", name: "Truck-mounted stemming unit" },
+        ],
+      },
+      { id: "eq.monitoring_equipment", code: "blast_monitoring_equipment", name: "Blast monitoring equipment",
+        types: [
+          { id: "eq.monitoring_equipment.vibration_monitor", code: "vibration_monitor", name: "Vibration monitor" },
+          { id: "eq.monitoring_equipment.air_overpressure_monitor", code: "air_overpressure_monitor", name: "Air-overpressure monitor" },
+        ],
+      },
     ],
   },
   {
@@ -143,9 +218,23 @@ export const MINING_VALUE_CHAIN = [
       },
     ],
     equipmentFamilies: [
-      { id: "eq.excavators_load", code: "hydraulic_excavators", name: "Hydraulic excavators" },
-      { id: "eq.shovels", code: "electric_rope_shovels", name: "Electric rope shovels" },
-      { id: "eq.loaders", code: "front_end_loaders", name: "Front-end loaders" },
+      { id: "eq.excavators_load", code: "hydraulic_excavators", name: "Hydraulic excavators",
+        types: [
+          { id: "eq.excavators_load.hydraulic_mining_shovel", code: "hydraulic_mining_shovel", name: "Hydraulic mining shovel" },
+          { id: "eq.excavators_load.hydraulic_backhoe_excavator", code: "hydraulic_backhoe_excavator", name: "Hydraulic backhoe excavator" },
+        ],
+      },
+      { id: "eq.shovels", code: "electric_rope_shovels", name: "Electric rope shovels",
+        types: [
+          { id: "eq.shovels.crawler_mounted_electric_rope_shovel", code: "crawler_mounted_electric_rope_shovel", name: "Crawler-mounted electric rope shovel" },
+        ],
+      },
+      { id: "eq.loaders", code: "front_end_loaders", name: "Front-end loaders",
+        types: [
+          { id: "eq.loaders.wheel_loader", code: "wheel_loader", name: "Wheel loader" },
+          { id: "eq.loaders.tracked_loader", code: "tracked_loader", name: "Tracked loader" },
+        ],
+      },
       {
         id: "eq.haul_trucks",
         code: "haul_trucks",
@@ -167,8 +256,17 @@ export const MINING_VALUE_CHAIN = [
           },
         ],
       },
-      { id: "eq.adts", code: "adts", name: "Articulated dump trucks (ADT)" },
-      { id: "eq.lhds", code: "lhds", name: "Load-haul-dump (LHD) machines" },
+      { id: "eq.adts", code: "adts", name: "Articulated dump trucks (ADT)",
+        types: [
+          { id: "eq.adts.three_axle_articulated_dumper", code: "three_axle_articulated_dumper", name: "Three-axle articulated dumper" },
+        ],
+      },
+      { id: "eq.lhds", code: "lhds", name: "Load-haul-dump (LHD) machines",
+        types: [
+          { id: "eq.lhds.diesel_lhd", code: "diesel_lhd", name: "Diesel LHD" },
+          { id: "eq.lhds.battery_electric_lhd", code: "battery_electric_lhd", name: "Battery-electric LHD" },
+        ],
+      },
     ],
   },
   {
@@ -181,9 +279,22 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.continuous_mining", code: "continuous_mining", name: "Continuous mining" },
     ],
     equipmentFamilies: [
-      { id: "eq.continuous_miners", code: "continuous_miners", name: "Continuous miners" },
-      { id: "eq.roadheaders", code: "roadheaders", name: "Roadheaders" },
-      { id: "eq.surface_miners", code: "surface_miners", name: "Surface miners" },
+      { id: "eq.continuous_miners", code: "continuous_miners", name: "Continuous miners",
+        types: [
+          { id: "eq.continuous_miners.track_mounted_continuous_miner", code: "track_mounted_continuous_miner", name: "Track-mounted continuous miner" },
+        ],
+      },
+      { id: "eq.roadheaders", code: "roadheaders", name: "Roadheaders",
+        types: [
+          { id: "eq.roadheaders.transverse_head_roadheader", code: "transverse_head_roadheader", name: "Transverse-head roadheader" },
+          { id: "eq.roadheaders.longitudinal_head_roadheader", code: "longitudinal_head_roadheader", name: "Longitudinal-head roadheader" },
+        ],
+      },
+      { id: "eq.surface_miners", code: "surface_miners", name: "Surface miners",
+        types: [
+          { id: "eq.surface_miners.crawler_surface_miner", code: "crawler_surface_miner", name: "Crawler surface miner" },
+        ],
+      },
     ],
   },
   {
@@ -197,11 +308,34 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.sizing", code: "sizing_and_scalping", name: "Sizing and scalping" },
     ],
     equipmentFamilies: [
-      { id: "eq.jaw_crushers", code: "jaw_crushers", name: "Jaw crushers" },
-      { id: "eq.gyratory_crushers", code: "gyratory_crushers", name: "Gyratory crushers" },
-      { id: "eq.cone_crushers", code: "cone_crushers", name: "Cone crushers" },
-      { id: "eq.impact_crushers", code: "impact_crushers", name: "Impact crushers" },
-      { id: "eq.screens", code: "screens", name: "Screens" },
+      { id: "eq.jaw_crushers", code: "jaw_crushers", name: "Jaw crushers",
+        types: [
+          { id: "eq.jaw_crushers.single_toggle_jaw_crusher", code: "single_toggle_jaw_crusher", name: "Single-toggle jaw crusher" },
+          { id: "eq.jaw_crushers.double_toggle_jaw_crusher", code: "double_toggle_jaw_crusher", name: "Double-toggle jaw crusher" },
+        ],
+      },
+      { id: "eq.gyratory_crushers", code: "gyratory_crushers", name: "Gyratory crushers",
+        types: [
+          { id: "eq.gyratory_crushers.primary_gyratory_crusher", code: "primary_gyratory_crusher", name: "Primary gyratory crusher" },
+        ],
+      },
+      { id: "eq.cone_crushers", code: "cone_crushers", name: "Cone crushers",
+        types: [
+          { id: "eq.cone_crushers.hydraulic_cone_crusher", code: "hydraulic_cone_crusher", name: "Hydraulic cone crusher" },
+        ],
+      },
+      { id: "eq.impact_crushers", code: "impact_crushers", name: "Impact crushers",
+        types: [
+          { id: "eq.impact_crushers.horizontal_shaft_impact_crusher", code: "horizontal_shaft_impact_crusher", name: "Horizontal-shaft impact crusher" },
+          { id: "eq.impact_crushers.vertical_shaft_impact_crusher", code: "vertical_shaft_impact_crusher", name: "Vertical-shaft impact crusher" },
+        ],
+      },
+      { id: "eq.screens", code: "screens", name: "Screens",
+        types: [
+          { id: "eq.screens.vibrating_screen", code: "vibrating_screen", name: "Vibrating screen" },
+          { id: "eq.screens.trommel_screen", code: "trommel_screen", name: "Trommel screen" },
+        ],
+      },
     ],
   },
   {
@@ -214,11 +348,35 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.circulating_load", code: "circulating_load", name: "Circulating load" },
     ],
     equipmentFamilies: [
-      { id: "eq.sag_mills", code: "sag_mills", name: "SAG mills" },
-      { id: "eq.ball_mills", code: "ball_mills", name: "Ball mills" },
-      { id: "eq.rod_mills", code: "rod_mills", name: "Rod mills" },
-      { id: "eq.cyclones", code: "cyclones", name: "Cyclones" },
-      { id: "eq.classifiers", code: "classifiers", name: "Classifiers" },
+      { id: "eq.sag_mills", code: "sag_mills", name: "SAG mills",
+        types: [
+          { id: "eq.sag_mills.gearless_drive_sag_mill", code: "gearless_drive_sag_mill", name: "Gearless-drive SAG mill" },
+          { id: "eq.sag_mills.geared_drive_sag_mill", code: "geared_drive_sag_mill", name: "Geared-drive SAG mill" },
+        ],
+      },
+      { id: "eq.ball_mills", code: "ball_mills", name: "Ball mills",
+        types: [
+          { id: "eq.ball_mills.overflow_ball_mill", code: "overflow_ball_mill", name: "Overflow ball mill" },
+          { id: "eq.ball_mills.grate_discharge_ball_mill", code: "grate_discharge_ball_mill", name: "Grate-discharge ball mill" },
+        ],
+      },
+      { id: "eq.rod_mills", code: "rod_mills", name: "Rod mills",
+        types: [
+          { id: "eq.rod_mills.overflow_rod_mill", code: "overflow_rod_mill", name: "Overflow rod mill" },
+          { id: "eq.rod_mills.end_peripheral_discharge_rod_mill", code: "end_peripheral_discharge_rod_mill", name: "End-peripheral discharge rod mill" },
+        ],
+      },
+      { id: "eq.cyclones", code: "cyclones", name: "Cyclones",
+        types: [
+          { id: "eq.cyclones.classification_hydrocyclone", code: "classification_hydrocyclone", name: "Classification hydrocyclone" },
+        ],
+      },
+      { id: "eq.classifiers", code: "classifiers", name: "Classifiers",
+        types: [
+          { id: "eq.classifiers.spiral_classifier", code: "spiral_classifier", name: "Spiral classifier" },
+          { id: "eq.classifiers.hydraulic_classifier", code: "hydraulic_classifier", name: "Hydraulic classifier" },
+        ],
+      },
     ],
   },
   {
@@ -233,11 +391,35 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.magnetic", code: "magnetic_separation", name: "Magnetic separation" },
     ],
     equipmentFamilies: [
-      { id: "eq.dms_modules", code: "dms_modules", name: "DMS modules" },
-      { id: "eq.flotation_cells", code: "flotation_cells", name: "Flotation cells" },
-      { id: "eq.leach_tanks", code: "leach_tanks", name: "Leach tanks" },
-      { id: "eq.separators", code: "separators", name: "Separators" },
-      { id: "eq.concentrators", code: "concentrators", name: "Concentrators" },
+      { id: "eq.dms_modules", code: "dms_modules", name: "DMS modules",
+        types: [
+          { id: "eq.dms_modules.cyclone_dms_module", code: "cyclone_dms_module", name: "Cyclone DMS module" },
+          { id: "eq.dms_modules.drum_dms_module", code: "drum_dms_module", name: "Drum DMS module" },
+        ],
+      },
+      { id: "eq.flotation_cells", code: "flotation_cells", name: "Flotation cells",
+        types: [
+          { id: "eq.flotation_cells.mechanical_flotation_cell", code: "mechanical_flotation_cell", name: "Mechanical flotation cell" },
+          { id: "eq.flotation_cells.column_flotation_cell", code: "column_flotation_cell", name: "Column flotation cell" },
+        ],
+      },
+      { id: "eq.leach_tanks", code: "leach_tanks", name: "Leach tanks",
+        types: [
+          { id: "eq.leach_tanks.agitated_leach_tank", code: "agitated_leach_tank", name: "Agitated leach tank" },
+        ],
+      },
+      { id: "eq.separators", code: "separators", name: "Separators",
+        types: [
+          { id: "eq.separators.magnetic_separator", code: "magnetic_separator", name: "Magnetic separator" },
+          { id: "eq.separators.gravity_separator", code: "gravity_separator", name: "Gravity separator" },
+        ],
+      },
+      { id: "eq.concentrators", code: "concentrators", name: "Concentrators",
+        types: [
+          { id: "eq.concentrators.spiral_concentrator", code: "spiral_concentrator", name: "Spiral concentrator" },
+          { id: "eq.concentrators.centrifugal_concentrator", code: "centrifugal_concentrator", name: "Centrifugal concentrator" },
+        ],
+      },
     ],
   },
   {
@@ -251,10 +433,30 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.blending", code: "blending", name: "Blending" },
     ],
     equipmentFamilies: [
-      { id: "eq.thickeners", code: "thickeners", name: "Thickeners" },
-      { id: "eq.filters", code: "filters", name: "Filters" },
-      { id: "eq.dryers", code: "dryers", name: "Dryers" },
-      { id: "eq.blenders", code: "blenders", name: "Blenders" },
+      { id: "eq.thickeners", code: "thickeners", name: "Thickeners",
+        types: [
+          { id: "eq.thickeners.high_rate_thickener", code: "high_rate_thickener", name: "High-rate thickener" },
+          { id: "eq.thickeners.paste_thickener", code: "paste_thickener", name: "Paste thickener" },
+        ],
+      },
+      { id: "eq.filters", code: "filters", name: "Filters",
+        types: [
+          { id: "eq.filters.filter_press", code: "filter_press", name: "Filter press" },
+          { id: "eq.filters.vacuum_belt_filter", code: "vacuum_belt_filter", name: "Vacuum belt filter" },
+        ],
+      },
+      { id: "eq.dryers", code: "dryers", name: "Dryers",
+        types: [
+          { id: "eq.dryers.rotary_dryer", code: "rotary_dryer", name: "Rotary dryer" },
+          { id: "eq.dryers.fluid_bed_dryer", code: "fluid_bed_dryer", name: "Fluid-bed dryer" },
+        ],
+      },
+      { id: "eq.blenders", code: "blenders", name: "Blenders",
+        types: [
+          { id: "eq.blenders.paddle_blender", code: "paddle_blender", name: "Paddle blender" },
+          { id: "eq.blenders.ribbon_blender", code: "ribbon_blender", name: "Ribbon blender" },
+        ],
+      },
     ],
   },
   {
@@ -268,12 +470,41 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.loadout", code: "loadout", name: "Load-out" },
     ],
     equipmentFamilies: [
-      { id: "eq.conveyors", code: "conveyors", name: "Conveyors" },
-      { id: "eq.stackers", code: "stackers", name: "Stackers" },
-      { id: "eq.reclaimers", code: "reclaimers", name: "Reclaimers" },
-      { id: "eq.feeders", code: "feeders", name: "Feeders" },
-      { id: "eq.ship_loaders", code: "ship_loaders", name: "Ship loaders" },
-      { id: "eq.rail_loaders", code: "rail_loaders", name: "Rail loaders" },
+      { id: "eq.conveyors", code: "conveyors", name: "Conveyors",
+        types: [
+          { id: "eq.conveyors.belt_conveyor", code: "belt_conveyor", name: "Belt conveyor" },
+          { id: "eq.conveyors.apron_conveyor", code: "apron_conveyor", name: "Apron conveyor" },
+        ],
+      },
+      { id: "eq.stackers", code: "stackers", name: "Stackers",
+        types: [
+          { id: "eq.stackers.radial_stacker", code: "radial_stacker", name: "Radial stacker" },
+          { id: "eq.stackers.travelling_stacker", code: "travelling_stacker", name: "Travelling stacker" },
+        ],
+      },
+      { id: "eq.reclaimers", code: "reclaimers", name: "Reclaimers",
+        types: [
+          { id: "eq.reclaimers.bucket_wheel_reclaimer", code: "bucket_wheel_reclaimer", name: "Bucket-wheel reclaimer" },
+          { id: "eq.reclaimers.scraper_reclaimer", code: "scraper_reclaimer", name: "Scraper reclaimer" },
+        ],
+      },
+      { id: "eq.feeders", code: "feeders", name: "Feeders",
+        types: [
+          { id: "eq.feeders.apron_feeder", code: "apron_feeder", name: "Apron feeder" },
+          { id: "eq.feeders.vibrating_feeder", code: "vibrating_feeder", name: "Vibrating feeder" },
+        ],
+      },
+      { id: "eq.ship_loaders", code: "ship_loaders", name: "Ship loaders",
+        types: [
+          { id: "eq.ship_loaders.travelling_ship_loader", code: "travelling_ship_loader", name: "Travelling ship loader" },
+          { id: "eq.ship_loaders.fixed_ship_loader", code: "fixed_ship_loader", name: "Fixed ship loader" },
+        ],
+      },
+      { id: "eq.rail_loaders", code: "rail_loaders", name: "Rail loaders",
+        types: [
+          { id: "eq.rail_loaders.rapid_rail_wagon_loader", code: "rapid_rail_wagon_loader", name: "Rapid rail wagon loader" },
+        ],
+      },
     ],
   },
   {
@@ -288,11 +519,36 @@ export const MINING_VALUE_CHAIN = [
       { id: "svc.water", code: "water_supply", name: "Water supply" },
     ],
     equipmentFamilies: [
-      { id: "eq.pumps", code: "pumps", name: "Pumps" },
-      { id: "eq.fans", code: "fans", name: "Fans and ventilation" },
-      { id: "eq.substations", code: "substations", name: "Substations" },
-      { id: "eq.generators", code: "generators", name: "Generators" },
-      { id: "eq.compressors", code: "compressors", name: "Compressors" },
+      { id: "eq.pumps", code: "pumps", name: "Pumps",
+        types: [
+          { id: "eq.pumps.centrifugal_slurry_pump", code: "centrifugal_slurry_pump", name: "Centrifugal slurry pump" },
+          { id: "eq.pumps.submersible_dewatering_pump", code: "submersible_dewatering_pump", name: "Submersible dewatering pump" },
+        ],
+      },
+      { id: "eq.fans", code: "fans", name: "Fans and ventilation",
+        types: [
+          { id: "eq.fans.axial_ventilation_fan", code: "axial_ventilation_fan", name: "Axial ventilation fan" },
+          { id: "eq.fans.centrifugal_ventilation_fan", code: "centrifugal_ventilation_fan", name: "Centrifugal ventilation fan" },
+        ],
+      },
+      { id: "eq.substations", code: "substations", name: "Substations",
+        types: [
+          { id: "eq.substations.mobile_substation", code: "mobile_substation", name: "Mobile substation" },
+          { id: "eq.substations.fixed_substation", code: "fixed_substation", name: "Fixed substation" },
+        ],
+      },
+      { id: "eq.generators", code: "generators", name: "Generators",
+        types: [
+          { id: "eq.generators.diesel_generator_set", code: "diesel_generator_set", name: "Diesel generator set" },
+          { id: "eq.generators.gas_generator_set", code: "gas_generator_set", name: "Gas generator set" },
+        ],
+      },
+      { id: "eq.compressors", code: "compressors", name: "Compressors",
+        types: [
+          { id: "eq.compressors.rotary_screw_compressor", code: "rotary_screw_compressor", name: "Rotary screw compressor" },
+          { id: "eq.compressors.reciprocating_compressor", code: "reciprocating_compressor", name: "Reciprocating compressor" },
+        ],
+      },
     ],
   },
 ];

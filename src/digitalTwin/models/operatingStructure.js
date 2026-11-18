@@ -9,6 +9,7 @@ export const EMPTY_STRUCTURE = {
   activities: [],
   services: [],
   equipmentGroups: [],
+  equipment: [],
   technical: [],
   nonTechnical: [],
 }
@@ -19,32 +20,35 @@ const roles = {
   manufacturing: [["Machine operator", "Production technician", "Quality technician", "Maintenance technician"], ["Production planner", "Warehouse administrator", "Procurement officer"]],
   industrial_support: [["Field technician", "Maintenance technician", "Site supervisor"], ["Service coordinator", "Account manager", "Administrator"]],
 }
-const choice = (term) => ({ id: term.id, name: term.name })
+export const workLabel = (value = "") => /blasting and drilling/i.test(value) ? value
+  : value.replace(/\bdrilling\b/gi, (word) => word === "Drilling" ? "Blasting and Drilling" : "blasting and drilling")
+const choice = (term) => ({ id: term.id, name: workLabel(term.name) })
 export const uniqueChoices = (values) => [...new Map(values.map((value) => [value.id, value])).values()]
 
-export function structureOptions(packKey, selectedChains, selectedActivities) {
+function packServices(pack) {
+  return [...(pack?.services || []), ...(pack?.valueChain || []).flatMap((stage) => stage.services || [])]
+}
+
+export function structureOptions(packKey, selectedChains = []) {
   const pack = getPack(packKey)
   const chains = pack?.valueChain || (pack?.services ? [{
     id: pack.sector.id, name: pack.sector.name, services: pack.services,
   }] : [])
-  const stages = chains.filter((chain) => selectedChains.some(({ id }) => id === chain.id))
-  // Some packs define a service without named activities. Use its work label
-  // as the activity in that case and retain the canonical service ID.
-  const work = stages.flatMap((stage) => (stage.services || []).flatMap((service) => {
-    const activities = service.activities?.length ? service.activities : [{ id: `${service.id}.work`, name: service.name }]
-    return activities.map((activity) => ({ ...choice(activity), service }))
-  }))
+  const stages = selectedChains.length ? chains.filter((chain) => selectedChains.some(({ id }) => id === chain.id)) : chains
+  const work = stages.flatMap((stage) => (stage.services || []).flatMap((service) =>
+    service.activities?.length ? service.activities : [{ id: `${service.id}.work`, name: service.name }]))
   const [technical, nonTechnical] = roles[packKey] || [[], []]
-  const equipment = optionsFor({ packKey, domain: "equipment_family" })
+  const families = optionsFor({ packKey, domain: "equipment_family" })
   return {
     valueChains: chains.map(choice),
     activities: uniqueChoices(work.map(choice)),
-    services: uniqueChoices(work.filter((activity) => selectedActivities.some(({ id }) => id === activity.id))
-      .map(({ service }) => choice(service))),
-    equipmentGroups: uniqueChoices(equipment.map(choice)),
-    asset: uniqueChoices(equipment.flatMap((family) => {
+    services: uniqueChoices([...packServices(pack), ...packServices(getPack("industrial_support"))].map(choice)),
+    equipmentGroups: uniqueChoices(families.map(choice)),
+    asset: uniqueChoices(families.flatMap((family) => {
       const types = optionsFor({ packKey, domain: "equipment_type", parentId: family.id })
-      return (types.length ? types : [family]).map(choice)
+      return types.map((type) => ({
+        id: type.id, name: type.name, equipmentGroupChoiceId: family.id,
+      }))
     })),
     technical: technical.map((name) => ({ id: `technical:${name}`, name })),
     nonTechnical: nonTechnical.map((name) => ({ id: `nonTechnical:${name}`, name })),
@@ -54,12 +58,14 @@ export function structureOptions(packKey, selectedChains, selectedActivities) {
 export function changeWorkSelection(form, key, values) {
   const next = { ...form, [key]: values }
   if (key === "valueChains") {
-    const available = structureOptions(next.sectorPack, values, []).activities
-    next.activities = next.activities.filter((value) => value.custom || available.some(({ id }) => id === value.id))
+    const valid = new Set(structureOptions(next.sectorPack, values).activities.map(({ id }) => id))
+    next.activities = next.activities.filter((value) => value.custom || valid.has(value.id))
   }
-  if (key === "valueChains" || key === "activities") {
-    const available = structureOptions(next.sectorPack, next.valueChains, next.activities).services
-    next.services = next.services.filter((value) => value.custom || available.some(({ id }) => id === value.id))
+  if (key === "equipmentGroups") {
+    const selected = new Set(values.filter((value) => !value.custom).map(({ id }) => id))
+    if (selected.size) {
+      next.equipment = (next.equipment || []).filter((value) => !value.equipmentGroupChoiceId || selected.has(value.equipmentGroupChoiceId))
+    }
   }
   return next
 }

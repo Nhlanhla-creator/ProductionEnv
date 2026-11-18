@@ -46,7 +46,9 @@ const GROUPS = {
   dataQuality: "Data quality",
 }
 
-function Row({ children, cols = 2 }) { return <div className={`dt-fields ${cols === 3 ? "dt-fields-three" : ""}`} style={{ marginBottom: 12 }}>{children}</div> }
+function Row({ children, cols = 4 }) {
+  return <div className={`dt-asset-fields dt-asset-fields-${cols}`}>{children}</div>
+}
 function Field({ label, name, children, required, errors = [], warnings = [] }) {
   const error = errors.find(e => e.field === name)?.message, warning = warnings.find(w => w.field === name)?.message
   return <div><label style={labelS}>{label}{required && <span style={{ color: T.red }}> *</span>}</label>{children}{error && <div role="alert" style={{ color: T.red, fontSize: 12 }}>{error}</div>}{warning && <div style={{ color: T.amber, fontSize: 12 }}>{warning}</div>}</div>
@@ -156,20 +158,15 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
             <input value={form.internalNumber || ""} onChange={(e) => set({ internalNumber: e.target.value })}
               style={inputS} placeholder="e.g. TRK-014" />
           </Field>
-        </Row>
-        <Row>
           <Field errors={errors} warnings={warnings} label="Serial number" name="serialNumber">
             <input value={form.serialNumber || ""} onChange={(e) => set({ serialNumber: e.target.value })} style={inputS} />
           </Field>
           <Field errors={errors} warnings={warnings} label="Registration" name="registration">
             <input value={form.registration || ""} onChange={(e) => set({ registration: e.target.value })} style={inputS} />
           </Field>
-        </Row>
-        <Row>
           <Field errors={errors} warnings={warnings} label="Barcode / QR" name="barcodeOrQr">
             <input value={form.barcodeOrQr || ""} onChange={(e) => set({ barcodeOrQr: e.target.value })} style={inputS} />
           </Field>
-          <div />
         </Row>
       </div>
 
@@ -195,8 +192,8 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
               </select>
             </Field>
           </Row>
-          <Row cols={3}>
-            <Field errors={errors} warnings={warnings} label="Make" name="make">
+          <Row cols={4}>
+            <Field errors={errors} warnings={warnings} label="Make / OEM" name="make">
               <input value={form.make || ""} onChange={(e) => set({ make: e.target.value })} style={inputS} placeholder="e.g. Caterpillar" />
             </Field>
             <Field errors={errors} warnings={warnings} label="Model" name="model">
@@ -205,25 +202,24 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
             <Field errors={errors} warnings={warnings} label="Year" name="year">
               <input type="number" value={form.year ?? ""} onChange={(e) => set({ year: e.target.value ? Number(e.target.value) : null })} style={inputS} />
             </Field>
-          </Row>
           <Field errors={errors} warnings={warnings} label="Model group" name="modelGroup">
             <input value={form.modelGroup || ""} onChange={(event) => set({ modelGroup: event.target.value })}
               style={inputS} maxLength={120} />
           </Field>
-          <Field errors={errors} warnings={warnings} label="Configuration" name="configuration">
+          </Row>
+          <Row cols={3}><Field errors={errors} warnings={warnings} label="Configuration" name="configuration">
             <input value={form.configuration || ""} onChange={(e) => set({ configuration: e.target.value })} style={inputS}
               placeholder="Body type, engine, attachments" />
-          </Field>
+          </Field></Row>
         </div>
       )}
 
       {isAsset && <div style={sectionS}>
         <h4 style={{ color: T.accent }}>Group & operating location</h4>
-        <Row>
+        <Row cols={3}>
           <Field errors={errors} warnings={warnings} label="Asset group (optional)" name="equipmentGroupId"><select style={inputS} value={form.equipmentGroupId || ""} onChange={e => set({ equipmentGroupId: e.target.value || null })}><option value="">No group</option>{form.equipmentGroupId && !groups.some(g => g.id === form.equipmentGroupId) && <option value={form.equipmentGroupId}>{form.equipmentGroupId}</option>}{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
           <Field errors={errors} warnings={warnings} label="Site (optional)" name="siteId"><select style={inputS} value={form.siteId || ""} onChange={e => set({ siteId: e.target.value || null })}><option value="">No site</option>{form.siteId && !sites.some(s => s.id === form.siteId) && <option value={form.siteId}>{form.siteId}</option>}{sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-        </Row>
-        <Field errors={errors} warnings={warnings} label="Location description (optional)" name="location"><input style={inputS} value={form.location || ""} onChange={e => set({ location: e.target.value })} placeholder="e.g. North pit / Workshop A" /></Field>
+        <Field errors={errors} warnings={warnings} label="Location description (optional)" name="location"><input style={inputS} value={form.location || ""} onChange={e => set({ location: e.target.value })} placeholder="e.g. North pit / Workshop A" /></Field></Row>
       </div>}
 
       {/* Ownership */}
@@ -240,16 +236,12 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
               {Object.values(OWNERSHIP_TYPE).map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
             </select>
           </Field>
-        </Row>
-        <Row>
           <Field errors={errors} warnings={warnings} label="Lessor" name="lessor">
             <input value={form.lessor || ""} onChange={(e) => set({ lessor: e.target.value })} style={inputS} />
           </Field>
           <Field errors={errors} warnings={warnings} label="Finance / SPV entity" name="financeOrSpv">
             <input value={form.financeOrSpv || ""} onChange={(e) => set({ financeOrSpv: e.target.value })} style={inputS} />
           </Field>
-        </Row>
-        <Row>
           <Field errors={errors} warnings={warnings} label="Acquisition date" name="acquisitionDate">
             <input type="date" value={form.acquisitionDate || ""} onChange={(e) => set({ acquisitionDate: e.target.value || null })} style={inputS} />
           </Field>
@@ -265,7 +257,7 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
           <h4 style={{ fontSize: "13px", fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 10px" }}>
             {GROUPS.capacity}
           </h4>
-          <Row cols={3}>
+          <Row cols={4}>
             <Field errors={errors} warnings={warnings} label="Nameplate capacity" name="nameplateCapacity">
               <input type="number" step="0.01" value={form.nameplateCapacity ?? ""} onChange={(e) => set({ nameplateCapacity: e.target.value ? Number(e.target.value) : null })} style={inputS} />
             </Field>
@@ -277,11 +269,10 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
             <Field errors={errors} warnings={warnings} label="Current derated capacity" name="currentDeratedCapacity">
               <input type="number" step="0.01" value={form.currentDeratedCapacity ?? ""} onChange={(e) => set({ currentDeratedCapacity: e.target.value ? Number(e.target.value) : null })} style={inputS} />
             </Field>
-          </Row>
           <Field errors={errors} warnings={warnings} label="Derating reason" name="deratingReason">
             <input value={form.deratingReason || ""} onChange={(e) => set({ deratingReason: e.target.value })} style={inputS}
               placeholder="e.g. Restricted to 85t due to road condition" />
-          </Field>
+          </Field></Row>
         </div>
       )}
 
@@ -322,8 +313,12 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
             {GROUPS.metering}
           </h4>
           <Row cols={4}>
-            <Field errors={errors} warnings={warnings} label="Hour meter" name="hourMeter">
-              <input type="number" step="0.1" value={form.hourMeter ?? ""} onChange={(e) => set({ hourMeter: e.target.value ? Number(e.target.value) : null })} style={inputS} />
+            <Field errors={errors} warnings={warnings} label="Machine hours (hour meter)" name="hourMeter">
+              <input type="number" min="0" step="0.1" value={form.hourMeter ?? ""} onChange={(e) => set({ hourMeter: e.target.value ? Number(e.target.value) : null })} style={inputS} />
+            </Field>
+            <Field errors={errors} warnings={warnings} label="Operating hours" name="operatingHours">
+              <input type="number" min="0" step="0.1" value={form.operatingHours ?? ""}
+                onChange={event => set({ operatingHours: event.target.value === "" ? null : Number(event.target.value) })} style={inputS} />
             </Field>
             <Field errors={errors} warnings={warnings} label="Odometer" name="odometer">
               <input type="number" step="0.1" value={form.odometer ?? ""} onChange={(e) => set({ odometer: e.target.value ? Number(e.target.value) : null })} style={inputS} />
@@ -334,10 +329,9 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
             <Field errors={errors} warnings={warnings} label="Fuel meter" name="fuelMeter">
               <input type="number" step="0.1" value={form.fuelMeter ?? ""} onChange={(e) => set({ fuelMeter: e.target.value ? Number(e.target.value) : null })} style={inputS} />
             </Field>
-          </Row>
           <Field errors={errors} warnings={warnings} label="Last meter reading date" name="lastMeterReadingDate">
             <input type="date" value={form.lastMeterReadingDate || ""} onChange={(e) => set({ lastMeterReadingDate: e.target.value || null })} style={inputS} />
-          </Field>
+          </Field></Row>
         </div>
       )}
 

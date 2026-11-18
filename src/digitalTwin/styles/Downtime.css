@@ -22,26 +22,59 @@
 .dt-people-list { margin-top: 1rem; }
 .dt-people-list summary { cursor: pointer; font-weight: 600; }
 
+.dt-step:disabled { cursor: default; }
+.dt-step:disabled:not([aria-current="step"]) { opacity: .62; }
+.dt-step:disabled:not([aria-current="step"]):hover { background: #fff; }
+.dt-asset-fields { display: grid; gap: 14px; margin-bottom: 14px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dt-asset-fields-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dt-asset-fields > div { min-width: 0; }
+
 .dt-register-filter-actions { justify-content: flex-end; margin-bottom: .75rem; }
-.dt-register-table th {
-  background: var(--dt-brown);
-  color: #fff;
-  vertical-align: top;
+.dt-register-search { max-width: 280px; margin-right: auto; }
+.dt-register-columns { border: 1px solid var(--dt-line); border-radius: 10px; padding: 12px; margin-bottom: .75rem; }
+.dt-register-column-options { display: grid; grid-template-columns: repeat(auto-fit,minmax(235px,1fr)); gap: 8px; max-height: 245px; overflow: auto; }
+.dt-register-column-options > div { justify-content: space-between; border-radius: 7px; padding: 3px 8px; background: #faf8f7; }
+.dt-register-column-options label { font-size: 13px; }
+.dt-register-custom { table-layout: fixed; border-collapse: separate; border-spacing: 0; min-width: 100%; }
+.dt-register-custom th { position: relative; vertical-align: top; background: #33231e; color: #fff; border-right: 1px solid #ffffff24;
+  border-bottom: 2px solid #33231e; padding: 0; letter-spacing: normal; text-transform: none; font-size: 13px; font-weight: 600; }
+.dt-register-custom td { padding: 13px 14px; border-right: 1px solid #e9e3df; color: #3b2b26; font-size: 14px; overflow-wrap: anywhere; }
+.dt-register-custom tbody tr:nth-child(even) { background: #faf8f7; }
+.dt-register-th { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px 8px; min-height: 61px; white-space: normal; }
+.dt-register-th .dt-actions { flex-wrap: nowrap; gap: 2px; }
+.dt-register-icon, .dt-register-drag { display: inline-flex; align-items: center; border: 0; background: transparent;
+  color: inherit; border-radius: 6px; padding: 5px; cursor: pointer; }
+.dt-register-drag { cursor: grab; color: #ffffffa8; }
+.dt-register-th .dt-register-icon { color: #ffffffa8; }
+.dt-register-th .dt-register-icon[aria-pressed="true"], .dt-register-th .dt-register-icon:hover { color: #fff; background: #ffffff28; }
+.dt-register-icon:disabled { opacity: .35; cursor: default; }
+.dt-register-row-actions { gap: 3px; }
+.dt-register-row-actions .dt-register-icon:hover { background: #f2e8df; }
+.dt-register-resize { position: absolute; top: 0; right: 0; width: 8px; height: 100%; padding: 0;
+  border: 0; background: transparent; cursor: col-resize; touch-action: none; }
+.dt-register-resize:hover, .dt-register-resize:focus-visible { background: #ffffff45; outline: none; }
+.dt-register-filter-popover { position: fixed; z-index: 1500; width: 232px; max-width: calc(100vw - 16px); max-height: min(250px,40vh);
+  overflow: auto; padding: 6px; border: 1px solid #b0a29b; border-radius: 10px; background: #fff; box-shadow: 0 12px 30px #2d201c2e; }
+.dt-register-filter-popover button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px;
+  background: transparent; text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
+.dt-register-filter-popover button:hover, .dt-register-filter-popover button[aria-pressed="true"] { background: #f4efec; }
+
+.dt-shift-attendance-table { margin-top: 0; min-width: 1280px; }
+.dt-shift-attendance-table th { background: #33231e; color: white; }
+.dt-shift-attendance-table input, .dt-shift-attendance-table select, .dt-shift-attendance-table textarea {
+  display: block; box-sizing: border-box; width: 100%; min-height: 36px; padding: 6px 8px; border: 1px solid #d9cfc6;
+  border-radius: 6px; color: var(--dt-ink); background: white; font: inherit;
 }
-.dt-register-table th input,
-.dt-register-table th select {
-  display: block;
-  width: 100%;
-  min-width: 8rem;
-  margin-top: .55rem;
-  border: 1px solid #e7dfd9;
-  border-radius: 6px;
-  padding: .45rem .55rem;
-  background: #fff;
-  color: var(--dt-ink);
-  font: inherit;
-  font-size: 12px;
-  letter-spacing: normal;
-  text-transform: none;
+.dt-shift-attendance-table td:nth-child(4) { min-width: 200px; }
+.dt-shift-attendance-table td:nth-child(7), .dt-shift-attendance-table td:nth-child(8), .dt-shift-attendance-table td:nth-child(9) { min-width: 160px; }
+.dt-shift-attendance-table select + input { margin-top: 6px; }
+
+@media (max-width: 1000px) {
+  .dt-asset-fields, .dt-asset-fields-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-.dt-register-table th input { min-width: 13rem; }
+@media (max-width: 690px) {
+  .dt-asset-fields, .dt-asset-fields-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 460px) {
+  .dt-asset-fields, .dt-asset-fields-3 { grid-template-columns: minmax(0, 1fr); }
+}

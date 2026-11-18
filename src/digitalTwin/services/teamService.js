@@ -35,19 +35,32 @@ export async function savePerson(tenantId, person) {
 export async function loadAttendance(tenantId, date, shiftId) {
   const snapshot = await getDocs(query(teamCollection(tenantId, "shiftAttendance"), where("captureKey", "==", captureKey(date, shiftId))))
   return Object.fromEntries(snapshot.docs.map((entry) => {
-    const { personId, status } = entry.data()
-    return [personId, status]
+    const { personId, status, vehicleId, vehicleLabel, role, reason, activity, checkIn, checkOut, notes } = entry.data()
+    return [personId, {
+      status, vehicleId: vehicleId || "", vehicleLabel: vehicleLabel || "", role: role || "", reason: reason || "",
+      activity: activity || "", checkIn: checkIn || "", checkOut: checkOut || "", notes: notes || "",
+    }]
   }))
 }
 
-export async function markAttendance(tenantId, { date, shift, personId, status }) {
+export async function markAttendance(tenantId, { date, shift, personId, status, vehicleId = "",
+  vehicleLabel = "", role = "", reason = "", activity = "", checkIn = "", checkOut = "", notes = "" }) {
   const user = auth.currentUser
   if (!user) throw new Error("Sign in to record attendance.")
-  if (!shift.active) throw new Error("Select an active shift.")
+  if (!shift?.active) throw new Error("Select an active shift.")
+  if (!["present", "absent"].includes(status)) throw new Error("Choose Present or Absent.")
+  for (const time of [checkIn, checkOut]) {
+    if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error("Enter a valid time.")
+  }
   shiftWindow(date, shift)
   const key = captureKey(date, shift.id)
+  const fields = {
+    status, vehicleId, vehicleLabel: vehicleLabel.trim(), role: role.trim(), reason: reason.trim(), activity: activity.trim(),
+    checkIn, checkOut, notes: notes.trim(),
+  }
   await setDoc(doc(teamCollection(tenantId, "shiftAttendance"), `${key}_${personId}`), {
-    date, shiftId: shift.id, captureKey: key, personId, status,
+    date, shiftId: shift.id, captureKey: key, personId, ...fields,
     updatedBy: user.uid, updatedAt: serverTimestamp(),
   })
+  return fields
 }
