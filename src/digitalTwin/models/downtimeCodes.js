@@ -1,3 +1,4 @@
+import { codeAppliesToEquipment } from './equipmentDowntime';
 /** Fixed headings and pure validation; no Firebase or browser dependencies. */
 export const DOWNTIME_HEADINGS = Object.freeze([
   'Downtime Type', 'Delay Category', 'Delay Classification',
@@ -108,6 +109,7 @@ export function validateCodes(nodes, previous = [], templateId = TEMPLATE_VERSIO
     } else if (n.level === 3) {
       if (n.origin !== 'custom_unmapped' || n.canonicalId !== null || n.standardLabel !== null) throw new Error('Custom Level 3 must be flagged Custom / Unmapped.');
     } else if (n.origin !== 'organisation' || n.canonicalId !== null || n.standardLabel !== null) throw new Error('Invalid organisation code.');
+    if (n.equipmentTypeIds && (n.level < 4 || !Array.isArray(n.equipmentTypeIds) || n.equipmentTypeIds.length > 100 || n.equipmentTypeIds.some((id) => typeof id !== 'string' || !id.trim()))) throw new Error('Equipment-specific codes must be at Level 4 or 5 and reference valid equipment categories.');
     if (n.level === 5 && !n.terminal) throw new Error('Level 5 is the final downtime reason and must end the branch.');
     if (n.level < 3 && n.terminal) throw new Error('Branches may end only at Level 3, 4 or 5.');
     if (publishing && n.active) {
@@ -131,7 +133,7 @@ export function appliesTo(assignment, asset) {
 export function selectedClassification(published, asset, codeId) {
   if (!published || !appliesTo(published.assignment,asset)) throw new Error('This published master list is not assigned to the asset.');
   const path = codePath(published.nodes,codeId);
-  if (path.length < 3 || path.some(n => !n.active) || !path[path.length-1].terminal || childrenOf(published.nodes,codeId).length) throw new Error('Select an active terminal code from the published list.');
+  if (path.length < 3 || path.some(n => !n.active || !codeAppliesToEquipment(n, asset.equipmentTypeId)) || !path[path.length-1].terminal || childrenOf(published.nodes,codeId).length) throw new Error('Select an active terminal code from the published list.');
   return path.map(n => ({ codeId: n.id, level: n.level, label: n.label,
     canonicalId: n.canonicalId, reportingLabel: n.standardLabel || n.label,
     mappingStatus: n.origin === 'custom_unmapped' ? 'custom_unmapped' : 'mapped' }));
@@ -163,4 +165,4 @@ export function eventTiming(startValue,endValue = null) {
 }
 export const elapsedHours = (event,asOf = Date.now()) => Math.max(0,((event.eventEnd?Date.parse(event.eventEnd):asOf)-Date.parse(event.eventStart))/3600000)||0;
 export const canCaptureAsset = a => a && a.resourceKind === 'asset' &&
-  !['retired','disposed','inactive'].includes(a.status);
+  a.currentStructureAsset !== false && !['retired','disposed','inactive'].includes(a.status);

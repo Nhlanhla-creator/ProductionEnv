@@ -123,7 +123,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     return <div style={{ padding: "40px", textAlign: "center", color: T.muted }}>Loading performance dashboard…</div>
   }
 
-  if (error) return <div className="dt-notice dt-notice-error" role="alert">{error}<button className="dt-button" onClick={loadAll}>Retry KPI Summary</button></div>;
+  if (error) return <div className="dt-notice dt-notice-error" role="alert">{error}<button className="dt-button" onClick={loadAll}>Retry delivery KPIs</button></div>;
   if (!anchor) {
     return (
       <div style={{ padding: "24px", maxWidth: "820px", margin: "0 auto" }}>
@@ -171,15 +171,11 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
     <div>
       {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back</button>}
 
-      <button style={{ ...btnGhost, marginBottom: 14 }} onClick={() => openDowntime()}>Open Downtime summary</button>
-      {/* ── SETUP GUIDE — SHOWN FIRST ── */}
-      <a className="dt-button" href="/digital-twin/setup">Open Setup</a>
-
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "14px", marginBottom: "18px", flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 700, color: T.accent, letterSpacing: "-0.4px" }}>
-            KPI results
+            Equipment performance
           </h2>
           <p style={{ margin: 0, fontSize: "13.5px", color: T.muted }}>
             {anchor.name} · {periodLabel.slice(2)} · every figure recomputed from source records
@@ -201,7 +197,7 @@ export default function AssetPerformanceCommandCentre({ tenantId, onBack, onOpen
 
       {/* Hero tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px", marginBottom: "18px" }}>
-        {tiles.map((tile) => <HeroTile key={tile.kpiId} tile={tile} onClick={() => setLineageKpi(tile.current)} />)}
+        {tiles.map((tile) => <HeroTile key={tile.kpiId} tile={tile} onClick={() => { setDrillKpiId(tile.kpiId); setShowDrill(true) }} />)}
       </div>
 
       {/* Two-column: category chart + side panels */}

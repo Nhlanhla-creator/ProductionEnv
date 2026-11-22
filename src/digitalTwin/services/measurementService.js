@@ -233,7 +233,7 @@ export const listMeasurements = async (tenantId, options = {}) => {
     cursor = snap.docs[snap.docs.length - 1];
   }
   const keys = ['component','kpiId','assetId','groupId','activityId','serviceId','contractId','siteId','processAreaId','facilityId','shiftId','commodity','product','client','operatingMode','state'];
-  return rows.filter(r => keys.every(k => !options[k] || (options[k] === '__none__' ? !r[k] : r[k] === options[k]))
+  return rows.filter(r => (!Array.isArray(options.assetIds) || options.assetIds.includes(r.assetId)) && keys.every(k => !options[k] || (options[k] === '__none__' ? !r[k] : r[k] === options[k]))
     && (!options.crew || r.tags?.crew === options.crew)
     && (!options.startFrom || r.startTimestamp >= options.startFrom)
     && (!options.endTo || r.startTimestamp <= options.endTo));

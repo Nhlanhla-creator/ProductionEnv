@@ -139,7 +139,7 @@ export default function DrillDownView({
 
   return (
     <div>
-      {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back to KPI Summary</button>}
+      {onBack && <button onClick={onBack} style={{ ...btnGhost, marginBottom: "14px" }}>← Back to Delivery</button>}
 
       <div style={{ marginBottom: "18px" }}>
         <h2 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: 700, color: T.accent, letterSpacing: "-0.4px" }}>

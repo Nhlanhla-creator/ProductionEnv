@@ -82,7 +82,7 @@ export async function listDowntimeEvents(tenantId,options = {}) {
   const key = keys.find(k => options[k] && options[k] !== '__none__');
   const snap = await getDocs(key ? query(eventsCol(tenantId),where(key,'==',options[key])) : eventsCol(tenantId));
   return snap.docs.map(d => ({ ...d.data(),id:d.id })).filter(e =>
-    e.validationStatus !== 'void' && keys.every(k => !options[k] || (options[k] === '__none__' ? !e[k] : e[k] === options[k])) &&
+    e.validationStatus !== 'void' && (!Array.isArray(options.assetIds) || options.assetIds.includes(e.assetId)) && keys.every(k => !options[k] || (options[k] === '__none__' ? !e[k] : e[k] === options[k])) &&
     (options.planned == null || e.planned === options.planned) &&
     (!options.startFrom || !e.eventEnd || Date.parse(e.eventEnd) > Date.parse(options.startFrom)) &&
     (!options.endTo || Date.parse(e.eventStart) <= Date.parse(options.endTo)))
@@ -145,7 +145,7 @@ async function mutateEvent(tenantId,input,{ eventId = null,reason = '',legacyClo
         if (old?.eventEnd && !timing.eventEnd) throw new Error('A closed event cannot be reopened. Record a new downtime event.');
         if (!timing.eventEnd && asset.activeDowntimeEventId && asset.activeDowntimeEventId !== ref.id) throw new Error('This asset already has ongoing downtime. Mark it back online before starting another event.');
         const closing = old && !old.eventEnd && timing.eventEnd;
-        if ((!timing.eventEnd || closing) && !canCaptureAsset(asset)) throw new Error('Retired, disposed or inactive assets cannot be marked down or returned online.');
+        if ((!timing.eventEnd || closing) && !canCaptureAsset({ ...asset, currentStructureAsset: true })) throw new Error('Retired, disposed or inactive assets cannot be marked down or returned online.');
         if (closing && asset.activeDowntimeEventId && asset.activeDowntimeEventId !== ref.id) throw new Error('The active downtime event changed. Refresh before closing it.');
         if (closing && Date.parse(timing.eventEnd)>Date.now()) throw new Error('The return-online time cannot be in the future.');
         if (closing && !['available','operating','standby'].includes(returnStatus)) throw new Error('Choose a valid online asset status.');

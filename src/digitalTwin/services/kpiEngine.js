@@ -126,6 +126,7 @@ const resolveComponent = async (tenantId, component, scope, period, options = {}
   const rows = await listMeasurements(tenantId, {
     component,
     assetId: scope.assetId || null,
+    assetIds: scope.assetIds,
     groupId: scope.groupId || null,
     activityId: scope.activityId || null,
     serviceId: scope.serviceId || null,

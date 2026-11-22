@@ -84,6 +84,7 @@ const DRILL_RELATION_TYPES = {
   [NODE_TYPES.ACTIVITY]:        ["performed_in", "supports", "contains"],
   [NODE_TYPES.EQUIPMENT_GROUP]: ["member_of", "supports", "contains"],
   [NODE_TYPES.EQUIPMENT_FAMILY]: ["classified_as"],
+  [NODE_TYPES.ASSET]: ["contains"],
 };
 
 /**
@@ -185,7 +186,11 @@ export const scopeFromNode = (node) => {
     case NODE_TYPES.SERVICE:         s.serviceId = node.id; break;
     case NODE_TYPES.ACTIVITY:        s.activityId = node.id; break;
     case NODE_TYPES.EQUIPMENT_GROUP: s.groupId = node.id; break;
-    case NODE_TYPES.ASSET:           s.assetId = node.id; break;
+    case NODE_TYPES.VALUE_CHAIN: s.assetIds = node.attributes?.structureResourceIds || []; break;
+    case NODE_TYPES.ASSET:
+      if (node.attributes?.instances) s.assetIds = node.attributes.instances.map((item) => item.id);
+      else s.assetId = node.id;
+      break;
     default: break;
   }
   return s;
@@ -256,6 +261,7 @@ export const availabilityLossByCategory = async (tenantId, { scope = {}, periodL
   const period = periodToWindow(periodLabel);
   const events = await listDowntimeEvents(tenantId, {
     assetId: scope.assetId || null,
+    assetIds: scope.assetIds,
     groupId: scope.groupId || null,
     activityId: scope.activityId || null,
     serviceId: scope.serviceId || null,

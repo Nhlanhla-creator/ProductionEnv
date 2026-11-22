@@ -94,7 +94,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
               </h3>
               <p style={{ margin: 0, fontSize: "14px", color: "#D7CCC8", lineHeight: 1.55, maxWidth: "620px" }}>
                 {completed
-                  ? "Open Operating Structure to edit your diagram or go to KPI Summary."
+                  ? "Open Operating Structure to edit your diagram or go to Delivery."
                   : started
                     ? `You're on step ${currentStep + 1} of ${totalSteps}. Continue from your saved step.`
                     : "Choose your sector and build your operating diagram."}
@@ -156,7 +156,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
                         boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       }}>
                       <TrendingUp size={15} />
-                      Go to KPI Summary
+                      Go to Delivery
                     </button>
                     <button
                       type="button"
@@ -233,9 +233,9 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
             />
             <StepItem
               num={3}
-              title="View your KPI Summary"
+              title="View your Delivery"
               description="Your KPI tiles will populate as soon as there's data to calculate from."
-              action={{ label: "Open KPI Summary", onClick: () => handleClick("dashboard"), icon: TrendingUp }}
+              action={{ label: "Open Delivery", onClick: () => handleClick("dashboard"), icon: TrendingUp }}
               noBorder
             />
           </div>
@@ -454,7 +454,7 @@ export default function OperationsSetupCard({ onNavigate, variant = "default" })
           whiteSpace: "nowrap",
         }}>
         <TrendingUp size={14} />
-        Open KPI Summary
+        Open Delivery
       </button>
     </div>
   )

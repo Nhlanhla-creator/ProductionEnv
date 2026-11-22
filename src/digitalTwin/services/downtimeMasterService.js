@@ -1,6 +1,8 @@
 /** Tenant-owned drafts and immutable published versions. Permissions belong in Firestore rules. */
 import { db, auth } from '../../firebaseConfig';
 import { collection, doc, getDoc, getDocs, runTransaction } from 'firebase/firestore';
+import { sectorMasterCodes } from '../models/sectorMasterCodes';
+import { addEquipmentDefaults } from '../models/equipmentDowntime';
 import { seedCodes, validateCodes, TEMPLATE_VERSION } from '../models/downtimeCodes';
 export const masterRef = (tenantId,id) => doc(db,'digitalTwinTenants',tenantId,'downtimeMasterLists',id);
 const mastersCol = tenantId => collection(db,'digitalTwinTenants',tenantId,'downtimeMasterLists');
@@ -19,7 +21,7 @@ function validateDraft(draft,previous,templateId,publishing) {
   const a = draft.assignment;
   if (!a || typeof a.allAssets !== 'boolean' || !Array.isArray(a.equipmentTypeIds) || !Array.isArray(a.groupIds) ||
       [...a.equipmentTypeIds,...a.groupIds].some(v => typeof v !== 'string' || !v.trim())) throw new Error('Invalid asset assignment.');
-  if (publishing && !a.allAssets && !a.equipmentTypeIds.length && !a.groupIds.length) throw new Error('Assign at least one asset type/group, or explicitly choose all assets.');
+  if (publishing && !a.allAssets && !a.equipmentTypeIds.length && !a.groupIds.length) throw new Error('Assign at least one equipment category/group, or explicitly choose all assets.');
   validateCodes(draft.nodes,previous,templateId,publishing);
 }
 function checkSize(value) {
@@ -36,12 +38,12 @@ function writeTemplateValidation(tx, ref, value) {
     tx.set(doc(ref,'validation','mining-b'),guard);
   }
 }
-export async function createDowntimeMaster(tenantId,{ name, industry = 'Mining', mining = true }) {
+export async function createDowntimeMaster(tenantId,{ name, industry = 'Mining', mining = true, groupIds = [], equipmentTypeIds = [], sectorPack = null }) {
   if (!tenantId) throw new Error('An organisation is required.');
   const actor = downtimeActor(), ref = doc(mastersCol(tenantId)), now = new Date().toISOString();
-  const draft = { name: name.trim(), industry: industry.trim(), nodes: seedCodes(mining),
-    assignment: { allAssets: false, equipmentTypeIds: [], groupIds: [] } };
-  const templateId = mining ? TEMPLATE_VERSION : 'custom-industry-1';
+  const draft = { name: name.trim(), industry: industry.trim(), nodes: sectorPack ? sectorMasterCodes(sectorPack, equipmentTypeIds) : mining ? addEquipmentDefaults(seedCodes(true), equipmentTypeIds) : seedCodes(false),
+    assignment: { allAssets: false, equipmentTypeIds, groupIds } };
+  const templateId = (sectorPack ? sectorPack === 'mining' : mining) ? TEMPLATE_VERSION : 'custom-industry-1';
   validateDraft(draft,[],templateId,false);
   const value = { tenantId, templateId, revision: 1, draft, published: null,
     createdAt: now, createdBy: actor, updatedAt: now, updatedBy: actor };

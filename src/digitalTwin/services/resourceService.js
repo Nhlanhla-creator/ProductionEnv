@@ -140,6 +140,7 @@ export const listResources = async (tenantId, {
   groupId = null,
   search = "",
   pageSize = 500,
+  includeOutsideStructure = false,
 } = {}) => {
   if (!tenantId) return [];
   const filters = [];
@@ -150,7 +151,7 @@ export const listResources = async (tenantId, {
 
   const snap = await getDocs(resourcesCol(tenantId));
   let rows = snap.docs.map(d => ({ ...d.data(), id: d.id })).filter(r =>
-    (!resourceKind || r.resourceKind === resourceKind) && (!status || r.status === status)
+    (includeOutsideStructure || r.currentStructureAsset !== false) && (!resourceKind || r.resourceKind === resourceKind) && (!status || r.status === status)
     && (!equipmentTypeId || r.equipmentTypeId === equipmentTypeId) && (!groupId || r.equipmentGroupId === groupId))
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 

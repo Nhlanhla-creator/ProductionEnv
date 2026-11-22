@@ -1,33 +1,35 @@
 "use client"
 import { collection,onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
-import { useEffect,useMemo,useState } from 'react';
+import { useCallback,useEffect,useMemo,useState } from 'react';
 import { listCaptureAssets,getDowntimeEventAudit } from '../services/downtimeService';
 import { listGroups,listOperatingSites } from '../services/resourceService';
 import { listShifts } from '../services/shiftCaptureService';
 import { filterReport,aggregateReport,classificationKey } from '../models/downtimeReporting';
-import { downloadDowntimeCsv } from '../services/downtimeSpreadsheetService';
+import { listDowntimeMasters } from '../services/downtimeMasterService';
+import DowntimeRegisterTable from './DowntimeRegisterTable';
 import DowntimeDialog from './DowntimeDialog';
 import '../styles/Downtime.css';
 const blank=()=>({assetId:'',groupId:'',siteId:'',contractId:'',activityId:'',serviceId:'',shiftId:'',crew:'',status:'',type:'',search:'',from:'',to:''});
 const stamp=(value,options)=>value?new Date(value).toLocaleString(undefined,options):'Ongoing';
 export default function DowntimeRecords({tenantId,initialAssetId='',initialRange=null,onNavigate,onCorrect,onOpenAsset,onRecord,onCloseEvent}) {
+  const [masters,setMasters]=useState([]),[tableIds,setTableIds]=useState(null),[tableReset,setTableReset]=useState(0);
   const [events,setEvents]=useState([]),[assets,setAssets]=useState([]),[groups,setGroups]=useState([]),[sites,setSites]=useState([]),[shifts,setShifts]=useState([]);
   const [filters,setFilters]=useState(()=>({...blank(),...(initialRange||{}),assetId:initialAssetId})),[path,setPath]=useState([]),[dimension,setDimension]=useState('reason');
-  const [asOf,setAsOf]=useState(Date.now()),[loading,setLoading]=useState(true),[error,setError]=useState(''),[audit,setAudit]=useState(null),[analysis,setAnalysis]=useState(false);
+  const [asOf,setAsOf]=useState(Date.now()),[loading,setLoading]=useState(true),[error,setError]=useState(''),[audit,setAudit]=useState(null),[analysis,setAnalysis]=useState(true);
   useEffect(()=>{let live=true;setError('');setAssets([]);setGroups([]);setSites([]);setShifts([]);
-    Promise.all([listCaptureAssets(tenantId,{includeInactive:true}),listGroups(tenantId,{status:null}),listOperatingSites(tenantId,{activeOnly:false}),listShifts(tenantId)]).then(([a,g,s,h])=>{if(live){setAssets(a);setGroups(g);setSites(s);setShifts(h);}}).catch(e=>{if(live)setError(e.message);});
+    Promise.all([listCaptureAssets(tenantId,{includeInactive:true}),listGroups(tenantId,{status:null}),listOperatingSites(tenantId,{activeOnly:false}),listShifts(tenantId),listDowntimeMasters(tenantId)]).then(([a,g,s,h,m])=>{if(live){setAssets(a);setGroups(g);setSites(s);setShifts(h);setMasters(m);}}).catch(e=>{if(live)setError(e.message);});
     return()=>{live=false;};
   },[tenantId]);
   useEffect(()=>{const t=setInterval(()=>setAsOf(Date.now()),30000);return()=>clearInterval(t);},[]);
   useEffect(()=>{setLoading(true);setEvents([]);if(!tenantId){setLoading(false);return;}return onSnapshot(collection(db,'digitalTwinTenants',tenantId,'downtimeEvents'),s=>{setAsOf(Date.now());setEvents(s.docs.map(d=>({...d.data(),id:d.id})));setLoading(false);},e=>{setError(e.message);setLoading(false);});},[tenantId]);
-  const enriched=useMemo(()=>events.map(e=>{const a=assets.find(a=>(a.assetId||a.id)===e.assetId);return {...e,assetName:e.assetName||a?.name,assetNumber:e.assetNumber||a?.internalNumber,groupName:groups.find(g=>(g.id||g.groupId)===e.groupId)?.name||e.groupId,siteName:sites.find(s=>s.id===e.siteId)?.name||e.siteId,shiftName:shifts.find(s=>s.id===e.shiftId)?.name||e.shiftId};}),[events,assets,groups,sites,shifts]);
+  const enriched=useMemo(()=>events.map(e=>{const a=assets.find(a=>(a.assetId||a.id)===e.assetId);return {...e,assetName:a?.name||e.assetName,assetNumber:a?.internalNumber||e.assetNumber,masterName:masters.find(m=>m.id===e.masterListId)?.published?.name||masters.find(m=>m.id===e.masterListId)?.draft.name||e.masterListId,groupName:groups.find(g=>(g.id||g.groupId)===e.groupId)?.name||e.groupId,siteName:sites.find(s=>s.id===e.siteId)?.name||e.siteId,shiftName:shifts.find(s=>s.id===e.shiftId)?.name||e.shiftId};}),[events,assets,groups,sites,shifts,masters]);
   const report=useMemo(()=>{try{return {rows:filterReport(enriched,{...filters,asOf,path:path.map(p=>p.key)}).sort((a,b)=>Date.parse(b.eventStart)-Date.parse(a.eventStart)),error:''};}catch(e){return {rows:[],error:e.message};}},[enriched,filters,path,asOf]);
   // This exact array drives the summary, its totals, export, drill-down and Pareto.
-  const rows=report.rows,total=rows.reduce((sum,e)=>sum+e.periodDurationHours,0),pareto=aggregateReport(rows,dimension),sitesSummary=aggregateReport(rows,'site'),shiftsSummary=aggregateReport(rows,'shift');
+  const onVisibleRowsChange=useCallback((visible)=>{const ids=visible.map(e=>e.id);setTableIds(old=>JSON.stringify(old)===JSON.stringify(ids)?old:ids);},[]);
+  const rows=useMemo(()=>tableIds===null?report.rows:report.rows.filter(e=>tableIds.includes(e.id)),[report.rows,tableIds]);
+  const total=rows.reduce((sum,e)=>sum+e.periodDurationHours,0),pareto=aggregateReport(rows,dimension),sitesSummary=aggregateReport(rows,'site'),shiftsSummary=aggregateReport(rows,'shift');
   const pick=(key,value)=>{setFilters(old=>({...old,[key]:value}));setPath([]);};
-  const choices=key=>[...new Set(enriched.map(e=>e[key]).filter(Boolean))].sort();
-  const select=(key,label,options)=><label className="dt-field"><span>{label}</span><select value={filters[key]} onChange={e=>pick(key,e.target.value)}><option value="">All</option>{options.map(([value,text])=><option key={value} value={value}>{text}</option>)}</select></label>;
   const contributor=row=>{
     if(['asset','group','site','shift','crew'].includes(dimension)){pick(({asset:'assetId',group:'groupId',site:'siteId',shift:'shiftId',crew:'crew'})[dimension],row.key==='unassigned'?'__none__':row.key);return;}
     const lookupIndex=Number(dimension.slice(-1))-1,event=rows.find(e=>classificationKey(e,dimension==='reason'?(e.classificationPath?.length||0)-1:lookupIndex)===row.key);
@@ -35,21 +37,18 @@ export default function DowntimeRecords({tenantId,initialAssetId='',initialRange
     if(event?.classificationPath)setPath(event.classificationPath.slice(0,index+1).map((p,i)=>({key:classificationKey(event,i),label:p.label})));
   };
   const auditEvent=async event=>{setError('');try{setAudit({event,rows:await getDowntimeEventAudit(tenantId,event.eventId||event.id)});}catch(e){setError(e.message);}};
-  return <section className="dt-workspace"><div className="dt-heading"><div><h2>Downtime summary</h2><p>All logged downtime, including ongoing events. Capture first, then analyse the same records.</p></div><div className="dt-actions"><button className="dt-button" disabled={!rows.length} onClick={()=>{try{downloadDowntimeCsv(rows);}catch(e){setError(e.message);}}}>Export selection</button><button className="dt-button dt-button-primary" onClick={()=>onRecord?onRecord():onNavigate?.('capture', {view:'record'})}>+ Record downtime</button></div></div>
+  return <section className="dt-workspace"><div className="dt-heading"><div><h2>Downtime Output</h2><p>All logged downtime, including ongoing events. Capture first, then analyse the same records.</p></div><div className="dt-actions"><button className="dt-button dt-button-primary" onClick={()=>onRecord?onRecord():onNavigate?.('capture', {view:'record'})}>+ Record downtime</button></div></div>
     {(error||report.error)&&<div role="alert" className="dt-notice dt-notice-error">{error||report.error}</div>}
-    <section className="dt-panel"><div className="dt-panel-head"><h3>Downtime Summary Table</h3><button className="dt-button dt-button-small" onClick={()=>{setFilters(blank());setPath([]);}}>Clear all filters</button></div><div className="dt-asset-toolbar">
-      <label className="dt-field"><span>Machine or reason</span><input type="search" value={filters.search} onChange={e=>pick('search',e.target.value)} placeholder="Search machine, reason or notes"/></label>
-      {select('assetId','Machine',choices('assetId').map(id=>{const a=assets.find(a=>(a.assetId||a.id)===id);return [id,a?`${a.internalNumber} — ${a.name}`:id];}))}
-      {select('siteId','Operating site',[['__none__','No site recorded'],...choices('siteId').map(id=>[id,sites.find(s=>s.id===id)?.name||id])])}
-      {select('shiftId','Shift at event start',[['__none__','No shift recorded'],...choices('shiftId').map(id=>[id,shifts.find(s=>s.id===id)?.name||id])])}
-      {select('groupId','Equipment group',[['__none__','No group recorded'],...choices('groupId').map(id=>[id,groups.find(g=>(g.id||g.groupId)===id)?.name||id])])}
-      {['contractId','activityId','serviceId'].filter(key=>choices(key).length||filters[key]).map(key=><span key={key}>{select(key,({contractId:'Contract',activityId:'Activity',serviceId:'Service'})[key],[...new Set([...choices(key),filters[key]].filter(Boolean))].map(v=>[v,v]))}</span>)}
-      {select('crew','Crew',[['__none__','No crew recorded'],...choices('crew').map(v=>[v,v])])}
-      {select('status','Status',[['open','Ongoing'],['closed','Completed']])}{select('type','Downtime type',[['planned','Planned'],['unplanned','Unplanned']])}
-      <label className="dt-field"><span>From</span><input type="date" value={filters.from} onChange={e=>pick('from',e.target.value)}/></label><label className="dt-field"><span>To</span><input type="date" value={filters.to} min={filters.from||undefined} onChange={e=>pick('to',e.target.value)}/></label>
-    </div>{path.length>0&&<div className="dt-path"><button className="dt-button dt-button-small" onClick={()=>setPath([])}>Clear reason drill-down</button>{path.map(p=><span className="dt-badge" key={p.key}>{p.label}</span>)}</div>}
-    <p className="dt-muted">{rows.length} records · {total.toFixed(2)} asset-hours · {rows.filter(e=>!e.eventEnd).length} ongoing. Dates use your device timezone; hours are clipped to the selected dates. Shift groups use the saved shift at event start.</p>
-    {loading?<div className="dt-empty">Loading downtime…</div>:<div className="dt-table-wrap"><table className="dt-table"><thead><tr>{['Machine','Date','Downtime Reason','Start Time','End Time','Hours','Operating site','Shift / Crew','Actions'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(e=><tr key={e.id}><td><button className="dt-button dt-button-text" onClick={()=>onOpenAsset?.(e.assetId)}>{e.assetNumber||e.assetId}</button><small>{e.assetName}</small></td><td>{stamp(e.eventStart,{year:'numeric',month:'2-digit',day:'2-digit'})}</td><td><strong>{e.classificationPath?.slice(-1)[0]?.label||e.categoryLevel5||e.categoryLevel2||'Unclassified'}</strong><small>{e.classificationPath?.map(p=>p.label).join(' → ')}</small><small>{e.notes}</small></td><td>{stamp(e.eventStart,{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td><td>{e.eventEnd?<>{stamp(e.eventEnd,{hour:'2-digit',minute:'2-digit',second:'2-digit'})}<small>{stamp(e.eventEnd,{year:'numeric',month:'2-digit',day:'2-digit'})}</small></>:<span className="dt-badge dt-badge-amber">Ongoing</span>}</td><td>{e.periodDurationHours.toFixed(2)}<small>{!e.eventEnd?'Provisional':''}</small></td><td>{e.siteName||'No site recorded'}</td><td>{e.shiftName||'No shift recorded'}<small>{e.crew||'No crew recorded'}</small></td><td><div className="dt-actions">{!e.eventEnd&&onCloseEvent&&<button className="dt-button dt-button-primary" onClick={()=>onCloseEvent(e)}>Mark back online</button>}{e.masterListId&&onCorrect&&<button className="dt-button dt-button-small" onClick={()=>onCorrect(e)}>Correct</button>}<button className="dt-button dt-button-small" onClick={()=>auditEvent(e)}>Audit</button></div></td></tr>)}</tbody></table>{!rows.length&&<div className="dt-empty">No records match these filters.</div>}</div>}
+    <section className="dt-panel"><div className="dt-panel-head"><h3>Downtime records</h3><button className="dt-button dt-button-small" onClick={()=>{setFilters(blank());setPath([]);setTableIds(null);setTableReset(x=>x+1);}}>Clear all filters</button></div>
+      <div className="dt-actions"><label className="dt-field"><span>From</span><input type="date" value={filters.from} onChange={e=>pick('from',e.target.value)}/></label>
+        <label className="dt-field"><span>To</span><input type="date" value={filters.to} min={filters.from||undefined} onChange={e=>pick('to',e.target.value)}/></label>
+        {Object.entries(filters).some(([key,value])=>value&&!['from','to','search'].includes(key))&&<span className="dt-badge">Filtered by the selected equipment / drill-down</span>}
+      </div>
+      {path.length>0&&<div className="dt-path"><button className="dt-button dt-button-small" onClick={()=>setPath([])}>Clear reason drill-down</button>{path.map(p=><span className="dt-badge" key={p.key}>{p.label}</span>)}</div>}
+      <p className="dt-muted">{rows.length} records · {total.toFixed(2)} asset-hours · {rows.filter(e=>!e.eventEnd).length} ongoing. Header filters, charts and exports use the same records.</p>
+      <DowntimeRegisterTable key={`${tenantId}:${tableReset}`} tenantId={tenantId} rows={report.rows} loading={loading}
+        onVisibleRowsChange={onVisibleRowsChange} onOpenAsset={onOpenAsset} onCorrect={onCorrect} onCloseEvent={onCloseEvent} onAudit={auditEvent}
+        onMasterCodes={event=>onNavigate?.('setup',{masterId:event.masterListId,groupId:event.groupId||''})}/>
     </section>
     {rows.some(e=>!e.eventEnd)&&<p className="dt-notice">Ongoing hours are provisional as of {new Date(asOf).toLocaleString()}. Events remain open until the machine returns online.</p>}
     <button className="dt-button" aria-expanded={analysis} onClick={()=>setAnalysis(v=>!v)}>{analysis?'Hide analysis':'Analyse this table selection'}</button>

@@ -13,7 +13,7 @@ export const TWIN_ROUTES = Object.freeze({
 export function twinPath(key,context={}) {
   const params=new URLSearchParams();
   if(key==='shiftDefinitions')params.set('view','definitions');
-  for(const k of ['assetId','eventId','from','to','siteId','shiftId','groupId','contractId','activityId','serviceId','crew','view'])if(context[k])params.set(k,context[k]);
+  for(const k of ['assetId','eventId','masterId','from','to','siteId','shiftId','groupId','contractId','activityId','serviceId','crew','view'])if(context[k])params.set(k,context[k]);
   return (TWIN_ROUTES[key==='shiftDefinitions'?'shiftSetup':key]||TWIN_ROUTES.home)+(params.size?'?'+params:'');
 }
 export function twinView(pathname,search='',initialActive=null) {

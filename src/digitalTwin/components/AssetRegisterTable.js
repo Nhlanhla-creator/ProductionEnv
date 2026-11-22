@@ -8,13 +8,13 @@ import { getTerm } from "../services/taxonomyService"
 import { downloadCsv } from "../models/downloadCsv"
 
 const DEFAULTS = [
-  ["name", "Equipment / Asset ID", 235], ["group", "Equipment group", 170], ["make", "Make / OEM", 138],
+  ["internalNumber", "Asset ID", 160], ["name", "Equipment", 215], ["group", "Equipment group", 170], ["make", "Make / OEM", 138],
   ["model", "Model", 135], ["hourMeter", "Machine hours", 133], ["operatingHours", "Operating hours", 140],
   ["location", "Location", 160], ["capacity", "Capacity / unit", 150], ["ownershipType", "Ownership status", 153],
   ["modelGroup", "Model group", 145], ["status", "Status", 132],
 ]
 const OPTIONAL = [
-  ["internalNumber", "Asset ID"], ["serialNumber", "Serial number"], ["registration", "Registration"],
+  ["serialNumber", "Serial number"], ["registration", "Registration"],
   ["barcodeOrQr", "Barcode / QR"], ["equipmentTypeId", "Equipment type"], ["year", "Year"],
   ["criticality", "Criticality"], ["configuration", "Configuration"], ["owner", "Owner"], ["lessor", "Lessor"],
   ["financeOrSpv", "Finance / SPV"], ["acquisitionDate", "Acquisition date"], ["bookOrReplacementValue", "Book / replacement value"],
@@ -81,7 +81,7 @@ const IconButton = ({ label, icon: Icon, ...props }) => <button type="button" cl
   aria-label={label} title={label} {...props}><Icon size={15} aria-hidden="true" /></button>
 
 export default function AssetRegisterTable({ tenantId, rows, initialAssetId, loading, onView, onCapture, onEdit, onRetire }) {
-  const storageKey = `digitalTwin.assetRegisterColumns:${tenantId}`
+  const storageKey = `digitalTwin.assetRegisterColumns:v3:${tenantId}`
   const [layout, setLayout] = useState(() => getLayout(storageKey))
   const [search, setSearch] = useState(initialAssetId || "")
   const [filters, setFilters] = useState({})
@@ -243,7 +243,7 @@ export default function AssetRegisterTable({ tenantId, rows, initialAssetId, loa
             {keys.map((key) => {
               const value = valueFor(row, key)
               return <td key={key} title={display(value)}>{key === "name" ? <>
-                <strong>{display(value)}</strong><small>{assetNumber(asset)}</small>
+                <strong>{display(value)}</strong>
               </> : key === "status" ? <span className={`dt-badge ${canCapture ? "dt-badge-green" : ""}`}>{display(value)}</span> : display(value)}</td>
             })}
             <td><div className="dt-actions dt-register-row-actions">

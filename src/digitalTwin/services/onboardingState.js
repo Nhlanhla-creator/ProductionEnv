@@ -34,7 +34,7 @@ export const getOnboardingState = async (tenantId) => {
   }
 }
 
-const FORM_KEYS = ['structureDraft','environment','siteName','contractName','clientName','serviceValueChainId','serviceId','activityName','equipmentGroupName','equipmentGroupCapacity','companyNodeId','siteNodeId','contractNodeId','serviceNodeId','activityNodeId','groupId'];
+const FORM_KEYS = ['operationalDataSources','structureDraft','environment','siteName','contractName','clientName','serviceValueChainId','serviceId','activityName','equipmentGroupName','equipmentGroupCapacity','companyNodeId','siteNodeId','contractNodeId','serviceNodeId','activityNodeId','groupId'];
 export const saveOnboardingState = async (tenantId, patch) => {
   if (!tenantId) return;
   return runTransaction(db, async (transaction) => {

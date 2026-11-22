@@ -5,6 +5,7 @@ export const STRUCTURE_STEPS = ["Sector pack", "What work is performed?", "Asset
 export const EMPTY_STRUCTURE = {
   sectorPack: "",
   sectorName: "",
+  operatingEnvironments: [],
   valueChains: [],
   activities: [],
   services: [],
@@ -25,8 +26,17 @@ export const workLabel = (value = "") => /blasting and drilling/i.test(value) ? 
 const choice = (term) => ({ id: term.id, name: workLabel(term.name) })
 export const uniqueChoices = (values) => [...new Map(values.map((value) => [value.id, value])).values()]
 
-function packServices(pack) {
-  return [...(pack?.services || []), ...(pack?.valueChain || []).flatMap((stage) => stage.services || [])]
+const SUPPORT_CATEGORIES = {
+  mining: ["cleaning", "catering", "security", "medical", "maintenance", "labs", "logistics", "professional"],
+  agriculture: ["cleaning", "security", "medical", "maintenance", "labs", "logistics", "professional"],
+  manufacturing: ["cleaning", "catering", "security", "medical", "maintenance", "labs", "logistics", "professional"],
+  industrial_support: ["cleaning", "catering", "security", "medical", "maintenance", "labs", "logistics", "professional"],
+}
+export function supportServices(packKey) {
+  const allowed = SUPPORT_CATEGORIES[packKey] || ["cleaning", "security", "maintenance", "logistics", "professional"]
+  const pack = getPack("industrial_support")
+  return (pack?.services || []).filter((service) => allowed.includes(service.sectorChild?.split(".").pop()))
+    .map((term) => ({ ...choice(term), category: pack.sector.children.find((item) => item.id === term.sectorChild)?.name || "Professional services" }))
 }
 
 export function structureOptions(packKey, selectedChains = []) {
@@ -34,15 +44,15 @@ export function structureOptions(packKey, selectedChains = []) {
   const chains = pack?.valueChain || (pack?.services ? [{
     id: pack.sector.id, name: pack.sector.name, services: pack.services,
   }] : [])
-  const stages = selectedChains.length ? chains.filter((chain) => selectedChains.some(({ id }) => id === chain.id)) : chains
+  const stages = selectedChains.length ? chains.filter((chain) => selectedChains.some(({ id }) => id === chain.id)) : []
   const work = stages.flatMap((stage) => (stage.services || []).flatMap((service) =>
     service.activities?.length ? service.activities : [{ id: `${service.id}.work`, name: service.name }]))
   const [technical, nonTechnical] = roles[packKey] || [[], []]
   const families = optionsFor({ packKey, domain: "equipment_family" })
   return {
     valueChains: chains.map(choice),
-    activities: uniqueChoices(work.map(choice)),
-    services: uniqueChoices([...packServices(pack), ...packServices(getPack("industrial_support"))].map(choice)),
+    activities: uniqueChoices(work.map((term) => ({ ...choice(term), valueChainIds: stages.filter((stage) => (stage.services || []).some((service) => service.activities?.some((activity) => activity.id === term.id) || `${service.id}.work` === term.id)).map((stage) => stage.id) }))),
+    services: supportServices(packKey),
     equipmentGroups: uniqueChoices(families.map(choice)),
     asset: uniqueChoices(families.flatMap((family) => {
       const types = optionsFor({ packKey, domain: "equipment_type", parentId: family.id })

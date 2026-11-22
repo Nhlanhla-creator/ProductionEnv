@@ -71,9 +71,9 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
 
           <StepItem
             num={3}
-            title="View KPI Summary"
+            title="View Delivery"
             description="Your KPI tiles will populate as soon as there's data to calculate from."
-            action={{ label: "Open KPI Summary", onClick: onOpenCommandCentre, icon: TrendingUp }}
+            action={{ label: "Open Delivery", onClick: onOpenCommandCentre, icon: TrendingUp }}
             noBorder
           />
         </div>
@@ -107,7 +107,7 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
               cursor: "pointer", fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: "7px",
             }}>
-            Open KPI Summary
+            Open Delivery
             <ChevronRight size={14} />
           </button>
         </div>

@@ -154,7 +154,7 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
             <input value={form.name || ""} onChange={(e) => set({ name: e.target.value })}
               style={inputS} placeholder="e.g. KMS TRK 014" />
           </Field>
-          <Field errors={errors} warnings={warnings} label="Asset ID / internal number" name="internalNumber" required={isAsset}>
+          <Field errors={errors} warnings={warnings} label="Asset ID" name="internalNumber" required={isAsset}>
             <input value={form.internalNumber || ""} onChange={(e) => set({ internalNumber: e.target.value })}
               style={inputS} placeholder="e.g. TRK-014" />
           </Field>
@@ -177,7 +177,7 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
             {GROUPS.classification}
           </h4>
           <Row>
-            <Field errors={errors} warnings={warnings} label="Asset type" name="equipmentTypeId" required>
+            <Field errors={errors} warnings={warnings} label="Equipment" name="equipmentTypeId" required>
               {customType ? <input value={form.equipmentTypeId || ""} onChange={e => set({ equipmentTypeId: e.target.value })} style={inputS} placeholder="e.g. Delivery van or processing line" /> : <select value={form.equipmentTypeId || ""} onChange={e => { if (e.target.value === "__custom__") { setCustomType(true); set({ equipmentTypeId: "" }) } else set({ equipmentTypeId: e.target.value || null }) }} style={inputS}>
                 <option value="">Select equipment type…</option>
                 {form.equipmentTypeId && !equipmentTypeOptions.some(o => o.id === form.equipmentTypeId) && <option value={form.equipmentTypeId}>{form.equipmentTypeId}</option>}
@@ -217,7 +217,7 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
       {isAsset && <div style={sectionS}>
         <h4 style={{ color: T.accent }}>Group & operating location</h4>
         <Row cols={3}>
-          <Field errors={errors} warnings={warnings} label="Asset group (optional)" name="equipmentGroupId"><select style={inputS} value={form.equipmentGroupId || ""} onChange={e => set({ equipmentGroupId: e.target.value || null })}><option value="">No group</option>{form.equipmentGroupId && !groups.some(g => g.id === form.equipmentGroupId) && <option value={form.equipmentGroupId}>{form.equipmentGroupId}</option>}{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
+          <Field errors={errors} warnings={warnings} label="Equipment group (optional)" name="equipmentGroupId"><select style={inputS} value={form.equipmentGroupId || ""} onChange={e => set({ equipmentGroupId: e.target.value || null })}><option value="">No group</option>{form.equipmentGroupId && !groups.some(g => g.id === form.equipmentGroupId) && <option value={form.equipmentGroupId}>{form.equipmentGroupId}</option>}{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
           <Field errors={errors} warnings={warnings} label="Site (optional)" name="siteId"><select style={inputS} value={form.siteId || ""} onChange={e => set({ siteId: e.target.value || null })}><option value="">No site</option>{form.siteId && !sites.some(s => s.id === form.siteId) && <option value={form.siteId}>{form.siteId}</option>}{sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         <Field errors={errors} warnings={warnings} label="Location description (optional)" name="location"><input style={inputS} value={form.location || ""} onChange={e => set({ location: e.target.value })} placeholder="e.g. North pit / Workshop A" /></Field></Row>
       </div>}

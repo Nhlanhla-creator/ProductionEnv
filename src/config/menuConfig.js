@@ -695,7 +695,7 @@ export const smeMenuItems = [
           { id: "operations-asset-setup", label: "Asset Setup", icon: <Truck size={16} />, route: "/digital-twin/setup/asset-setup" },
           { id: "operations-master-codes", label: "Master Codes", icon: <Settings size={16} />, route: "/digital-twin/setup/master-codes" },
           { id: "operations-shift-setup", label: "Team Setup", icon: <Calendar size={16} />, route: "/digital-twin/setup/shifts" },
-          { id: "operations-imports", label: "Data imports", icon: <Upload size={16} />, route: "/digital-twin/setup/imports" },
+          { id: "operations-imports", label: "Operational Data Sources", icon: <Upload size={16} />, route: "/digital-twin/setup/imports" },
         ],
       },
       // ─── RAPs (Overall Company Health removed) ───────────────────────────
@@ -736,12 +736,10 @@ export const smeMenuItems = [
         id: "operational-performance", label: "Operations Performance", icon: <Activity size={16} />,
         route: "/digital-twin/operations", hasSubmenu: true,
         subItems: [
-          { id: "operations-kpi-summary", label: "KPI Summary", icon: <LayoutDashboard size={16} />, route: "/digital-twin/operations/kpis" },
           { id: "operations-supply-chain", label: "Supply Chain", icon: <Boxes size={16} />, route: "/digital-twin/operations/supply-chain" },
           { id: "operations-delivery", label: "Delivery", icon: <Truck size={16} />, route: "/digital-twin/operations/delivery" },
           { id: "operations-safety", label: "Safety", icon: <Activity size={16} />, route: "/digital-twin/operations/safety" },
           { id: "operations-downtime", label: "Downtime", icon: <Wrench size={16} />, route: "/digital-twin/operations/downtime" },
-          { id: "operations-capacity", label: "Capacity", icon: <Boxes size={16} />, route: "/digital-twin/operations/capacity" },
         ],
       },
       // ─── People Performance ─────────────────────────────────────────────

@@ -17,14 +17,14 @@ function reasonOptions(person, status) {
 }
 
 function AttendanceRow({ person, row, vehicles, saving, disabled, onChange, onSave }) {
-  const title = (label) => `${label}: ${person.name}`
+  const title = (label) => `${label}: ${[person.name, person.surname].filter(Boolean).join(" ")}`
   const change = (key) => (event) => onChange({ [key]: event.target.value })
   const registered = vehicles.find(({ id }) => id === row.vehicleId)
   const enteredExternal = !row.vehicleId && !!row.externalVehicle
   const choice = row.vehicleId || (enteredExternal || row.vehicleLabel ? EXTERNAL : "")
   const listId = `shift-reasons-${person.id}`
   return <tr>
-    <td><strong>{person.name}</strong></td><td>{row.role || person.role || "—"}</td>
+    <td><strong>{[person.name, person.surname].filter(Boolean).join(" ")}</strong></td><td>{row.role || person.role || "—"}</td>
     <td><div className="dt-attendance-buttons">
       {[["present", "Present"], ["absent", "Absent"]].map(([value, label]) =>
         <button type="button" key={value} aria-label={title(label)} aria-pressed={row.status === value} disabled={disabled}
@@ -105,7 +105,7 @@ export default function ShiftAttendance({ tenantId, people, shifts }) {
     if (pending.current) return
     const row = rowFor(person.id)
     if (row.externalVehicle && !row.vehicleLabel.trim()) {
-      setError(`Enter the vehicle used by ${person.name}, or select None.`)
+      setError(`Enter the vehicle used by ${[person.name, person.surname].filter(Boolean).join(" ")}, or select None.`)
       return
     }
     pending.current = person.id
@@ -120,7 +120,7 @@ export default function ShiftAttendance({ tenantId, people, shifts }) {
         delete next[person.id]
         return next
       })
-      setNotice(`Attendance saved for ${person.name}.`)
+      setNotice(`Attendance saved for ${[person.name, person.surname].filter(Boolean).join(" ")}.`)
     } catch (failure) {
       setError(failure.message)
     } finally {
@@ -133,7 +133,7 @@ export default function ShiftAttendance({ tenantId, people, shifts }) {
     ["Date", "Shift", "Person", "Role", "Attendance", "Vehicle / equipment", "Check in", "Check out", "Work / activity", "Reason", "Shift notes"],
     ...savedPeople.map((person) => {
       const row = attendance[person.id]
-      return [date, shift.name, person.name, row.role || person.role, row.status, row.vehicleLabel || row.vehicleId,
+      return [date, shift.name, [person.name,person.surname].filter(Boolean).join(" "), row.role || person.role, row.status, row.vehicleLabel || row.vehicleId,
         row.checkIn, row.checkOut, row.activity, row.reason, row.notes]
     }),
   ])
