@@ -140,6 +140,7 @@ const ROLE_OBJECTIVES = {
     { id: "recruit-intern", title: "Recruit an intern or graduate", service: "Internship Marketplace" },
     { id: "join-programme", title: "Join an ESD, incubator, accelerator or development programme", service: "Programme Matching + BIG Score + Growth Suite" },
     { id: "offer-services", title: "Offer professional or advisory services", service: "Business Marketplace + Advisor Marketplace" },
+    { id: "not-sure", title: "Help me decide where to start", service: "Guided recommendations" },
   ],
   Corporate: [
     { id: "find-suppliers", title: "Find and verify capable suppliers", service: "Procurement Matchmaking + Supplier Intelligence + BIG Score" },

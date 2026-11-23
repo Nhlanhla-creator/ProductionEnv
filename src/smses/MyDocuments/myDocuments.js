@@ -22,6 +22,13 @@ import {
 } from "../../utils/documentSyncService";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useVerificationNudges } from "../../hooks/useVerificationNudges";
+import { useSmeObjectiveView } from "../../hooks/useSmeObjectiveView";
+import { useSmeAccess } from "../SMEAccess";
+import {
+  getObjectiveDocumentCategories,
+  getObjectiveDocumentLabels,
+  getObjectiveViewConfig,
+} from "../../utils/smeObjectiveView";
 
 const DOCUMENTS = [
  "5 Year Budget",
@@ -200,6 +207,34 @@ const MyDocuments = () => {
   const [showFullGuidelines, setShowFullGuidelines] = useState(false);
 const [highlightedDoc, setHighlightedDoc] = useState(null);
   const { notifyDocumentExpiryWarning } = useVerificationNudges(auth.currentUser);
+  const {
+    primaryObjective,
+    showEverything,
+    setShowEverything,
+    loading: objectiveLoading,
+  } = useSmeObjectiveView();
+  const {
+    isCompanyMember,
+    loading: accessLoading,
+    error: accessError,
+  } = useSmeAccess();
+  const objectiveDocumentLabels = getObjectiveDocumentLabels(primaryObjective)
+  const objectiveDocumentCategories =
+    getObjectiveDocumentCategories(primaryObjective)
+  const objectiveViewActive =
+    !objectiveLoading &&
+    !accessLoading &&
+    !accessError &&
+    !isCompanyMember &&
+    !isInvestorView &&
+    sessionStorage.getItem("investorViewMode") !== "true" &&
+    !(sessionStorage.getItem("viewOrigin") === "cmf" &&
+      sessionStorage.getItem("viewingSMEId")) &&
+    !showEverything &&
+    Boolean(getObjectiveViewConfig(primaryObjective));
+  const documentFilterTypes = objectiveViewActive
+    ? ["all", ...Object.keys(objectiveDocumentCategories || {})]
+    : ["all", "Compliance", "Capital Appeal", "Governance", "Legitimacy", "Leadership", "Operations"]
 
   // Expiry calculation for compliance documents (SP8.41)
   const getExpiringDocuments = () => {
@@ -1279,6 +1314,11 @@ console.info("Download URL retrieved successfully");
     : DOCUMENTS;
     
   const filteredDocuments = documentsToDisplay.filter((docLabel) => {
+   const isInObjectiveScope =
+     !objectiveViewActive ||
+     objectiveDocumentLabels?.has(docLabel);
+   if (!isInObjectiveScope) return false;
+
    const documentId = getDocumentId(docLabel);
 
    const fundingDocuments = [
@@ -1347,15 +1387,17 @@ console.info("Download URL retrieved successfully");
    ];
 
 
-   const matchFilter =
-     filter === "all" ||
-     (filter === "Funding" && fundingDocuments.includes(docLabel)) ||
-     (filter === "Compliance" && complianceDocuments.includes(docLabel)) ||
-     (filter === "Legitimacy" && legitimacyDocuments.includes(docLabel)) ||
-     (filter === "Leadership" && leadershipDocuments.includes(docLabel)) ||
-     (filter === "Governance" && governanceDocuments.includes(docLabel)) ||
-      (filter === "Operations" && operationsDocuments.includes(docLabel)) ||
-     (filter === "Capital Appeal" && capitalAppealDocuments.includes(docLabel));
+   const matchFilter = filter === "all" || (
+     objectiveViewActive
+       ? Boolean(objectiveDocumentCategories?.[filter]?.has(docLabel))
+       : (filter === "Funding" && fundingDocuments.includes(docLabel)) ||
+         (filter === "Compliance" && complianceDocuments.includes(docLabel)) ||
+         (filter === "Legitimacy" && legitimacyDocuments.includes(docLabel)) ||
+         (filter === "Leadership" && leadershipDocuments.includes(docLabel)) ||
+         (filter === "Governance" && governanceDocuments.includes(docLabel)) ||
+         (filter === "Operations" && operationsDocuments.includes(docLabel)) ||
+         (filter === "Capital Appeal" && capitalAppealDocuments.includes(docLabel))
+   );
 
    const matchStatusFilter =
      statusFilter === "all" ||
@@ -1365,6 +1407,12 @@ console.info("Download URL retrieved successfully");
 
    return matchFilter && matchStatusFilter && matchSearch;
  });
+
+  useEffect(() => {
+    if (objectiveViewActive && !documentFilterTypes.includes(filter)) {
+      setFilter("all")
+    }
+  }, [objectiveViewActive, documentFilterTypes, filter])
 
 
  const handleDeleteDocument = async (docLabel) => {
@@ -2029,6 +2077,25 @@ const badgeStyles = (status) => {
                ? `${viewingSMEName}'s ${hasRequiredDocSet ? "Required Documents" : "Documents"}`
                : "My Documents"}
            </h1>
+           {objectiveViewActive && (
+             <button
+                type="button"
+                onClick={() => setShowEverything(true)}
+                style={{
+                  marginTop: "12px",
+                  padding: "8px 14px",
+                  backgroundColor: "transparent",
+                  color: "#8d6e63",
+                  border: "1px solid #8d6e63",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+             >
+                Show everything
+             </button>
+           )}
            <p style={{
              fontSize: "1.125rem",
              color: "#6d4c41",
@@ -2039,7 +2106,9 @@ const badgeStyles = (status) => {
                ? (hasRequiredDocSet
                  ? "Reviewing the documents required by your programme"
                  : "Reviewing everything this business has on file")
-               : "Track all your submitted documents in one place"}
+               : objectiveViewActive
+                 ? `Showing documents related to your ${getObjectiveViewConfig(primaryObjective)?.title} objective. This view does not mean every item is required.`
+                 : "Track all your submitted documents in one place"}
            </p>
 
            {/* Document Submission Guidelines */}
@@ -2220,7 +2289,7 @@ const badgeStyles = (status) => {
            boxSizing: "border-box"
          }}>
            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-             {["all", "Compliance", "Capital Appeal", "Governance", "Legitimacy", "Leadership", "Operations", ].map((type) => (
+             {documentFilterTypes.map((type) => (
                <button
                  key={type}
                  onClick={() => setFilter(type)}

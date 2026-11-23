@@ -25,6 +25,11 @@ import { useVerificationNudges } from "../../hooks/useVerificationNudges";
 import { ROLE_PERMISSIONS, resolveProfileContext } from "../../utils/profile-context";
 import ProfileScopeSwitcher from "../../utils/ProfileScopeSwitcher";
 import { checkIsNGO } from "./ngoTaxonomy";
+import { useSmeObjectiveView } from "../../hooks/useSmeObjectiveView";
+import {
+  filterProfileSectionsForObjective,
+  getObjectiveViewConfig,
+} from "../../utils/smeObjectiveView";
 
 export const getProfileSections = (isNGO = false) => [
   { id: "instructions", label: "Instructions" },
@@ -93,8 +98,15 @@ const sectionValidations = {
   declarationConsent: (data) => Boolean(data?.accuracy && data?.dataProcessing && data?.termsConditions),
 }
 
-const validateAllSections = (formData, completedSections, isNGO = false) => {
-  const sectionList = getProfileSections(isNGO)
+const validateAllSections = (
+  formData,
+  completedSections,
+  isNGO = false,
+  requiredSectionIds = null
+) => {
+  const sectionList = getProfileSections(isNGO).filter(
+    (section) => !requiredSectionIds || requiredSectionIds.has(section.id)
+  )
   const sectionStatus = {}
   let allValid = true
   sectionList.forEach((section) => {
@@ -161,6 +173,12 @@ export default function UniversalProfile() {
   const [editHistory, setEditHistory] = useState([])
   const { notifyVettingStatusUpdate } = useOnboardingVetting(auth.currentUser);
   const { notifyApplicationDraftSaved } = useVerificationNudges(auth.currentUser);
+  const {
+    primaryObjective,
+    showEverything,
+    setShowEverything,
+    loading: objectiveLoading,
+  } = useSmeObjectiveView();
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
@@ -306,11 +324,27 @@ export default function UniversalProfile() {
   })
 
   const isNGO = checkIsNGO(formData, authUser)
-  const sections = getProfileSections(isNGO).filter((section) =>
+  const isExternalProfileView =
+    sessionStorage.getItem("investorViewMode") === "true" ||
+    (sessionStorage.getItem("viewOrigin") === "cmf" &&
+      Boolean(sessionStorage.getItem("viewingSMEId")))
+  const objectiveViewActive =
+    !objectiveLoading &&
+    !isExternalProfileView &&
+    !isCompanyMember &&
+    !showEverything &&
+    Boolean(getObjectiveViewConfig(primaryObjective))
+  const objectiveProfileSectionIds =
+    getObjectiveViewConfig(primaryObjective)?.profileSections || null
+  const permittedSections = getProfileSections(isNGO).filter((section) =>
     !isCompanyMember ||
     !Array.isArray(profileSectionGrants) ||
     profileSectionGrants.includes(section.id)
   )
+  const sections = objectiveViewActive
+    ? filterProfileSectionsForObjective(permittedSections, primaryObjective)
+    : permittedSections
+  const visibleProfileSectionIds = sections.map((section) => section.id)
 
   useEffect(() => {
     if (sections.length && !sections.some((section) => section.id === activeSection)) {
@@ -536,7 +570,12 @@ export default function UniversalProfile() {
       return
     }
     const completedWithDeclaration = { ...completedSections, declarationConsent: true }
-    const { allValid, sectionStatus } = validateAllSections(formData, completedWithDeclaration, isNGO)
+    const { allValid, sectionStatus } = validateAllSections(
+      formData,
+      completedWithDeclaration,
+      isNGO,
+      objectiveViewActive ? objectiveProfileSectionIds : null
+    )
     if (!allValid) {
       const issues = Object.entries(sectionStatus).filter(([_, s]) => !s.valid || !s.completed).map(([_, s]) => `❌ ${s.name.replace(/\n/g, " ")} is incomplete or invalid.`)
       alert("Profile submission blocked:\n\n" + issues.join("\n"))
@@ -769,7 +808,27 @@ export default function UniversalProfile() {
     return (
       <div className="universal-profile-container">
         {renderCmfBanner()}
-        <ProfileSummary data={profileData || formData} onEdit={handleEditProfile} isNGO={isNGO} />
+        {objectiveViewActive && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowEverything(true)}
+            >
+              Show everything
+            </button>
+          </div>
+        )}
+        <ProfileSummary
+          data={profileData || formData}
+          onEdit={handleEditProfile}
+          isNGO={isNGO}
+          visibleSections={visibleProfileSectionIds}
+          showFundingAction={
+            !objectiveViewActive ||
+            getObjectiveViewConfig(primaryObjective)?.applicationScopes.has("funding")
+          }
+        />
       </div>
     )
   }
@@ -818,7 +877,9 @@ export default function UniversalProfile() {
               <p>You've successfully completed your Universal Profile!</p>
               <div className="popup-buttons-group">
                 <button className="btn btn-secondary" onClick={handleCloseCongratulationsPopup}>View Summary</button>
-                <button className="btn btn-primary" onClick={handleNavigateToFunding}>Go to Funding Application</button>
+                {!objectiveViewActive && (
+                  <button className="btn btn-primary" onClick={handleNavigateToFunding}>Go to Funding Application</button>
+                )}
               </div>
             </div>
           </div>
@@ -835,6 +896,15 @@ export default function UniversalProfile() {
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <ProfileScopeSwitcher />
+          {objectiveViewActive && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowEverything(true)}
+            >
+              Show everything
+            </button>
+          )}
           {isDevMode && (
             <button
               type="button"

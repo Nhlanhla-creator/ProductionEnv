@@ -24,7 +24,8 @@ function Sidebar({
   storageKey = "sidebarCollapsed",
   autoExpandMenus = {},
   enableNested = false,  // ← NEW: enables nested submenus (3rd level)
-  customDocId = null
+  customDocId = null,
+  objectiveViewControl = null,
 }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -337,6 +338,17 @@ function Sidebar({
 
         {/* Menu Items */}
         <div className={styles.menuContainer}>
+          {objectiveViewControl && (
+            <button
+              type="button"
+              className={styles.objectiveViewButton}
+              onClick={objectiveViewControl.onClick}
+              title={objectiveViewControl.label}
+              aria-label={objectiveViewControl.label}
+            >
+              {isCollapsed ? "All" : objectiveViewControl.label}
+            </button>
+          )}
           <nav className={styles.menu} role="navigation">
             {renderedMenuItems}
           </nav>

@@ -5,6 +5,11 @@ import { useUserProfile } from "../../hooks/useUserProfile"
 import { smeMenuItems } from "../../config/menuConfig"
 import { filterSmeMenuItems } from "../../utils/sme-access"
 import { useSmeAccess } from "../SMEAccess"
+import { useSmeObjectiveView } from "../../hooks/useSmeObjectiveView"
+import {
+  filterMenuForObjective,
+  getObjectiveViewConfig,
+} from "../../utils/smeObjectiveView"
 
 // ─── What an outside viewer can reach ───────────────────────────────────────
 const VIEWER_MENU_IDS = ["dashboard", "growth-tools", "profile", "documents"]
@@ -28,6 +33,27 @@ function SMESidebar() {
   const [filteredMenuItems, setFilteredMenuItems] = useState([])
   const [autoExpandMenus, setAutoExpandMenus] = useState({})
   const { loading: accessLoading, error: accessError, isCompanyMember, permissions } = useSmeAccess()
+  const {
+    primaryObjective,
+    showEverything,
+    setShowEverything,
+    loading: objectiveLoading,
+  } = useSmeObjectiveView()
+  const objectiveViewActive =
+    !objectiveLoading &&
+    !accessLoading &&
+    !accessError &&
+    !isInvestorView &&
+    !isCompanyMember &&
+    !showEverything &&
+    Boolean(getObjectiveViewConfig(primaryObjective))
+  const objectiveViewAvailable =
+    !objectiveLoading &&
+    !accessLoading &&
+    !accessError &&
+    !isInvestorView &&
+    !isCompanyMember &&
+    Boolean(getObjectiveViewConfig(primaryObjective))
 
   const { userName } = useUserProfile(
     "universalProfiles",
@@ -59,19 +85,34 @@ function SMESidebar() {
         operations: true,
       })
     } else if (accessError) {
+      setIsInvestorView(false)
       setFilteredMenuItems([])
       setAutoExpandMenus({})
     } else if (accessLoading) {
+      setIsInvestorView(false)
       setFilteredMenuItems([])
       setAutoExpandMenus({})
     } else if (isCompanyMember) {
+      setIsInvestorView(false)
       setFilteredMenuItems(filterSmeMenuItems(smeMenuItems, permissions?.sidebarSections || []))
       setAutoExpandMenus({})
     } else {
-      setFilteredMenuItems(smeMenuItems)
+      setIsInvestorView(false)
+      setFilteredMenuItems(
+        objectiveViewActive
+          ? filterMenuForObjective(smeMenuItems, primaryObjective)
+          : smeMenuItems
+      )
       setAutoExpandMenus({})
     }
-  }, [accessError, accessLoading, isCompanyMember, permissions])
+  }, [
+    accessError,
+    accessLoading,
+    isCompanyMember,
+    permissions,
+    primaryObjective,
+    objectiveViewActive,
+  ])
 
   return (
     <Sidebar
@@ -81,6 +122,16 @@ function SMESidebar() {
       storageKey="smeSidebarCollapsed"
       autoExpandMenus={autoExpandMenus}
       enableNested={true}
+      objectiveViewControl={
+        objectiveViewAvailable
+          ? {
+              label: showEverything
+                ? `Focus on ${getObjectiveViewConfig(primaryObjective)?.title}`
+                : "Show everything",
+              onClick: () => setShowEverything(!showEverything),
+            }
+          : null
+      }
     />
   )
 }

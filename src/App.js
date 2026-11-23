@@ -279,6 +279,7 @@ import { Dashboard } from "./smses/SMSEDashboard/Dashboard"
 import Profile from "./smses/UniversalProfile/UniversalProfile"
 import FindMatches from "./smses/MyMatches/FindMatches"
 import MyDocuments from "./smses/MyDocuments/myDocuments"
+import ObjectiveRouteGate from "./smses/ObjectiveRouteGate"
 import GrowthEnabler from "./smses/MyGrowthTools/shop"
 
 import Messages from "./smses/Messages/Messages"
@@ -612,6 +613,11 @@ function App() {
 
   const withProtection = (Component, props = {}, layoutFn = renderSMERoute) => (
     <ProtectedRoute>{layoutFn(Component, props)}</ProtectedRoute>
+  )
+  const withObjectiveProtection = (Component, props = {}) => (
+    <ProtectedRoute>
+      {renderSMERoute(ObjectiveRouteGate, { children: <Component {...props} /> })}
+    </ProtectedRoute>
   )
 
   const withAdminProtection = (Component, props = {}) => (
@@ -1244,13 +1250,13 @@ function App() {
         {/* ────────────────────────────────────────────────────────────────────── */}
 
         {/* ─── Funding Application Module (Phases 1–6) ─── */}
-        <Route path="/funding-new" element={withProtection(FundingRequestListRoute, {}, renderSMERoute)} />
-        <Route path="/funding-new/request" element={withProtection(FundingRequestNewRoute, {}, renderSMERoute)} />
-        <Route path="/funding-new/request/:requestId" element={withProtection(FundingRequestOpenRoute, {}, renderSMERoute)} />
-        <Route path="/funding-new/request/:requestId/matches" element={withProtection(FundingMatchesRoute, {}, renderSMERoute)} />
-        <Route path="/funding-new/request/:requestId/apply/:opportunityId" element={withProtection(FundingApplyRoute, {}, renderSMERoute)} />
-        <Route path="/funding-new/submissions" element={withProtection(MySubmissionsRoute, {}, renderSMERoute)} />
-        <Route path="/funding-new/submissions/:submissionId" element={withProtection(MySubmissionCaseRoute, {}, renderSMERoute)} />
+        <Route path="/funding-new" element={withObjectiveProtection(FundingRequestListRoute)} />
+        <Route path="/funding-new/request" element={withObjectiveProtection(FundingRequestNewRoute)} />
+        <Route path="/funding-new/request/:requestId" element={withObjectiveProtection(FundingRequestOpenRoute)} />
+        <Route path="/funding-new/request/:requestId/matches" element={withObjectiveProtection(FundingMatchesRoute)} />
+        <Route path="/funding-new/request/:requestId/apply/:opportunityId" element={withObjectiveProtection(FundingApplyRoute)} />
+        <Route path="/funding-new/submissions" element={withObjectiveProtection(MySubmissionsRoute)} />
+        <Route path="/funding-new/submissions/:submissionId" element={withObjectiveProtection(MySubmissionCaseRoute)} />
         {/* ────────────────────────────────────────────────────────────────────── */}
 
         {/* Investor Billing and Payments Routes */}
@@ -1390,24 +1396,24 @@ function App() {
 
         {/* Application Routes */}
         <Route path="/applications" element={<Navigate to="/applications/products-services" replace />} />
-        <Route path="/applications/funding" element={withProtection(FundingApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/funding/:section" element={withProtection(FundingApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/product" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/products-services" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/product/:section" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/funding" element={withObjectiveProtection(FundingApplicationManager)} />
+        <Route path="/applications/funding/:section" element={withObjectiveProtection(FundingApplicationManager)} />
+        <Route path="/applications/product" element={withObjectiveProtection(ProductApplicationManager)} />
+        <Route path="/applications/products-services" element={withObjectiveProtection(ProductApplicationManager)} />
+        <Route path="/applications/product/:section" element={withObjectiveProtection(ProductApplicationManager)} />
         <Route path="/applications/product-application" element={<Navigate to="/applications/product" replace />} />
-        <Route path="/applications/advisory" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/advisors" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/advisory/:section" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/advisory" element={withObjectiveProtection(AdvisorApplicationManager)} />
+        <Route path="/applications/advisors" element={withObjectiveProtection(AdvisorApplicationManager)} />
+        <Route path="/applications/advisory/:section" element={withObjectiveProtection(AdvisorApplicationManager)} />
 
         {/* Intern Application Routes */}
-        <Route path="/applications/intern" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/interns" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/intern/:section" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
-        <Route path="/applications/intern/instructions" element={withProtection(Instructions, {}, renderSMERoute)} />
-        <Route path="/applications/intern/job-overview" element={withProtection(InternJobOverview, {}, renderSMERoute)} />
-        <Route path="/applications/intern/internship-request" element={withProtection(InternInternshipRequest, {}, renderSMERoute)} />
-        <Route path="/applications/intern/matching-agreement" element={withProtection(InternMatchingAgreement, {}, renderSMERoute)} />
+        <Route path="/applications/intern" element={withObjectiveProtection(InternApplicationManager)} />
+        <Route path="/applications/interns" element={withObjectiveProtection(InternApplicationManager)} />
+        <Route path="/applications/intern/:section" element={withObjectiveProtection(InternApplicationManager)} />
+        <Route path="/applications/intern/instructions" element={withObjectiveProtection(Instructions)} />
+        <Route path="/applications/intern/job-overview" element={withObjectiveProtection(InternJobOverview)} />
+        <Route path="/applications/intern/internship-request" element={withObjectiveProtection(InternInternshipRequest)} />
+        <Route path="/applications/intern/matching-agreement" element={withObjectiveProtection(InternMatchingAgreement)} />
 
         {/* SME Universal Profile Sub-Routes */}
         <Route path="/profile/instructions" element={renderSMEProfileSection(SMEInstructions, "instructions")} />

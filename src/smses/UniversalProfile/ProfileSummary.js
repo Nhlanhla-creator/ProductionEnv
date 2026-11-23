@@ -7,8 +7,15 @@ import {
 } from "lucide-react"
 import { checkIsNGO } from "./ngoTaxonomy"
 
-const ProfileSummary = ({ data, onEdit }) => {
+const ProfileSummary = ({
+  data,
+  onEdit,
+  visibleSections = null,
+  showFundingAction = true,
+}) => {
   const isNGO = checkIsNGO(data)
+  const isSectionVisible = (sectionId) =>
+    !Array.isArray(visibleSections) || visibleSections.includes(sectionId)
 
   const [expandedSections, setExpandedSections] = useState({
     entityOverview: false, brandAssets: false, productsServices: false,
@@ -685,7 +692,7 @@ const ProfileSummary = ({ data, onEdit }) => {
 
           <div style={{ display: "grid", gap: "14px" }}>
             {/* Entity Overview */}
-            <div style={sectionCardStyle}>
+            {isSectionVisible("entityOverview") && <div style={sectionCardStyle}>
               {renderSectionHeader("entityOverview", Building, "Entity Overview")}
               {expandedSections.entityOverview && (
                 <div style={sectionContentStyle}>
@@ -725,25 +732,25 @@ const ProfileSummary = ({ data, onEdit }) => {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Brand Assets */}
-            {renderBrandAssets()}
+            {isSectionVisible("brandAssets") && renderBrandAssets()}
 
             {/* Products & Services / Programmes & Services */}
-            {renderProductsServices()}
+            {isSectionVisible("productsServices") && renderProductsServices()}
 
             {/* Ownership & Management / Leadership & Governance */}
-            {renderOwnershipManagement()}
+            {isSectionVisible("ownershipManagement") && renderOwnershipManagement()}
 
             {/* Contact Details */}
-            {renderContactDetails()}
+            {isSectionVisible("contactDetails") && renderContactDetails()}
 
             {/* Legal & Compliance */}
-            {renderLegalCompliance()}
+            {isSectionVisible("legalCompliance") && renderLegalCompliance()}
 
             {/* Financial Overview */}
-            <div style={sectionCardStyle}>
+            {isSectionVisible("financialOverview") && <div style={sectionCardStyle}>
               {renderSectionHeader("financialOverview", DollarSign, "Financial Overview")}
               {expandedSections.financialOverview && (
                 <div style={sectionContentStyle}>
@@ -883,13 +890,13 @@ const ProfileSummary = ({ data, onEdit }) => {
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Operations Overview */}
-            {renderOperationsOverview()}
+            {isSectionVisible("operationsOverview") && renderOperationsOverview()}
 
             {/* Governance & ESG Overview */}
-            <div style={sectionCardStyle}>
+            {isSectionVisible("governance") && <div style={sectionCardStyle}>
               {renderSectionHeader("governance", FileCheck, isNGO ? "Governance & ESG" : "ESG Overview")}
               {expandedSections.governance && (
                 <div style={sectionContentStyle}>
@@ -935,10 +942,10 @@ const ProfileSummary = ({ data, onEdit }) => {
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Declaration & Consent — includes How Did You Hear at the END */}
-            <div style={sectionCardStyle}>
+            {isSectionVisible("declarationConsent") && <div style={sectionCardStyle}>
               {renderSectionHeader("declarationConsent", CheckSquare, "Declaration & Consent")}
               {expandedSections.declarationConsent && (
                 <div style={sectionContentStyle}>
@@ -967,17 +974,17 @@ const ProfileSummary = ({ data, onEdit }) => {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
 
-          <div style={{ marginTop: "20px", textAlign: "center", background: "linear-gradient(135deg, rgba(250,247,242,0.9), rgba(245,240,225,0.9))", borderRadius: "16px", padding: "16px", border: "1px solid rgba(200,182,166,0.3)" }}>
+          {showFundingAction && <div style={{ marginTop: "20px", textAlign: "center", background: "linear-gradient(135deg, rgba(250,247,242,0.9), rgba(245,240,225,0.9))", borderRadius: "16px", padding: "16px", border: "1px solid rgba(200,182,166,0.3)" }}>
             <button
               onClick={() => (window.location.href = isNGO ? "/funding" : "/applications/funding")}
               style={{ padding: "12px 24px", background: "linear-gradient(135deg, #a67c52, #7d5a50)", color: "#faf7f2", border: "none", borderRadius: "10px", fontSize: "clamp(13px, 1.8vw, 15px)", fontWeight: "600", cursor: "pointer", boxShadow: "0 8px 24px rgba(166,124,82,0.3)", minWidth: "180px" }}
             >
               {isNGO ? "🚀 Explore Funding & Grants" : "🚀 Go to Funding Application"}
             </button>
-          </div>
+          </div>}
         </div>
       </div>
     </div>
