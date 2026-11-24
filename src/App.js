@@ -332,7 +332,7 @@ import FundingApplicationManager from "./smses/FundingApplication/FundingApplica
 import ProductApplication from "./smses/ProductApplication/ProductApplication"
 import ProductApplicationManager from "./smses/ProductApplication/ProductApplicationManager"
 import AdvisoryApplication from "./smses/AdvisorApplication/AdvisorApplication"
-
+import ArticleDetailPage from "./main_pages/ArticleDetailPage";
 // Matches Components
 import CustomerMatchesPage from "./smses/MyCustomerMatches/customer-matches"
 import FundingMatchesPage from "./smses/MyFunderMatches/funders-matches"
@@ -1162,7 +1162,7 @@ function App() {
         <Route path="/solutions/graduates" element={<SolutionsGraduates />} />
         <Route path="/solutions/advisors" element={<SolutionsAdvisors />} />
         <Route path="/solutions/associations" element={<SolutionsAssociations />} />
-
+ <Route path="/InsightsPage/:id" element={<ArticleDetailPage />} />
         {/* Admin Notion Routes */}
         <Route path="/admin/articles" element={withAdminProtection(ArticleManagement)} />
         <Route path="/admin/notion/delivery" element={withAdminProtection(Delivery)} />

@@ -1,14 +1,15 @@
 // src/main_pages/InsightsPage.js
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import styled, { keyframes } from 'styled-components';
-import { 
-  FiMoreVertical, 
-  FiShare2, 
-  FiDownload, 
-  FiEye, 
-  FiMessageCircle, 
+import {
+  FiMoreVertical,
+  FiShare2,
+  FiDownload,
+  FiEye,
+  FiMessageCircle,
   FiHeart,
   FiClock,
   FiCalendar,
@@ -19,22 +20,14 @@ import {
   FiBriefcase,
   FiTrendingUp,
   FiAward,
-  FiStar,
-  FiTarget
 } from 'react-icons/fi';
-import { FaHeart, FaRegHeart } from 'react-icons/fa';
+import { FaHeart } from 'react-icons/fa';
 import { fetchArticles } from '../services/articleService';
 import { db } from '../../src/firebaseConfig';
 
 const floatUp = keyframes`
-  from {
-    transform: translateY(100px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(100px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 `;
 
 const AnimatedHeroTitle = styled.h1`
@@ -61,19 +54,19 @@ const AnimatedHeroSubtitle = styled.p`
   line-height: 1.7;
 `;
 
-// Updated Category Icon Map for 5C's
 const CategoryIconMap = {
-  "Customer": <FiUsers size={16} />,
-  "Credibility": <FiShield size={16} />,
-  "Capacity": <FiBriefcase size={16} />,
-  "Capital": <FiTrendingUp size={16} />,
-  "Capability": <FiAward size={16} />,
+  Customer: <FiUsers size={16} />,
+  Credibility: <FiShield size={16} />,
+  Capacity: <FiBriefcase size={16} />,
+  Capital: <FiTrendingUp size={16} />,
+  Capability: <FiAward size={16} />,
 };
 
 const InsightsPage = () => {
+  const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState("All Posts");
+  const [activeCategory, setActiveCategory] = useState('All Posts');
   const [likedPosts, setLikedPosts] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -82,22 +75,19 @@ const InsightsPage = () => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Updated categories to 5C's
   const categories = [
-    "All Posts",
-    "Customer",
-    "Credibility",
-    "Capacity",
-    "Capital",
-    "Capability"
+    'All Posts',
+    'Customer',
+    'Credibility',
+    'Capacity',
+    'Capital',
+    'Capability',
   ];
 
   useEffect(() => {
@@ -108,18 +98,12 @@ const InsightsPage = () => {
   useEffect(() => {
     const testFirebase = async () => {
       try {
-        console.log('Testing Firebase connection...');
         const testSnapshot = await db.collection('articles').get();
-        console.log('Firebase test - articles collection size:', testSnapshot.size);
-        testSnapshot.forEach(doc => {
-          console.log('Article found - ID:', doc.id);
-          console.log('Article data:', doc.data());
-        });
         if (testSnapshot.size === 0) {
-          console.log('No articles found in Firebase. Please add some articles manually.');
+          console.log('No articles found in Firebase.');
         }
-      } catch (error) {
-        console.error('Firebase test error:', error);
+      } catch (err) {
+        console.error('Firebase test error:', err);
         setError('Failed to connect to database');
       }
     };
@@ -130,19 +114,14 @@ const InsightsPage = () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('Loading articles from service...');
       const articles = await fetchArticles();
-      console.log('Articles loaded:', articles);
-      console.log('Number of articles:', articles.length);
-      
-      if (articles.length === 0) {
-        console.log('No articles returned from fetchArticles');
+      if (!articles || articles.length === 0) {
         setError('No articles found. Please add some articles in the admin panel.');
       } else {
         setPosts(articles);
       }
-    } catch (error) {
-      console.error('Error loading articles:', error);
+    } catch (err) {
+      console.error('Error loading articles:', err);
       setError('Failed to load articles. Please check your connection.');
     } finally {
       setLoading(false);
@@ -150,10 +129,8 @@ const InsightsPage = () => {
   };
 
   const toggleLike = (postId) => {
-    setLikedPosts(prev => 
-      prev.includes(postId) 
-        ? prev.filter(id => id !== postId) 
-        : [...prev, postId]
+    setLikedPosts((prev) =>
+      prev.includes(postId) ? prev.filter((id) => id !== postId) : [...prev, postId]
     );
   };
 
@@ -161,9 +138,14 @@ const InsightsPage = () => {
     setOpenMenuId(openMenuId === postId ? null : postId);
   };
 
+  // ✅ THE FIX — navigate to a real, shareable per-article URL
   const handleReadMore = (article) => {
-    setSelectedArticle(article);
-    document.body.style.overflow = 'hidden';
+    if (!article?.id) {
+      setSelectedArticle(article);
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+    navigate(`/InsightsPage/${article.id}`);
   };
 
   const closeModal = () => {
@@ -171,185 +153,206 @@ const InsightsPage = () => {
     document.body.style.overflow = 'auto';
   };
 
+  // ✅ Copy a direct LinkedIn-ready link
+  const handleShare = async (post) => {
+    const url = `${window.location.origin}/InsightsPage/${post.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      alert(
+        `Link copied:\n${url}\n\nPaste this on LinkedIn — it will open this exact article.`
+      );
+    } catch {
+      window.prompt('Copy this link:', url);
+    }
+    setOpenMenuId(null);
+  };
+
   const formatDate = (dateValue) => {
     if (!dateValue) return 'Recent';
-    
-    // If it's a Firestore timestamp
-    if (dateValue && typeof dateValue.toDate === 'function') {
+    if (typeof dateValue?.toDate === 'function') {
       try {
-        const date = dateValue.toDate();
-        return date.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric', 
-          year: 'numeric' 
+        return dateValue.toDate().toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
         });
-      } catch (e) {
+      } catch {
         return 'Recent';
       }
     }
-    
-    // If it's a string or number
     try {
-      const date = new Date(dateValue);
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric', 
-          year: 'numeric' 
+      const d = new Date(dateValue);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
         });
       }
-    } catch (e) {
+    } catch {
       return 'Recent';
     }
-    
-    if (dateValue && dateValue.displayDate) {
-      const date = new Date(dateValue.displayDate);
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric', 
-          year: 'numeric' 
-        });
-      }
-    }
-    
     return 'Recent';
   };
 
-  const filteredPosts = activeCategory === "All Posts" 
-    ? posts 
-    : posts.filter(post => post.category === activeCategory);
+  const filteredPosts =
+    activeCategory === 'All Posts'
+      ? posts
+      : posts.filter((post) => post.category === activeCategory);
 
   return (
     <div style={styles.app}>
       <Header />
-      
+
       <main style={styles.mainContent}>
-        {/* Hero Banner */}
-        <div style={{
-          ...styles.fullWidthBanner,
-          minHeight: isMobile ? '350px' : '500px',
-        }}>
+        <div style={{ ...styles.fullWidthBanner, minHeight: isMobile ? '350px' : '500px' }}>
           <div style={styles.heroOverlay}></div>
           <div style={styles.heroContent}>
             {loaded && (
               <>
-                <AnimatedHeroTitle>From Data to Decisions,<br />From Trends to Triumph</AnimatedHeroTitle>
+                <AnimatedHeroTitle>
+                  From Data to Decisions,
+                  <br />
+                  From Trends to Triumph
+                </AnimatedHeroTitle>
                 <AnimatedHeroSubtitle>
-                  Actionable insights, expert analysis, and data-driven perspectives to help high-impact 
-                  enterprises navigate challenges, seize opportunities, and lead with confidence.
+                  Actionable insights, expert analysis, and data-driven perspectives to help
+                  high-impact enterprises navigate challenges, seize opportunities, and lead with
+                  confidence.
                 </AnimatedHeroSubtitle>
               </>
             )}
           </div>
         </div>
-        
-        {/* Blog Posts Section */}
+
         <div style={styles.contentContainer}>
           <section style={styles.blogSection} id="main-content">
             <div style={styles.sectionHeader}>
               <h2 style={styles.sectionTitle}>Insights & Trends</h2>
-              <div style={{
-                ...styles.categoryFilters,
-                gap: isMobile ? '0.5rem' : '0.75rem',
-              }}>
+              <div
+                style={{
+                  ...styles.categoryFilters,
+                  gap: isMobile ? '0.5rem' : '0.75rem',
+                }}
+              >
                 {categories.map((category) => (
-                  <button 
+                  <button
                     key={category}
                     style={{
                       ...styles.categoryBtn,
                       padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
                       fontSize: isMobile ? '0.75rem' : '0.85rem',
-                      ...(activeCategory === category ? styles.activeCategoryBtn : {})
+                      ...(activeCategory === category ? styles.activeCategoryBtn : {}),
                     }}
                     onClick={() => setActiveCategory(category)}
                   >
-                    {category !== "All Posts" && CategoryIconMap[category]}
+                    {category !== 'All Posts' && CategoryIconMap[category]}
                     {category}
                   </button>
                 ))}
               </div>
             </div>
-            
+
             {error && (
-              <div style={{
-                ...styles.errorContainer,
-                padding: isMobile ? '30px 20px' : '60px',
-              }}>
+              <div
+                style={{
+                  ...styles.errorContainer,
+                  padding: isMobile ? '30px 20px' : '60px',
+                }}
+              >
                 <p>{error}</p>
                 <button onClick={loadArticles} style={styles.retryButton}>
                   Retry
                 </button>
               </div>
             )}
-            
+
             {loading ? (
-              <div style={{
-                ...styles.loadingContainer,
-                padding: isMobile ? '30px 20px' : '60px',
-              }}>
+              <div
+                style={{
+                  ...styles.loadingContainer,
+                  padding: isMobile ? '30px 20px' : '60px',
+                }}
+              >
                 <div style={styles.spinner}></div>
                 <p>Loading insights...</p>
               </div>
             ) : filteredPosts.length === 0 ? (
-              <div style={{
-                ...styles.emptyContainer,
-                padding: isMobile ? '30px 20px' : '60px',
-              }}>
+              <div
+                style={{
+                  ...styles.emptyContainer,
+                  padding: isMobile ? '30px 20px' : '60px',
+                }}
+              >
                 <FiBookOpen size={isMobile ? 32 : 48} color="#BCAE9C" />
                 <p>No articles found in this category.</p>
-                <p style={styles.emptySubtext}>Please add articles in the admin panel at /admin/articles</p>
+                <p style={styles.emptySubtext}>
+                  Please add articles in the admin panel at /admin/articles
+                </p>
               </div>
             ) : (
               <div style={styles.postsContainer}>
                 {filteredPosts.map((post) => (
                   <article key={post.id} style={styles.postCard}>
-                    <div style={{
-                      ...styles.postLayout,
-                      flexDirection: isMobile ? 'column' : 'row',
-                      minHeight: isMobile ? 'auto' : '300px',
-                    }}>
-                      <div style={{
-                        ...styles.postImageContainer,
-                        width: isMobile ? '100%' : '40%',
-                        height: isMobile ? '200px' : '100%',
-                      }}>
-                        <img 
-                          src={post.imageUrl || '/BIGLogoBrown.jpg'} 
-                          alt={post.title} 
+                    <div
+                      style={{
+                        ...styles.postLayout,
+                        flexDirection: isMobile ? 'column' : 'row',
+                        minHeight: isMobile ? 'auto' : '300px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...styles.postImageContainer,
+                          width: isMobile ? '100%' : '40%',
+                          height: isMobile ? '200px' : '100%',
+                        }}
+                      >
+                        <img
+                          src={post.imageUrl || '/BIGLogoBrown.jpg'}
+                          alt={post.title}
                           style={styles.postImage}
                           onError={(e) => {
                             e.target.src = '/BIGLogoBrown.jpg';
                           }}
                         />
-                        {post.category && post.category !== "All Posts" && (
-                          <div style={{
-                            ...styles.postCategoryBadge,
-                            fontSize: isMobile ? '0.6rem' : '0.7rem',
-                            padding: isMobile ? '4px 10px' : '6px 14px',
-                          }}>
+                        {post.category && post.category !== 'All Posts' && (
+                          <div
+                            style={{
+                              ...styles.postCategoryBadge,
+                              fontSize: isMobile ? '0.6rem' : '0.7rem',
+                              padding: isMobile ? '4px 10px' : '6px 14px',
+                            }}
+                          >
                             {CategoryIconMap[post.category]} {post.category}
                           </div>
                         )}
                       </div>
-                      <div style={{
-                        ...styles.postContent,
-                        width: isMobile ? '100%' : '60%',
-                        padding: isMobile ? '1rem 1.25rem' : '1.5rem 2rem',
-                      }}>
+
+                      <div
+                        style={{
+                          ...styles.postContent,
+                          width: isMobile ? '100%' : '60%',
+                          padding: isMobile ? '1rem 1.25rem' : '1.5rem 2rem',
+                        }}
+                      >
                         <div style={styles.postHeader}>
-                          <div style={{
-                            ...styles.authorInfo,
-                            gap: isMobile ? '0.75rem' : '1rem',
-                          }}>
-                            <div style={{
-                              ...styles.authorImageContainer,
-                              width: isMobile ? '36px' : '44px',
-                              height: isMobile ? '36px' : '44px',
-                            }}>
-                              <img 
-                                src={post.authorImageUrl || '/BIGLogoBrown.jpg'} 
-                                alt="BIG Marketplace" 
+                          <div
+                            style={{
+                              ...styles.authorInfo,
+                              gap: isMobile ? '0.75rem' : '1rem',
+                            }}
+                          >
+                            <div
+                              style={{
+                                ...styles.authorImageContainer,
+                                width: isMobile ? '36px' : '44px',
+                                height: isMobile ? '36px' : '44px',
+                              }}
+                            >
+                              <img
+                                src={post.authorImageUrl || '/BIGLogoBrown.jpg'}
+                                alt="BIG Marketplace"
                                 style={styles.authorImage}
                                 onError={(e) => {
                                   e.target.src = '/BIGLogoBrown.jpg';
@@ -357,31 +360,41 @@ const InsightsPage = () => {
                               />
                             </div>
                             <div style={styles.authorText}>
-                              <div style={{
-                                ...styles.authorName,
-                                fontSize: isMobile ? '0.85rem' : '0.95rem',
-                              }}>
+                              <div
+                                style={{
+                                  ...styles.authorName,
+                                  fontSize: isMobile ? '0.85rem' : '0.95rem',
+                                }}
+                              >
                                 <FiUser size={isMobile ? 12 : 14} style={styles.iconInline} />
                                 {post.writer || 'BIG Marketplace'}
                               </div>
-                              <div style={{
-                                ...styles.postMeta,
-                                fontSize: isMobile ? '0.7rem' : '0.8rem',
-                              }}>
+                              <div
+                                style={{
+                                  ...styles.postMeta,
+                                  fontSize: isMobile ? '0.7rem' : '0.8rem',
+                                }}
+                              >
                                 <span style={styles.postMetaItem}>
-                                  <FiCalendar size={isMobile ? 10 : 12} style={styles.iconInline} />
-                                  {formatDate(post)}
+                                  <FiCalendar
+                                    size={isMobile ? 10 : 12}
+                                    style={styles.iconInline}
+                                  />
+                                  {formatDate(post.displayDate || post.createdAt || post.date)}
                                 </span>
                                 <span style={styles.postMetaItem}>•</span>
                                 <span style={styles.postMetaItem}>
-                                  <FiClock size={isMobile ? 10 : 12} style={styles.iconInline} />
+                                  <FiClock
+                                    size={isMobile ? 10 : 12}
+                                    style={styles.iconInline}
+                                  />
                                   {post.readTime || '3 min read'}
                                 </span>
                               </div>
                             </div>
                           </div>
                           <div style={styles.menuContainer}>
-                            <button 
+                            <button
                               style={styles.menuButton}
                               onClick={() => toggleMenu(post.id)}
                             >
@@ -389,9 +402,12 @@ const InsightsPage = () => {
                             </button>
                             {openMenuId === post.id && (
                               <div style={styles.dropdownMenu}>
-                                <button style={styles.menuItem}>
+                                <button
+                                  style={styles.menuItem}
+                                  onClick={() => handleShare(post)}
+                                >
                                   <FiShare2 style={styles.menuIcon} />
-                                  Share
+                                  Copy Link
                                 </button>
                                 <button style={styles.menuItem}>
                                   <FiDownload style={styles.menuIcon} />
@@ -401,23 +417,29 @@ const InsightsPage = () => {
                             )}
                           </div>
                         </div>
-                        
-                        <h3 style={{
-                          ...styles.postTitle,
-                          fontSize: isMobile ? 'clamp(1rem, 4vw, 1.3rem)' : 'clamp(1.1rem, 1.5vw, 1.5rem)',
-                          marginBottom: isMobile ? '0.5rem' : '0.75rem',
-                        }}>
+
+                        <h3
+                          style={{
+                            ...styles.postTitle,
+                            fontSize: isMobile
+                              ? 'clamp(1rem, 4vw, 1.3rem)'
+                              : 'clamp(1.1rem, 1.5vw, 1.5rem)',
+                            marginBottom: isMobile ? '0.5rem' : '0.75rem',
+                          }}
+                        >
                           {post.title}
                         </h3>
-                        <p style={{
-                          ...styles.postExcerpt,
-                          fontSize: isMobile ? '0.85rem' : '0.95rem',
-                          marginBottom: isMobile ? '0.75rem' : '1rem',
-                        }}>
+                        <p
+                          style={{
+                            ...styles.postExcerpt,
+                            fontSize: isMobile ? '0.85rem' : '0.95rem',
+                            marginBottom: isMobile ? '0.75rem' : '1rem',
+                          }}
+                        >
                           {post.excerpt}
                         </p>
-                        
-                        <button 
+
+                        <button
                           style={{
                             ...styles.readMoreButton,
                             fontSize: isMobile ? '0.8rem' : '0.9rem',
@@ -427,32 +449,41 @@ const InsightsPage = () => {
                         >
                           Read More →
                         </button>
-                        
-                        <div style={{
-                          ...styles.postStats,
-                          gap: isMobile ? '1rem' : '1.5rem',
-                          flexWrap: isMobile ? 'wrap' : 'nowrap',
-                          fontSize: isMobile ? '0.75rem' : '0.85rem',
-                          paddingTop: isMobile ? '0.75rem' : '1rem',
-                        }}>
+
+                        <div
+                          style={{
+                            ...styles.postStats,
+                            gap: isMobile ? '1rem' : '1.5rem',
+                            flexWrap: isMobile ? 'wrap' : 'nowrap',
+                            fontSize: isMobile ? '0.75rem' : '0.85rem',
+                            paddingTop: isMobile ? '0.75rem' : '1rem',
+                          }}
+                        >
                           <span style={styles.statItem}>
                             <FiEye size={isMobile ? 12 : 14} style={styles.iconInline} />
                             {post.views || 0} view{post.views !== 1 ? 's' : ''}
                           </span>
                           <span style={styles.statItem}>
-                            <FiMessageCircle size={isMobile ? 12 : 14} style={styles.iconInline} />
+                            <FiMessageCircle
+                              size={isMobile ? 12 : 14}
+                              style={styles.iconInline}
+                            />
                             {post.comments || 0} comment{post.comments !== 1 ? 's' : ''}
                           </span>
-                          <button 
+                          <button
                             style={{
                               ...styles.likeBtn,
                               fontSize: isMobile ? '0.75rem' : '0.85rem',
-                              ...(likedPosts.includes(post.id) ? styles.likedBtn : {})
+                              ...(likedPosts.includes(post.id) ? styles.likedBtn : {}),
                             }}
                             onClick={() => toggleLike(post.id)}
                           >
                             {likedPosts.includes(post.id) ? (
-                              <FaHeart size={isMobile ? 12 : 14} style={styles.iconInline} color="#754A2D" />
+                              <FaHeart
+                                size={isMobile ? 12 : 14}
+                                style={styles.iconInline}
+                                color="#754A2D"
+                              />
                             ) : (
                               <FiHeart size={isMobile ? 12 : 14} style={styles.iconInline} />
                             )}
@@ -469,75 +500,84 @@ const InsightsPage = () => {
         </div>
       </main>
 
-      {/* Article Modal */}
+      {/* Safety-net modal — only used if article has no id (shouldn't happen) */}
       {selectedArticle && (
-        <div style={{
-          ...styles.modalOverlay,
-          padding: isMobile ? '10px' : '20px',
-        }} onClick={closeModal}>
-          <div style={{
-            ...styles.modalContent,
-            width: isMobile ? '95%' : '90%',
-            margin: isMobile ? '10px' : '20px',
-            maxHeight: isMobile ? '95vh' : '90vh',
-          }} onClick={(e) => e.stopPropagation()}>
-            <button onClick={closeModal} style={{
-              ...styles.modalCloseButton,
-              top: isMobile ? '12px' : '16px',
-              right: isMobile ? '12px' : '20px',
-              width: isMobile ? '36px' : '44px',
-              height: isMobile ? '36px' : '44px',
-              fontSize: isMobile ? '1.5rem' : '2rem',
-            }}>×</button>
-            
-            <div style={{
-              ...styles.modalImageContainer,
-              height: isMobile ? '200px' : '400px',
-            }}>
-              <img 
-                src={selectedArticle.imageUrl || '/BIGLogoBrown.jpg'} 
-                alt={selectedArticle.title} 
+        <div
+          style={{ ...styles.modalOverlay, padding: isMobile ? '10px' : '20px' }}
+          onClick={closeModal}
+        >
+          <div
+            style={{
+              ...styles.modalContent,
+              width: isMobile ? '95%' : '90%',
+              margin: isMobile ? '10px' : '20px',
+              maxHeight: isMobile ? '95vh' : '90vh',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={closeModal}
+              style={{
+                ...styles.modalCloseButton,
+                top: isMobile ? '12px' : '16px',
+                right: isMobile ? '12px' : '20px',
+                width: isMobile ? '36px' : '44px',
+                height: isMobile ? '36px' : '44px',
+                fontSize: isMobile ? '1.5rem' : '2rem',
+              }}
+            >
+              ×
+            </button>
+            <div
+              style={{
+                ...styles.modalImageContainer,
+                height: isMobile ? '200px' : '400px',
+              }}
+            >
+              <img
+                src={selectedArticle.imageUrl || '/BIGLogoBrown.jpg'}
+                alt={selectedArticle.title}
                 style={styles.modalImage}
                 onError={(e) => {
                   e.target.src = '/BIGLogoBrown.jpg';
                 }}
               />
-              <div style={{
-                ...styles.modalImageOverlay,
-                padding: isMobile ? '20px' : '40px',
-              }}>
-                <h1 style={{
-                  ...styles.modalTitle,
-                  fontSize: isMobile ? 'clamp(1.2rem, 4vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2.2rem)',
-                  marginBottom: isMobile ? '0.5rem' : '0.75rem',
-                }}>
+              <div
+                style={{
+                  ...styles.modalImageOverlay,
+                  padding: isMobile ? '20px' : '40px',
+                }}
+              >
+                <h1
+                  style={{
+                    ...styles.modalTitle,
+                    fontSize: isMobile
+                      ? 'clamp(1.2rem, 4vw, 1.8rem)'
+                      : 'clamp(1.5rem, 2.5vw, 2.2rem)',
+                    marginBottom: isMobile ? '0.5rem' : '0.75rem',
+                  }}
+                >
                   {selectedArticle.title}
                 </h1>
-                <div style={{
-                  ...styles.modalMeta,
-                  fontSize: isMobile ? '0.75rem' : '0.9rem',
-                  gap: isMobile ? '0.5rem' : '0.75rem',
-                }}>
-                  <span><FiUser size={isMobile ? 12 : 14} style={styles.iconInline} /> {selectedArticle.writer || 'BIG Marketplace'}</span>
-                  <span>•</span>
-                  <span><FiCalendar size={isMobile ? 12 : 14} style={styles.iconInline} /> {formatDate(selectedArticle)}</span>
-                  <span>•</span>
-                  <span><FiClock size={isMobile ? 12 : 14} style={styles.iconInline} /> {selectedArticle.readTime || '3 min read'}</span>
-                </div>
               </div>
             </div>
-            
-            <div style={{
-              ...styles.modalBody,
-              padding: isMobile ? '20px' : '40px',
-              fontSize: isMobile ? '0.95rem' : '1.05rem',
-            }}>
-              <div dangerouslySetInnerHTML={{ __html: selectedArticle.content || selectedArticle.excerpt }} />
+            <div
+              style={{
+                ...styles.modalBody,
+                padding: isMobile ? '20px' : '40px',
+                fontSize: isMobile ? '0.95rem' : '1.05rem',
+              }}
+            >
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: selectedArticle.content || selectedArticle.excerpt || '',
+                }}
+              />
             </div>
           </div>
         </div>
       )}
-      
+
       <Footer />
     </div>
   );
@@ -554,14 +594,9 @@ const styles = {
     backgroundColor: '#F5F0E8',
     overflowX: 'hidden',
     margin: 0,
-    padding: 0
+    padding: 0,
   },
-  mainContent: {
-    flex: 1,
-    width: '100%',
-    margin: 0,
-    padding: 0
-  },
+  mainContent: { flex: 1, width: '100%', margin: 0, padding: 0 },
   fullWidthBanner: {
     width: '100vw',
     minHeight: '500px',
@@ -570,13 +605,14 @@ const styles = {
     right: '50%',
     marginLeft: '-50vw',
     marginRight: '-50vw',
-    backgroundImage: 'url("https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80")',
+    backgroundImage:
+      'url("https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80")',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: '4rem'
+    marginBottom: '4rem',
   },
   heroOverlay: {
     position: 'absolute',
@@ -593,18 +629,10 @@ const styles = {
     position: 'relative',
     zIndex: 2,
     color: '#F2F0E6',
-    textAlign: 'center'
+    textAlign: 'center',
   },
-  contentContainer: {
-    maxWidth: '1200px',
-    width: '100%',
-    margin: '0 auto',
-    padding: '0 20px'
-  },
-  blogSection: {
-    width: '100%',
-    marginBottom: '4rem'
-  },
+  contentContainer: { maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '0 20px' },
+  blogSection: { width: '100%', marginBottom: '4rem' },
   sectionHeader: {
     marginBottom: '2rem',
     display: 'flex',
@@ -617,11 +645,7 @@ const styles = {
     color: '#1C1410',
     letterSpacing: '-0.01em',
   },
-  categoryFilters: {
-    display: 'flex',
-    gap: '0.75rem',
-    flexWrap: 'wrap',
-  },
+  categoryFilters: { display: 'flex', gap: '0.75rem', flexWrap: 'wrap' },
   categoryBtn: {
     padding: '0.5rem 1rem',
     backgroundColor: '#EAE2D8',
@@ -643,18 +667,8 @@ const styles = {
     color: '#FFFFFF',
     boxShadow: '0 4px 15px rgba(124, 77, 42, 0.25)',
   },
-  postsContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2rem',
-    width: '100%'
-  },
-  loadingContainer: {
-    textAlign: 'center',
-    padding: '60px',
-    color: '#7C4D2A',
-    fontSize: '1.2rem'
-  },
+  postsContainer: { display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%' },
+  loadingContainer: { textAlign: 'center', padding: '60px', color: '#7C4D2A', fontSize: '1.2rem' },
   errorContainer: {
     textAlign: 'center',
     padding: '60px',
@@ -663,7 +677,7 @@ const styles = {
     backgroundColor: '#FAF7F2',
     border: '1px solid #EAE2D8',
     borderRadius: '12px',
-    margin: '20px 0'
+    margin: '20px 0',
   },
   emptyContainer: {
     textAlign: 'center',
@@ -679,11 +693,7 @@ const styles = {
     alignItems: 'center',
     gap: '12px',
   },
-  emptySubtext: {
-    fontSize: '0.9rem',
-    marginTop: '10px',
-    color: '#BCAE9C'
-  },
+  emptySubtext: { fontSize: '0.9rem', marginTop: '10px', color: '#BCAE9C' },
   retryButton: {
     marginTop: '15px',
     padding: '8px 24px',
@@ -703,7 +713,7 @@ const styles = {
     border: '3px solid #EAE2D8',
     borderTop: '3px solid #7C4D2A',
     borderRadius: '50%',
-    animation: 'spin 1s linear infinite'
+    animation: 'spin 1s linear infinite',
   },
   postCard: {
     border: '1px solid #EAE2D8',
@@ -714,17 +724,8 @@ const styles = {
     boxShadow: '0 4px 20px rgba(28,20,16,0.05)',
     transition: 'box-shadow 0.3s ease, transform 0.3s ease',
   },
-  postLayout: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    minHeight: '300px'
-  },
-  postImageContainer: {
-    width: '40%',
-    overflow: 'hidden',
-    position: 'relative',
-  },
+  postLayout: { display: 'flex', flexDirection: 'row', alignItems: 'stretch', minHeight: '300px' },
+  postImageContainer: { width: '40%', overflow: 'hidden', position: 'relative' },
   postImage: {
     width: '100%',
     height: '100%',
@@ -752,19 +753,15 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    position: 'relative'
+    position: 'relative',
   },
   postHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: '1rem'
+    marginBottom: '1rem',
   },
-  authorInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem'
-  },
+  authorInfo: { display: 'flex', alignItems: 'center', gap: '1rem' },
   authorImageContainer: {
     width: '44px',
     height: '44px',
@@ -773,15 +770,8 @@ const styles = {
     border: '2px solid #7C4D2A',
     flexShrink: 0,
   },
-  authorImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover'
-  },
-  authorText: {
-    display: 'flex',
-    flexDirection: 'column'
-  },
+  authorImage: { width: '100%', height: '100%', objectFit: 'cover' },
+  authorText: { display: 'flex', flexDirection: 'column' },
   authorName: {
     fontWeight: 700,
     color: '#1C1410',
@@ -824,27 +814,17 @@ const styles = {
     fontSize: '0.8rem',
     color: '#7A6A5E',
     flexWrap: 'wrap',
-    alignItems: 'center'
-  },
-  postMetaItem: {
-    display: 'flex',
     alignItems: 'center',
-    gap: '4px',
   },
+  postMetaItem: { display: 'flex', alignItems: 'center', gap: '4px' },
   postStats: {
     display: 'flex',
     gap: '1.5rem',
     paddingTop: '1rem',
     borderTop: '1px solid #EAE2D8',
-    marginTop: '0.5rem'
+    marginTop: '0.5rem',
   },
-  statItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    fontSize: '0.85rem',
-    color: '#7A6A5E',
-  },
+  statItem: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: '#7A6A5E' },
   likeBtn: {
     display: 'flex',
     alignItems: 'center',
@@ -858,13 +838,8 @@ const styles = {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
     transition: 'all 0.25s ease',
   },
-  likedBtn: {
-    color: '#7C4D2A',
-    fontWeight: 600,
-  },
-  menuContainer: {
-    position: 'relative'
-  },
+  likedBtn: { color: '#7C4D2A', fontWeight: 600 },
+  menuContainer: { position: 'relative' },
   menuButton: {
     background: 'none',
     border: 'none',
@@ -904,13 +879,8 @@ const styles = {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
     transition: 'background 0.2s ease',
   },
-  menuIcon: {
-    color: '#7A6A5E'
-  },
-  iconInline: {
-    verticalAlign: 'middle',
-  },
-  // Modal styles
+  menuIcon: { color: '#7A6A5E' },
+  iconInline: { verticalAlign: 'middle' },
   modalOverlay: {
     position: 'fixed',
     top: 0,
@@ -957,16 +927,8 @@ const styles = {
     backgroundColor: 'rgba(0,0,0,0.3)',
     backdropFilter: 'blur(4px)',
   },
-  modalImageContainer: {
-    position: 'relative',
-    height: '400px',
-    overflow: 'hidden',
-  },
-  modalImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  },
+  modalImageContainer: { position: 'relative', height: '400px', overflow: 'hidden' },
+  modalImage: { width: '100%', height: '100%', objectFit: 'cover' },
   modalImageOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -983,44 +945,32 @@ const styles = {
     lineHeight: 1.2,
     letterSpacing: '-0.01em',
   },
-  modalMeta: {
-    display: 'flex',
-    gap: '0.75rem',
-    fontSize: '0.9rem',
-    color: '#BCAE9C',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  modalBody: {
-    padding: '40px',
-    fontSize: '1.05rem',
-    lineHeight: 1.8,
-    color: '#1C1410',
-  },
+  modalBody: { padding: '40px', fontSize: '1.05rem', lineHeight: 1.8, color: '#1C1410' },
 };
 
-// Add keyframe animation for spinner
-const styleSheet = document.createElement("style");
-styleSheet.textContent = `
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  .post-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 30px rgba(28,20,16,0.1);
-  }
-  .post-card:hover .post-image {
-    transform: scale(1.03);
-  }
-
-  @media (max-width: 768px) {
-    .fullWidthBanner {
-      min-height: 350px !important;
-      margin-bottom: 2rem !important;
+// Inject spinner + hover animations once
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = `
+    @keyframes spin {
+      0%   { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
-  }
-`;
-document.head.appendChild(styleSheet);
+    .post-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 30px rgba(28,20,16,0.1);
+    }
+    .post-card:hover .post-image {
+      transform: scale(1.03);
+    }
+    @media (max-width: 768px) {
+      .fullWidthBanner {
+        min-height: 350px !important;
+        margin-bottom: 2rem !important;
+      }
+    }
+  `;
+  document.head.appendChild(styleSheet);
+}
 
 export default InsightsPage;
