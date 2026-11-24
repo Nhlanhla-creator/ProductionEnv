@@ -1,7 +1,7 @@
 /** Stable routes: setup configures; operations captures and analyses. */
 export const TWIN_ROUTES = Object.freeze({
   home:'/digital-twin',setupHome:'/digital-twin/setup',guide:'/digital-twin/setup/guide',
-  assetSetup:'/digital-twin/setup/asset-setup',shiftSetup:'/digital-twin/setup/shifts',assets:'/digital-twin/setup/assets',groups:'/digital-twin/setup/groups',setup:'/digital-twin/setup/master-codes',
+  assetSetup:'/digital-twin/setup/asset-setup',shiftSetup:'/digital-twin/setup/shifts',assets:'/digital-twin/setup/assets',groups:'/digital-twin/setup/groups',setup:'/digital-twin/setup/asset-setup',
   periods:'/digital-twin/setup/periods',import:'/digital-twin/setup/imports',
   packs:'/digital-twin/setup/packs',convert:'/digital-twin/setup/convert',
   capture:'/digital-twin/operations/downtime',records:'/digital-twin/operations/downtime/history',
@@ -12,6 +12,7 @@ export const TWIN_ROUTES = Object.freeze({
 });
 export function twinPath(key,context={}) {
   const params=new URLSearchParams();
+  if(key==='setup')params.set('tab','master-downtime-codes');
   if(key==='shiftDefinitions')params.set('view','definitions');
   for(const k of ['assetId','eventId','masterId','from','to','siteId','shiftId','groupId','contractId','activityId','serviceId','crew','view'])if(context[k])params.set(k,context[k]);
   return (TWIN_ROUTES[key==='shiftDefinitions'?'shiftSetup':key]||TWIN_ROUTES.home)+(params.size?'?'+params:'');
@@ -21,6 +22,8 @@ export function twinView(pathname,search='',initialActive=null) {
   const q=new URLSearchParams(search);
   if(pathname==='/digital-twin'&&q.get('setup')==='true')return 'guide';
   if(pathname==='/digital-twin'&&q.get('view'))return ({capture:'measurements',downtime:'capture',setup:'guide'}[q.get('view')]||q.get('view'));
+  if(pathname===TWIN_ROUTES.assetSetup&&q.get('tab')==='master-downtime-codes')return 'setup';
+  if(pathname==='/digital-twin/setup/master-codes')return 'setup';
   if(pathname===TWIN_ROUTES.shiftSetup&&q.get('view')==='definitions')return 'shiftDefinitions';
   const aliases={'/digital-twin/operations/performance':'performance','/digital-twin/operations/performance/kpis':'kpis','/digital-twin/operations/performance/capacity':'capacity','/digital-twin/operations/performance/capture':'grid','/digital-twin/operations/performance/grid':'grid','/digital-twin/packs':'packs','/digital-twin/convert':'convert','/digital-twin/dashboard':'performance','/digital-twin/assets':'assets','/digital-twin/downtime':'capture','/digital-twin/imports':'import'};
   if(aliases[pathname])return aliases[pathname];

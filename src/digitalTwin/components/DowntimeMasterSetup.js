@@ -7,7 +7,10 @@ import { getOnboardingState } from "../services/onboardingState"
 import { getPack } from "../services/taxonomyService"
 import { sectorMasterCodes } from "../models/sectorMasterCodes"
 import { codeAppliesToEquipment } from "../models/equipmentDowntime"
-import { appliesTo, childrenOf, DOWNTIME_HEADINGS, TEMPLATE_VERSION } from "../models/downtimeCodes"
+import { withActOfGod, appendDowntimeCategory } from "../models/downtimeAdditions"
+import DowntimeDialog from "./DowntimeDialog"
+import { structureId } from "../services/operatingStructureService"
+import { validateCodes, appliesTo, childrenOf, DOWNTIME_HEADINGS, TEMPLATE_VERSION } from "../models/downtimeCodes"
 import "../styles/Downtime.css"
 
 export default function DowntimeMasterSetup({ tenantId, onNavigate, initialMasterId = "", initialGroupId = "" }) {
@@ -15,17 +18,18 @@ export default function DowntimeMasterSetup({ tenantId, onNavigate, initialMaste
   const [sector, setSector] = useState({ key: "", name: "" }), [groupId, setGroupId] = useState(initialGroupId)
   const [selected, setSelected] = useState(""), [path, setPath] = useState([]), [allAssets, setAllAssets] = useState(true)
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("")
+  const [customNodes,setCustomNodes]=useState(null),[editor,setEditor]=useState(null)
   const saving = useRef(false)
   useEffect(() => {
     let live = true
     setLoading(true); setError(""); setSelected(""); setPath([])
-    Promise.all([listDowntimeMasters(tenantId), listCaptureAssets(tenantId), listGroups(tenantId), getOnboardingState(tenantId)])
+    Promise.all([listDowntimeMasters(tenantId), listCaptureAssets(tenantId,{includeInactive:true}), listGroups(tenantId), getOnboardingState(tenantId)])
       .then(([lists, equipment, equipmentGroups, state]) => {
         if (!live) return
         const form = state.structureDraft || state.form?.structureDraft || {}
         const key = form.sectorPack || state.sectorPack || ""
         const name = getPack(key)?.sector.name || form.sectorName || (key === "other" ? "Other" : "")
-        setSector({ key, name }); setMasters(lists); setAssets(equipment)
+        setSector({ key, name }); setMasters(lists); setAssets(equipment.filter((asset)=>asset.currentStructureAsset!==false))
         const matching = lists.find((master) => initialMasterId ? master.id === initialMasterId :
           (master.draft.industry.toLowerCase() === name.toLowerCase() || (key === "mining" && master.templateId === TEMPLATE_VERSION)) &&
           (!initialGroupId || equipment.some((asset) => asset.equipmentGroupId === initialGroupId && appliesTo(master.draft.assignment, asset))))
@@ -43,7 +47,7 @@ export default function DowntimeMasterSetup({ tenantId, onNavigate, initialMaste
     return master.id === initialMasterId || (sameSector && (!groupId || scopedAssets.some((asset) => appliesTo(master.draft.assignment, asset))))
   })
   const current = lists.find((master) => master.id === selected)
-  const nodes = useMemo(() => current?.draft.nodes || (sector.key ? sectorMasterCodes(sector.key, typeIds) : []), [current, sector.key, typeIds])
+  const nodes = useMemo(() => customNodes || withActOfGod(current?.draft.nodes || (sector.key ? sectorMasterCodes(sector.key, typeIds) : [])), [customNodes,current, sector.key, typeIds])
   const assignment = { allAssets, equipmentTypeIds: [], groupIds: allAssets ? [] : groupId ? [groupId] : [] }
   const matched = assets.filter((asset) => appliesTo(assignment, asset))
   const publish = async () => {
@@ -60,14 +64,14 @@ export default function DowntimeMasterSetup({ tenantId, onNavigate, initialMaste
       })
       // Keep the created draft selectable if publication fails. Retry must not create another list.
       if (!current) { setMasters((old) => [...old, record]); setSelected(record.id) }
-      const draft = { ...record.draft, industry: sector.name, assignment }
+      const draft = { ...record.draft, nodes, industry: sector.name, assignment }
       const saved = await saveDowntimeMaster(tenantId, record.id, draft, record.revision, { publish: true })
       setMasters((old) => old.map((entry) => entry.id === saved.id ? saved : entry)); setSelected(saved.id)
       setMessage(`Published version ${saved.published.version} for ${matched.length} equipment records. Downtime Inputs now uses this list.`)
     } catch (failure) { setError(failure.message) } finally { saving.current = false; setBusy(false) }
   }
   return <section className="dt-workspace">
-    <div className="dt-topline">Setup / Master Codes</div><div className="dt-heading"><h2>Master Codes</h2></div>
+    <div className="dt-heading"><h2>Master Downtime Codes</h2></div>
     {error && <p role="alert" className="dt-notice dt-notice-error">{error}</p>}
     {message && <p role="status" className="dt-notice dt-notice-success">{message}</p>}
     {loading ? <div className="dt-empty">Loading sector and equipment…</div> : <>
@@ -75,10 +79,10 @@ export default function DowntimeMasterSetup({ tenantId, onNavigate, initialMaste
       <fieldset className="dt-panel" disabled={busy}><div className="dt-asset-toolbar">
         <label className="dt-field"><span>Sector</span><input value={sector.name} readOnly placeholder="From Operating structure" /></label>
         <label className="dt-field"><span>Equipment group</span><select value={groupId} onChange={(event) => {
-          setGroupId(event.target.value); setSelected(""); setPath([]); setAllAssets(!event.target.value); setMessage("")
+          setGroupId(event.target.value); setSelected(""); setPath([]); setCustomNodes(null); setAllAssets(!event.target.value); setMessage("")
         }}><option value="">All registered equipment groups</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
         <label className="dt-field"><span>Master-code list</span><select value={current?.id || ""} onChange={(event) => {
-          setSelected(event.target.value); setPath([]); setMessage("")
+          setSelected(event.target.value); setPath([]); setCustomNodes(null); setMessage("")
           const record = lists.find((entry) => entry.id === event.target.value)
           if (record) { setAllAssets(record.draft.assignment.allAssets); if (!record.draft.assignment.allAssets && record.draft.assignment.groupIds.length === 1) setGroupId(record.draft.assignment.groupIds[0]) }
         }}>
@@ -93,6 +97,7 @@ export default function DowntimeMasterSetup({ tenantId, onNavigate, initialMaste
           return <div key={heading} className="dt-code-column"><header><div><strong>LEVEL {index + 1}</strong>{heading}</div></header>
             {options.map((node) => <button type="button" key={node.id} className="dt-code-choice" aria-pressed={path[index] === node.id}
               onClick={() => setPath([...path.slice(0, index), node.id])}>{node.label}</button>)}
+            {[2,3].includes(index) && parent && <button type="button" className="dt-button dt-button-small" disabled={busy} onClick={() => setEditor({parentId:parent.id,level:index+1,label:""})}>+ Add missing Level {index+1} category</button>}
             {!options.length && <p className="dt-muted">{parent?.terminal ? "This classification ends here." : index && !parent ? "Select the preceding level." : "No options available."}</p>}
           </div>
         })}</div>
@@ -105,5 +110,11 @@ export default function DowntimeMasterSetup({ tenantId, onNavigate, initialMaste
           <button type="button" className="dt-button" onClick={() => onNavigate?.("capture", { view: "record" })}>Downtime Inputs</button></div>
       </section>
     </>}
+    {editor && <DowntimeDialog title={`Add Level ${editor.level} category`} onClose={()=>setEditor(null)}><form onSubmit={(event)=>{
+      event.preventDefault();setError("");try {
+        const next=appendDowntimeCategory(nodes,{...editor,id:`org-${structureId()}`});validateCodes(next,current?.draft.nodes||[],current?.templateId||(sector.key==="mining"?TEMPLATE_VERSION:"custom-industry-1"),false)
+        setCustomNodes(next);setEditor(null);setMessage("Category added to this draft. Publish to make it available in Downtime Inputs.")
+      } catch(failure){setError(failure.message)}
+    }}><label className="dt-field"><span>Category name</span><input required maxLength={120} value={editor.label} onChange={(event)=>setEditor({...editor,label:event.target.value})}/></label><button type="submit" className="dt-button dt-button-primary">Add category</button></form></DowntimeDialog>}
   </section>
 }

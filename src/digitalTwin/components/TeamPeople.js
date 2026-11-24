@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { savePerson } from "../services/teamService"
 
-const blankPerson = { name: "", surname: "", role: "", category: "nonTechnical", base: "corporate", siteId: "" }
+const blankPerson = { employeeNumber: "", name: "", surname: "", role: "", category: "nonTechnical", base: "corporate", siteId: "" }
 const categories = { technical: "Technical", nonTechnical: "Non-technical" }
 
 export default function TeamPeople({ tenantId, people, roles, sites = [], onRefresh }) {
@@ -28,6 +28,7 @@ export default function TeamPeople({ tenantId, people, roles, sites = [], onRefr
     <div className="dt-panel-head"><h3>People</h3><button type="button" className="dt-button dt-button-primary"
       disabled={busy} onClick={() => { setError(""); setPerson(blankPerson) }}>+ Add person</button></div>
     {error && <p role="alert" className="dt-notice dt-notice-error">{error}</p>}
+    <p className="dt-muted">Grey cells show existing employee information. Choose Edit to complete the white input fields, including Employee Number.</p>
     {person && <form onSubmit={save}>
       <fieldset className="dt-panel" disabled={busy}>
         <div className="dt-asset-toolbar">
@@ -42,6 +43,7 @@ export default function TeamPeople({ tenantId, people, roles, sites = [], onRefr
               {(roles[person.category] || []).map((role) => <option key={role.id} value={role.name} />)}
             </datalist>
           </label>
+          <label className="dt-field"><span>Employee ID / Employee Number</span><input maxLength={80} value={person.employeeNumber || ""} placeholder="Enter employee number" onChange={(event)=>setPerson({...person,employeeNumber:event.target.value})} /></label>
           <label className="dt-field"><span>Name</span><input required maxLength={120} value={person.name}
             onChange={(event) => setPerson({ ...person, name: event.target.value })} /></label>
           <label className="dt-field"><span>Surname</span><input required maxLength={120} value={person.surname || ""}
@@ -59,9 +61,9 @@ export default function TeamPeople({ tenantId, people, roles, sites = [], onRefr
       </fieldset>
     </form>}
     {people.length ? <div className="dt-table-wrap"><table className="dt-table">
-      <thead><tr><th>Name</th><th>Surname</th><th>Role</th><th>Category</th><th>Based at</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Employee ID / Employee Number</th><th>Name</th><th>Surname</th><th>Role</th><th>Category</th><th>Based at</th><th>Actions</th></tr></thead>
       <tbody>{people.map((record) => <tr key={record.id}>
-        <td>{record.name}</td><td>{record.surname || "—"}</td><td>{record.role || "—"}</td><td>{categories[record.category]}</td><td>{record.base === "site" ? sites.find((site) => site.id === record.siteId)?.name || "Site unavailable" : "Corporate"}</td>
+        <td>{record.employeeNumber || "Not entered"}</td><td className="dt-sourced">{record.name}</td><td className="dt-sourced">{record.surname || "—"}</td><td>{record.role || "—"}</td><td>{categories[record.category]}</td><td>{record.base === "site" ? sites.find((site) => site.id === record.siteId)?.name || "Site unavailable" : "Corporate"}</td>
         <td><button type="button" className="dt-button dt-button-small" disabled={busy}
           onClick={() => { setError(""); setPerson(record) }}>Edit</button></td>
       </tr>)}</tbody>

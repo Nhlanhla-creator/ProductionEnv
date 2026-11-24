@@ -148,6 +148,8 @@ export default function TwinFlowDiagram({
   const [newNodeName, setNewNodeName] = useState("")
   const [choiceId, setChoiceId] = useState("")
   const [quantity, setQuantity] = useState(1)
+  const [activityChoiceId, setActivityChoiceId] = useState("")
+  const [equipmentNumber, setEquipmentNumber] = useState("")
   const [equipmentType, setEquipmentType] = useState("")
   const [personRole, setPersonRole] = useState("")
   const [personCategory, setPersonCategory] = useState("nonTechnical")
@@ -253,11 +255,22 @@ export default function TwinFlowDiagram({
     while (id && !seen.has(id)) {
       seen.add(id)
       const node = nodeById[id]
-      if (node?.nodeType === "value_chain") return node.attributes?.taxonomyId || null
+      if (["value_chain", "service"].includes(node?.nodeType)) return node.attributes?.taxonomyId || null
       id = relations.find((edge) => edge.isPrimary && edge.toId === id)?.fromId
     }
     return null
   }
+  const ancestorActivity = (id) => {
+    const seen = new Set()
+    while (id && !seen.has(id)) {
+      seen.add(id); const node = nodeById[id]
+      if (node?.nodeType === "activity") return node.attributes?.taxonomyId || null
+      id = relations.find((edge) => edge.isPrimary && edge.toId === id)?.fromId
+    }
+    return null
+  }
+  const parentActivityId = ancestorActivity(parentId)
+  const chosenActivity = parentActivityId || activityChoiceId
   const chainId = ancestorChain(parentId)
   const parent = nodeById[parentId]
   const parentGroupChoice = parent?.nodeType === "equipment_group"
@@ -267,7 +280,8 @@ export default function TwinFlowDiagram({
     ? []
     : (choices[newNodeType] || []).filter((choice) =>
       (newNodeType !== "activity" || !chainId || choice.custom || choice.valueChainIds?.includes(chainId)) &&
-      (newNodeType !== "asset" || !parentGroupChoice || !choice.equipmentGroupChoiceId || choice.equipmentGroupChoiceId === parentGroupChoice) &&
+      (!["asset", "equipment_group"].includes(newNodeType) || !chosenActivity || choice.activityIds?.includes(chosenActivity)) &&
+      (newNodeType !== "asset" || !parentGroupChoice || !choice.equipmentGroupChoiceId || (choice.equipmentGroupChoiceId === parentGroupChoice || choice.parentIds?.includes(parentGroupChoice))) &&
       !nodes.some((node) =>
         (choice.registerId && (node.attributes?.registerId === choice.registerId || node.attributes?.instances?.some((item) => item.id === choice.registerId))) ||
         (choice.hierarchyId && node.attributes?.hierarchyId === choice.hierarchyId) ||
@@ -276,7 +290,7 @@ export default function TwinFlowDiagram({
   const newAsset = newNodeType === "asset" && !picked?.registerId
   const canAdd = newNodeType === "person" ? !!personRole.trim() :
     (picked || ((newNodeType === "site" || choiceId === "__other__") && newNodeName.trim()))
-    && (!newAsset || (Number.isInteger(Number(quantity)) && Number(quantity) > 0 && Number(quantity) <= 50 && (picked || equipmentType.trim())))
+    && (!newAsset || (!!chosenActivity && !!picked && Number.isInteger(Number(quantity)) && Number(quantity) > 0 && Number(quantity) <= 50 && (picked || equipmentType.trim())))
 
   const openAdd = (parent, type = "site") => {
     setSelectedNode(null)
@@ -285,6 +299,8 @@ export default function TwinFlowDiagram({
     setChoiceId("")
     setNewNodeName("")
     setQuantity(1)
+    setActivityChoiceId("")
+    setEquipmentNumber("")
     setEquipmentType("")
     setPersonRole("")
     setPersonCategory("nonTechnical")
@@ -303,8 +319,11 @@ export default function TwinFlowDiagram({
       else if (picked?.hierarchyId) attributes.hierarchyId = picked.hierarchyId
       else if (picked) attributes.taxonomyId = picked.id
       if (newAsset) {
-        if (picked?.equipmentGroupChoiceId) attributes.equipmentGroupChoiceId = picked.equipmentGroupChoiceId
-        attributes.quantity = Number(quantity)
+        if (picked?.equipmentGroupChoiceId) attributes.equipmentGroupChoiceId = parentGroupChoice || (choices.equipment_group || []).find((group) => picked.parentIds?.includes(group.id) && group.activityIds?.includes(chosenActivity))?.id || picked.equipmentGroupChoiceId
+        attributes.quantity = Number(quantity || picked.quantity || 1)
+        attributes.equipmentNumber = equipmentNumber.trim() || picked.equipmentNumber || ""
+        attributes.activityChoiceId = chosenActivity
+        attributes.environmentId = picked.environmentId
         if (!picked) attributes.equipmentType = equipmentType.trim()
       }
       const newNode = { id: structureId(), nodeType: newNodeType, name, attributes }
@@ -461,18 +480,27 @@ export default function TwinFlowDiagram({
             <span className="dt-muted">Add employee names in Team Setup.</span>
           </> : newNodeType === "site" ? <input aria-label="Site name" value={newNodeName} maxLength={120}
             onChange={(event) => setNewNodeName(event.target.value)} placeholder="Enter site name" style={miniInput} /> : <>
-            <select aria-label="Available options" value={choiceId} onChange={(event) => setChoiceId(event.target.value)} style={miniInput}>
+            <select aria-label="Available options" value={choiceId} onChange={(event) => {
+              setChoiceId(event.target.value)
+              const choice = nodeOptions.find((item) => item.id === event.target.value)
+              setQuantity(choice?.quantity || 1); setEquipmentNumber(choice?.equipmentNumber || "")
+            }} style={miniInput}>
               <option value="">Choose an option</option>{nodeOptions.map((option) => <option key={option.id} value={option.id}>{option.label || option.name}</option>)}
               <option value="__other__">Other (specify)</option>
             </select>
             {choiceId === "__other__" && <input aria-label="Name" value={newNodeName} maxLength={120}
               onChange={(event) => setNewNodeName(event.target.value)} placeholder="Name" style={miniInput} />}
           </>}
+          {newNodeType === "asset" && !parentActivityId && <select aria-label="Operating activity" value={activityChoiceId} style={miniInput}
+            onChange={(event) => { setActivityChoiceId(event.target.value); setChoiceId("") }}><option value="">Choose an operating activity first</option>
+            {(choices.activity || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
           {newAsset && choiceId && <>
             <label>Quantity <input aria-label="Equipment quantity" type="number" min="1" max="50" step="1" value={quantity}
               onChange={(event) => setQuantity(event.target.value)} style={{ ...miniInput, width: 75 }} /></label>
             {choiceId === "__other__" && <input aria-label="Equipment type" value={equipmentType} maxLength={120}
               onChange={(event) => setEquipmentType(event.target.value)} placeholder="Equipment type" style={miniInput} />}
+            <input aria-label="Equipment number" style={miniInput} maxLength={50} value={equipmentNumber} placeholder="Equipment number / fleet prefix"
+              onChange={(event) => setEquipmentNumber(event.target.value)} />
             <small>Each unit gets a separate row and an editable Asset ID in Asset Setup.</small>
           </>}
           <button disabled={!canAdd} onClick={handleAddNode} style={toolbarPrimaryBtn}>Add</button>

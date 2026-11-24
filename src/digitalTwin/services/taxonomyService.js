@@ -1,3 +1,5 @@
+import { builderTerm } from "../models/builderSelection";
+import { CONSTRUCTION_PACK_VERSION, CONSTRUCTION_SECTOR, CONSTRUCTION_VALUE_CHAIN } from "../taxonomy/constructionPack";
 /**
  * digitalTwin/services/taxonomyService.js
  *
@@ -28,6 +30,7 @@ import { APPLICABILITY_DECISION } from "../models/enums";
 
 // ── In-memory pack registry (loaded once per session) ─────────────────────
 const PACKS = {
+  construction: { version: CONSTRUCTION_PACK_VERSION, sector: CONSTRUCTION_SECTOR, valueChain: CONSTRUCTION_VALUE_CHAIN },
   agriculture: { version: "1.0.0", sector: AGRICULTURE_SECTOR, valueChain: AGRICULTURE_VALUE_CHAIN },
   manufacturing: { version: MANUFACTURING_PACK_VERSION, sector: MANUFACTURING_SECTOR, valueChain: MANUFACTURING_VALUE_CHAIN },
   mining: {
@@ -140,7 +143,7 @@ export const listPacks = () =>
 export const getPack = (key) => PACKS[key] || null;
 
 /** Fetch a canonical term by ID (across all packs). */
-export const getTerm = (termId) => TERM_INDEX.get(termId) || null;
+export const getTerm = (termId) => builderTerm(termId) || TERM_INDEX.get(termId) || null;
 
 /** Breadcrumb for a term — parent chain from root pack. */
 export const getBreadcrumb = (termId) => {

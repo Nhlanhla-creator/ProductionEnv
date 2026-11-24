@@ -223,7 +223,7 @@ export default function DowntimeRegisterTable({ tenantId, rows, loading, onOpenA
           </td>)}
           <td><div className="dt-actions dt-register-row-actions">
             <IconButton icon={Eye} label="Open Asset Register record" onClick={() => onOpenAsset?.(row.assetId)} />
-            {row.masterListId && <IconButton icon={BookOpen} label="Open Master Codes" onClick={() => onMasterCodes?.(row)} />}
+            {row.masterListId && <IconButton icon={BookOpen} label="Open Master Downtime Codes" onClick={() => onMasterCodes?.(row)} />}
             {!row.eventEnd && onCloseEvent && <IconButton icon={Timer} label="Mark back online" onClick={() => onCloseEvent(row)} />}
             {row.masterListId && onCorrect && <IconButton icon={Pencil} label="Correct downtime record" onClick={() => onCorrect(row)} />}
             <IconButton icon={History} label="View audit history" onClick={() => onAudit?.(row)} />

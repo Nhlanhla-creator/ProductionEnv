@@ -16,6 +16,7 @@ export async function listPeople(tenantId) {
 export function personPayload(person, creating) {
   const name = person.name.trim()
   const surname = String(person.surname || "").trim()
+  if (String(person.employeeNumber || "").length > 80) throw new Error("Employee Number must be at most 80 characters.")
   if (!surname) throw new Error("Enter the person’s surname.")
   if (!person.role?.trim()) throw new Error("Select or specify a role.")
   if (!["technical", "nonTechnical"].includes(person.category)) throw new Error("Choose Technical or Non-Technical.")
@@ -25,7 +26,7 @@ export function personPayload(person, creating) {
   const timestamp = serverTimestamp()
   const uid = auth.currentUser.uid
   return {
-    name, surname, role: person.role.trim(), category: person.category, base: person.base === "site" ? "site" : "corporate", siteId: person.base === "site" ? person.siteId : "",
+    name, surname, employeeNumber: String(person.employeeNumber || "").trim(), role: person.role.trim(), category: person.category, base: person.base === "site" ? "site" : "corporate", siteId: person.base === "site" ? person.siteId : "",
     updatedAt: timestamp, updatedBy: uid,
     ...(creating ? { createdAt: timestamp, createdBy: uid } : {}),
   }

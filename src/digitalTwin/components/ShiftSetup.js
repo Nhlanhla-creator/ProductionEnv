@@ -28,7 +28,7 @@ export default function ShiftSetup({tenantId,initialView='people',onNavigate}) {
   const save=async e=>{e.preventDefault();setBusy(true);setError('');try{await saveShift(tenantId,editing);setShifts(await listShifts(tenantId));setEditing(null);}catch(e){setError(e.message);}finally{setBusy(false);}};
   const tabs=[['people','shiftSetup','People setup'],['definitions','shiftDefinitions','Shift setup'],['capture','measurements','Shift data capture']];
   return <section>
-    <div className="dt-topline">Setup / Team Setup</div>
+    
     <div className="dt-heading"><h2>Team Setup</h2></div>
     <nav className="dt-actions" aria-label="Team Setup">{tabs.map(([key,route,label])=>
       <button type="button" key={key} className={`dt-button ${initialView===key?'dt-button-primary':''}`}

@@ -8,7 +8,7 @@ import { getTerm } from "../services/taxonomyService"
 import { downloadCsv } from "../models/downloadCsv"
 
 const DEFAULTS = [
-  ["internalNumber", "Asset ID", 160], ["name", "Equipment", 215], ["group", "Equipment group", 170], ["make", "Make / OEM", 138],
+  ["internalNumber", "Asset ID", 160], ["name", "Equipment", 215], ["group", "Equipment group", 170], ["equipmentNumber", "Equipment number", 170], ["quantity", "Quantity", 110], ["make", "Make / OEM", 138],
   ["model", "Model", 135], ["hourMeter", "Machine hours", 133], ["operatingHours", "Operating hours", 140],
   ["location", "Location", 160], ["capacity", "Capacity / unit", 150], ["ownershipType", "Ownership status", 153],
   ["modelGroup", "Model group", 145], ["status", "Status", 132],
@@ -56,6 +56,7 @@ function getLayout(key) {
 function valueFor(row, key) {
   const { asset, group, location } = row
   switch (key) {
+    case "quantity": return 1
     case "group": return group
     case "location": return location
     case "capacity": return [asset.currentDeratedCapacity ?? asset.nameplateCapacity, asset.canonicalUnit && unitLabel(asset.canonicalUnit)]
@@ -81,7 +82,7 @@ const IconButton = ({ label, icon: Icon, ...props }) => <button type="button" cl
   aria-label={label} title={label} {...props}><Icon size={15} aria-hidden="true" /></button>
 
 export default function AssetRegisterTable({ tenantId, rows, initialAssetId, loading, onView, onCapture, onEdit, onRetire }) {
-  const storageKey = `digitalTwin.assetRegisterColumns:v3:${tenantId}`
+  const storageKey = `digitalTwin.assetRegisterColumns:v4:${tenantId}`
   const [layout, setLayout] = useState(() => getLayout(storageKey))
   const [search, setSearch] = useState(initialAssetId || "")
   const [filters, setFilters] = useState({})

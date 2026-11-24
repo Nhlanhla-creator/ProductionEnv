@@ -6,7 +6,7 @@ import { getTenant } from '../services/hierarchyService';
 import { getDowntimeEvent } from '../services/downtimeService';
 import { twinPath,twinView } from '../models/navigation';
 import DigitalTwinNavigation from './DigitalTwinNavigation';
-import AssetRegister from './AssetRegister';
+import AssetSetup from './AssetSetup';
 import EquipmentGroupManager from './EquipmentGroupManager';
 import ShiftSetup from './ShiftSetup';
 import InputSheetGrid from './InputSheetGrid';
@@ -15,13 +15,13 @@ import ShiftMeasurementReview from './ShiftMeasurementReview';
 import ImportCentre from './ImportCentre';
 import ReportingPeriodManager from './ReportingPeriodManager';
 import FirstRunWizard from './FirstRunWizard';
-import DowntimeMasterSetup from './DowntimeMasterSetup';
 import DowntimeOperations from './DowntimeOperations';
 import OperationalDataSources from './OperationalDataSources';
 import SectorPackLoader from './SectorPackLoader';
 import CapabilityToTwinConverter from './CapabilityToTwinConverter';
 import OperationalPerformance from '../../smses/MyGrowthTools/OperationalStrength';
 import '../styles/Downtime.css';
+import '../styles/BuilderForms.css';
 function Cards({rows,onPick}){return <div className="dt-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))'}}>{rows.map(([key,label,description])=><button type="button" key={key} className="dt-panel dt-nav-card" onClick={()=>onPick(key)}><strong>{label}</strong><p className="dt-muted">{description}</p><span>Open →</span></button>)}</div>;}
 export default function DigitalTwinHome({initialActive=null}) {
   const location=useLocation(),navigate=useNavigate(),view=twinView(location.pathname,location.search,initialActive);
@@ -40,9 +40,9 @@ export default function DigitalTwinHome({initialActive=null}) {
   if(view==='guide')content=<FirstRunWizard key={id} tenantId={id} onCancel={back} onComplete={()=>go('assets')}/>;
   else if(view==='shiftSetup'||view==='shiftDefinitions'||view==='measurements')content=<ShiftSetup key={`${id}:${view}`} tenantId={id} initialView={{shiftSetup:'people',shiftDefinitions:'definitions',measurements:'capture'}[view]} onNavigate={go}/>;
   else if(view==='grid')content=<><InputSheetGrid tenantId={id}/><ShiftMeasurementReview tenantId={id}/></>;
-  else if(view==='assetSetup'||view==='assets')content=<AssetRegister key={`${id}:${assetId}`} tenantId={id} initialAssetId={assetId} onWorkspaceNavigate={go}/>;
+  else if(view==='assetSetup'||view==='assets')content=<AssetSetup tenantId={id} assetId={assetId} onNavigate={go}/>;
   else if(view==='groups')content=<EquipmentGroupManager tenantId={id} onBack={back}/>;
-  else if(view==='setup')content=<DowntimeMasterSetup key={`${id}:${location.search}`} tenantId={id} initialMasterId={query.get("masterId")||""} initialGroupId={query.get("groupId")||""} onBack={back} onNavigate={go}/>;
+  else if(view==='setup')content=<AssetSetup tenantId={id} tab="codes" masterId={query.get("masterId")||""} groupId={query.get("groupId")||""} onNavigate={go}/>;
   else if(view==='packs')content=<SectorPackLoader tenantId={id} onBack={back}/>;
   else if(view==='convert')content=<CapabilityToTwinConverter tenantId={id} onBack={back}/>;
   else if(view==='periods')content=<ReportingPeriodManager tenantId={id} onBack={back}/>;

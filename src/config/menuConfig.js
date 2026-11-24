@@ -679,13 +679,6 @@ export const smeMenuItems = [
     route: "/growth",
     hasSubmenu: true,
     subItems: [
-      // ─── Overall Company Health (now standalone, outside RAPs) ───────────
-      {
-        id: "overall-health",
-        label: "Overall Company Health",
-        icon: <Heart size={16} />,
-        route: "/overall-company-health",
-      },
       // Configure once under Setup; run daily work under Operations.
       {
         id: "operations-setup", label: "Setup", icon: <Settings size={16} />,
@@ -693,10 +686,16 @@ export const smeMenuItems = [
         subItems: [
           { id: "operations-setup-guide", label: "Operating structure", icon: <Rocket size={16} />, route: "/digital-twin/setup/guide" },
           { id: "operations-asset-setup", label: "Asset Setup", icon: <Truck size={16} />, route: "/digital-twin/setup/asset-setup" },
-          { id: "operations-master-codes", label: "Master Codes", icon: <Settings size={16} />, route: "/digital-twin/setup/master-codes" },
           { id: "operations-shift-setup", label: "Team Setup", icon: <Calendar size={16} />, route: "/digital-twin/setup/shifts" },
           { id: "operations-imports", label: "Operational Data Sources", icon: <Upload size={16} />, route: "/digital-twin/setup/imports" },
         ],
+      },
+      // ─── Overall Company Health (now standalone, outside RAPs) ───────────
+      {
+        id: "overall-health",
+        label: "Overall Company Health",
+        icon: <Heart size={16} />,
+        route: "/overall-company-health",
       },
       // ─── RAPs (Overall Company Health removed) ───────────────────────────
       {

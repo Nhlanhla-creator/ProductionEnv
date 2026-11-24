@@ -52,7 +52,7 @@ export const CONDITION = Object.freeze({
 export const ASSET_FIELD_GROUPS = Object.freeze({
   identity: {
     label: "Identity",
-    fields: ["assetId", "internalNumber", "serialNumber", "registration", "barcodeOrQr", "name"],
+    fields: ["assetId", "internalNumber", "equipmentNumber", "serialNumber", "registration", "barcodeOrQr", "name"],
   },
   classification: {
     label: "Classification",
@@ -99,6 +99,7 @@ export const createEmptyResource = (tenantId, overrides = {}) => {
     // Identity
     assetId: null,               // assigned by service
     internalNumber: "",
+    equipmentNumber: "",
     serialNumber: "",
     registration: "",
     barcodeOrQr: "",
@@ -207,6 +208,10 @@ export const validateResource = (resource, { isCreate = false } = {}) => {
       if (value != null && value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0)) {
         errors.push({ field, message: `${label} must be zero or greater.` });
       }
+    }
+    if (["available", "operating", "standby", "planned_maintenance", "unplanned_downtime"].includes(resource.status)) {
+      if (!isNonEmptyString(resource.make)) errors.push({field:"make",message:"Equipment make / OEM is required before activation."});
+      if (!isNonEmptyString(resource.model)) errors.push({field:"model",message:"Equipment model is required before activation."});
     }
     if (!resource.equipmentTypeId) {
       errors.push({ field: "equipmentTypeId", message: "Canonical equipment type is required for physical assets." });

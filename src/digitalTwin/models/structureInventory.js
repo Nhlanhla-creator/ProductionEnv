@@ -25,7 +25,7 @@ export function inventoryForDiagram(diagram, assets, makeId) {
       let internalNumber = existing?.internalNumber || old?.internalNumber || (index === 0 ? attributes.internalNumber : '')
       if (!internalNumber) {
         let suffix = index + 1
-        do { internalNumber = `E-${node.id.slice(-12)}-${String(suffix++).padStart(3, '0')}`.toUpperCase() } while (numbers.has(internalNumber))
+        do { internalNumber = `${((attributes.equipmentNumber || "E").replace(/[^a-zA-Z0-9._-]/g, "").replace(/^[^a-zA-Z0-9]+/, "").slice(0,40) || "E")}-${node.id.slice(-8)}-${String(suffix++).padStart(3, '0')}`.toUpperCase() } while (numbers.has(internalNumber))
       }
       numbers.add(internalNumber.toUpperCase())
       const instance = { ...old, id, internalNumber }

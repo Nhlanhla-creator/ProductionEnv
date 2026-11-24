@@ -12,7 +12,7 @@ import { Save, X } from "lucide-react"
 import { createEmptyResource, validateResource, RESOURCE_KIND, OWNERSHIP_TYPE, CRITICALITY, CONDITION } from "../models/assetSchema"
 import { ASSET_STATUS, DATA_CONFIDENCE } from "../models/enums"
 import { UNITS, unitLabel, CANONICAL_UNIT } from "../models/units"
-import { optionsFor } from "../services/taxonomyService"
+import { getTerm, optionsFor } from "../services/taxonomyService"
 import { getOnboardingState } from "../services/onboardingState"
 import { listGroups, listOperatingSites } from "../services/resourceService"
 import { normalAssetNumber } from "../models/assetIdentity"
@@ -51,7 +51,7 @@ function Row({ children, cols = 4 }) {
 }
 function Field({ label, name, children, required, errors = [], warnings = [] }) {
   const error = errors.find(e => e.field === name)?.message, warning = warnings.find(w => w.field === name)?.message
-  return <div><label style={labelS}>{label}{required && <span style={{ color: T.red }}> *</span>}</label>{children}{error && <div role="alert" style={{ color: T.red, fontSize: 12 }}>{error}</div>}{warning && <div style={{ color: T.amber, fontSize: 12 }}>{warning}</div>}</div>
+  return <div className="dt-editable-field"><label style={labelS}>{label}{required && <span style={{ color: T.red }}> *</span>}</label>{children}{error && <div role="alert" style={{ color: T.red, fontSize: 12 }}>{error}</div>}{warning && <div style={{ color: T.amber, fontSize: 12 }}>{warning}</div>}</div>
 }
 
 export default function AssetForm({ tenantId, initial = null, onSave, onCancel }) {
@@ -70,6 +70,7 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
     return () => { live = false }
   }, [tenantId])
 
+  const sourced = !!initial?.structureNodeId
   const isAsset = form.resourceKind === RESOURCE_KIND.ASSET
   const isEdit = Boolean(initial?.assetId)
 
@@ -91,6 +92,9 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
     let submission = form
     if (isAsset) {
       try { submission = { ...form, internalNumber: normalAssetNumber(form.internalNumber) }; setForm(submission) } catch (e) { setErrors([{ field: "internalNumber", message: e.message }]); return }
+    }
+    if (isAsset && (!String(submission.make || "").trim() || !String(submission.model || "").trim())) {
+      setErrors([{field:!String(submission.make||"").trim()?"make":"model",message:"Enter the equipment make and model before saving."}]);return
     }
     const { ok, errors: verrs, warnings: vwarns } = validateResource(submission, { isCreate: !isEdit })
     setErrors(verrs); setWarnings(vwarns)
@@ -158,6 +162,7 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
             <input value={form.internalNumber || ""} onChange={(e) => set({ internalNumber: e.target.value })}
               style={inputS} placeholder="e.g. TRK-014" />
           </Field>
+          <Field errors={errors} warnings={warnings} label="Equipment number" name="equipmentNumber"><input style={inputS} maxLength={50} value={form.equipmentNumber || ""} placeholder="Enter fleet / equipment number" onChange={(event) => set({equipmentNumber:event.target.value})} /></Field>
           <Field errors={errors} warnings={warnings} label="Serial number" name="serialNumber">
             <input value={form.serialNumber || ""} onChange={(e) => set({ serialNumber: e.target.value })} style={inputS} />
           </Field>
@@ -178,7 +183,7 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
           </h4>
           <Row>
             <Field errors={errors} warnings={warnings} label="Equipment" name="equipmentTypeId" required>
-              {customType ? <input value={form.equipmentTypeId || ""} onChange={e => set({ equipmentTypeId: e.target.value })} style={inputS} placeholder="e.g. Delivery van or processing line" /> : <select value={form.equipmentTypeId || ""} onChange={e => { if (e.target.value === "__custom__") { setCustomType(true); set({ equipmentTypeId: "" }) } else set({ equipmentTypeId: e.target.value || null }) }} style={inputS}>
+              {sourced ? <input readOnly className="dt-sourced" style={{...inputS,background:"#f1f2f3"}} value={getTerm(form.equipmentTypeId)?.name || form.equipmentTypeId || ""} aria-label="Equipment from Digital Twin" /> : customType ? <input value={form.equipmentTypeId || ""} onChange={e => set({ equipmentTypeId: e.target.value })} style={inputS} placeholder="e.g. Delivery van or processing line" /> : <select value={form.equipmentTypeId || ""} onChange={e => { if (e.target.value === "__custom__") { setCustomType(true); set({ equipmentTypeId: "" }) } else set({ equipmentTypeId: e.target.value || null }) }} style={inputS}>
                 <option value="">Select equipment type…</option>
                 {form.equipmentTypeId && !equipmentTypeOptions.some(o => o.id === form.equipmentTypeId) && <option value={form.equipmentTypeId}>{form.equipmentTypeId}</option>}
                 {equipmentTypeOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -192,12 +197,13 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
               </select>
             </Field>
           </Row>
+          <p className="dt-notice">Complete the equipment make and model. Grey fields come from the Digital Twin; white fields are for your entries.</p>
           <Row cols={4}>
-            <Field errors={errors} warnings={warnings} label="Make / OEM" name="make">
-              <input value={form.make || ""} onChange={(e) => set({ make: e.target.value })} style={inputS} placeholder="e.g. Caterpillar" />
+            <Field errors={errors} warnings={warnings} label="Make / OEM" name="make" required>
+              <input required value={form.make || ""} onChange={(e) => set({ make: e.target.value })} style={inputS} placeholder="Enter equipment make / OEM" />
             </Field>
-            <Field errors={errors} warnings={warnings} label="Model" name="model">
-              <input value={form.model || ""} onChange={(e) => set({ model: e.target.value })} style={inputS} placeholder="e.g. 777E" />
+            <Field errors={errors} warnings={warnings} label="Model" name="model" required>
+              <input required value={form.model || ""} onChange={(e) => set({ model: e.target.value })} style={inputS} placeholder="Enter equipment model" />
             </Field>
             <Field errors={errors} warnings={warnings} label="Year" name="year">
               <input type="number" value={form.year ?? ""} onChange={(e) => set({ year: e.target.value ? Number(e.target.value) : null })} style={inputS} />
@@ -217,7 +223,7 @@ export default function AssetForm({ tenantId, initial = null, onSave, onCancel }
       {isAsset && <div style={sectionS}>
         <h4 style={{ color: T.accent }}>Group & operating location</h4>
         <Row cols={3}>
-          <Field errors={errors} warnings={warnings} label="Equipment group (optional)" name="equipmentGroupId"><select style={inputS} value={form.equipmentGroupId || ""} onChange={e => set({ equipmentGroupId: e.target.value || null })}><option value="">No group</option>{form.equipmentGroupId && !groups.some(g => g.id === form.equipmentGroupId) && <option value={form.equipmentGroupId}>{form.equipmentGroupId}</option>}{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
+          <Field errors={errors} warnings={warnings} label="Equipment group (optional)" name="equipmentGroupId"><select disabled={sourced} className={sourced?"dt-sourced":""} style={{...inputS,...(sourced?{background:"#f1f2f3"}:{})}} value={form.equipmentGroupId || ""} onChange={e => set({ equipmentGroupId: e.target.value || null })}><option value="">No group</option>{form.equipmentGroupId && !groups.some(g => g.id === form.equipmentGroupId) && <option value={form.equipmentGroupId}>{form.equipmentGroupId}</option>}{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
           <Field errors={errors} warnings={warnings} label="Site (optional)" name="siteId"><select style={inputS} value={form.siteId || ""} onChange={e => set({ siteId: e.target.value || null })}><option value="">No site</option>{form.siteId && !sites.some(s => s.id === form.siteId) && <option value={form.siteId}>{form.siteId}</option>}{sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         <Field errors={errors} warnings={warnings} label="Location description (optional)" name="location"><input style={inputS} value={form.location || ""} onChange={e => set({ location: e.target.value })} placeholder="e.g. North pit / Workshop A" /></Field></Row>
       </div>}

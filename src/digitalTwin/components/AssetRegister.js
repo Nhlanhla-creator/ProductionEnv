@@ -49,9 +49,9 @@ export default function AssetRegister({tenantId,onBack,onWorkspaceNavigate,initi
   if(view==='capture')return <DowntimeEventForm key={correction?.eventId||correction?.id||captureAsset||'new'} tenantId={tenantId} defaultAssetId={captureAsset} initialEvent={correction} onBack={()=>navigate('assets')} onNavigate={navigate}/>;
   if(view==='records')return <DowntimeRecords initialRange={reportRange} initialAssetId={reportAsset} tenantId={tenantId} onNavigate={navigate} onCorrect={correct} onOpenAsset={id=>{const a=assets.find(a=>(a.assetId||a.id)===id);if(a){setViewing(a);setView('assets');}}}/>;
   if(viewing)return <AssetDetail tenantId={tenantId} asset={viewing} onBack={()=>{setViewing(null);setReload(x=>x+1);}} onNavigate={navigate}/>;
-  if(form)return <div className="dt-workspace"><div className="dt-topline">Setup / Asset register</div><AssetForm tenantId={tenantId} initial={form.assetId?form:null} onSave={save} onCancel={()=>setForm(null)}/></div>;
+  if(form)return <div className="dt-workspace"><AssetForm tenantId={tenantId} initial={form.assetId?form:null} onSave={save} onCancel={()=>setForm(null)}/></div>;
   const active=physical.filter(canCaptureAsset);
-  return <section className="dt-workspace"><div className="dt-topline">Setup / Asset register</div>
+  return <section className="dt-workspace">
     <div className="dt-heading"><div><h2>Asset Register</h2></div><div className="dt-actions">{onBack&&<button className="dt-button" onClick={onBack}>← Back</button>}<button className="dt-button" disabled={loading||!tenantId} onClick={()=>setImporting(true)}>Import assets</button><button className="dt-button dt-button-primary" disabled={!tenantId} onClick={()=>setForm({})}>+ Add asset</button></div></div>
     {error&&<div className="dt-notice dt-notice-error" role="alert">{error}</div>}{message&&<div className="dt-notice dt-notice-success" role="status">{message}</div>}
     <p className="dt-muted" aria-label="Register totals">{physical.length} registered · {active.length} active · {groups.filter(g=>g.status==='active').length} equipment groups</p>

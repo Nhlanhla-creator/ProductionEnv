@@ -165,4 +165,4 @@ export function eventTiming(startValue,endValue = null) {
 }
 export const elapsedHours = (event,asOf = Date.now()) => Math.max(0,((event.eventEnd?Date.parse(event.eventEnd):asOf)-Date.parse(event.eventStart))/3600000)||0;
 export const canCaptureAsset = a => a && a.resourceKind === 'asset' &&
-  a.currentStructureAsset !== false && !['retired','disposed','inactive'].includes(a.status);
+  (!a.structureNodeId || (!!a.make && !!a.model && !['planned','draft'].includes(a.status))) && a.currentStructureAsset !== false && !['retired','disposed','inactive'].includes(a.status);

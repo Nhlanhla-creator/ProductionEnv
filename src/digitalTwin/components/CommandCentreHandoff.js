@@ -64,9 +64,9 @@ export default function CommandCentreHandoff({ tenantId, onOpenCommandCentre, on
 
           <StepItem
             num={2}
-            title="Configure Master Codes"
+            title="Configure Master Downtime Codes"
             description="Assign and publish the downtime codes your team will use during daily capture."
-            action={{ label: "Open Master Codes", onClick: onOpenMasterCodes || (()=>window.location.assign('/digital-twin/setup/master-codes')), icon: Plus }}
+            action={{ label: "Open Master Downtime Codes", onClick: onOpenMasterCodes || (()=>window.location.assign('/digital-twin/setup/master-codes')), icon: Plus }}
           />
 
           <StepItem

@@ -1,3 +1,4 @@
+import { equipmentMapping } from "../models/builderSelection"
 import { collection, doc, getDoc, runTransaction, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { getOnboardingState } from "./onboardingState"
@@ -69,18 +70,18 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
   const previousEdges = new Map((expected?.relations || []).map((edge) => [edge.id, edge]))
   const root = diagram.nodes.find((node) => node._root)
   if (!root) throw new Error("The organisation node is required.")
-  const options = structureOptions(form.sectorPack, form.valueChains)
+  const options = structureOptions(form.sectorPack, form.valueChains, form)
   const selectedChains = new Set(form.valueChains.map((item) => item.id))
   for (const node of diagram.nodes) {
     if (node.nodeType === "value_chain" && node.attributes?.taxonomyId && !selectedChains.has(node.attributes.taxonomyId)) throw new Error(`${node.name}: select this value chain in Step 2, or edit its selection in the diagram.`)
     if (node.nodeType === "service" && node.attributes?.taxonomyId && !options.services.some((item) => item.id === node.attributes.taxonomyId)) throw new Error(`${node.name}: choose a relevant Support Service or use Other.`)
     if (node.nodeType === "activity" && node.attributes?.taxonomyId) {
-      const choice = options.activities.find((item) => item.id === node.attributes.taxonomyId)
+      const choice = [...options.activities, ...options.supportActivities].find((item) => item.id === node.attributes.taxonomyId)
       let parentId = node.id, chain, seen = new Set()
       while (parentId && !seen.has(parentId)) {
         seen.add(parentId)
         const parent = diagram.nodes.find((item) => item.id === parentId)
-        if (parent?.nodeType === "value_chain") { chain = parent; break }
+        if (["value_chain","service"].includes(parent?.nodeType)) { chain = parent; break }
         parentId = diagram.relations.find((edge) => edge.isPrimary && edge.toId === parentId)?.fromId
       }
       if (!choice || (chain?.attributes?.taxonomyId && !choice.valueChainIds.includes(chain.attributes.taxonomyId))) throw new Error(`${node.name}: edit this activity to match its selected value chain.`)
@@ -116,9 +117,9 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
   }
   // A selected group is materialised only when equipment in the hierarchy uses it.
   for (const node of nodes.filter((item) => item.nodeType === "asset")) {
-    const choiceId = structureOptions(form.sectorPack).asset.find((item) => item.id === node.attributes.taxonomyId)?.equipmentGroupChoiceId || node.attributes.equipmentGroupChoiceId
+    const choiceId = node.attributes.equipmentGroupChoiceId || options.asset.find((item) => item.id === node.attributes.taxonomyId)?.equipmentGroupChoiceId
     if (choiceId && !groupIds.has(choiceId)) {
-      const group = [...form.equipmentGroups, ...structureOptions(form.sectorPack).equipmentGroups].find((item) => item.id === choiceId)
+      const group = [...form.equipmentGroups, ...options.equipmentGroups].find((item) => item.id === choiceId)
       if (group) { const id = structureId(); groupIds.set(choiceId, id); set("groups", id, prepareGroup(tenantId, { name: group.name }, id, now)) }
     }
     node.attributes.defaultEquipmentGroupId = groupIds.get(choiceId) || node.attributes.defaultEquipmentGroupId || null
@@ -141,18 +142,33 @@ export async function saveOperatingStructure(tenantId, form, diagram, loaded) {
     const oldNode = previousNodes.get(node.id)
     const oldContext = oldNode ? ancestorContext(oldNode.id, expected.nodes, expected.relations) : {}
     oldContext.groupId ||= oldNode?.attributes?.defaultEquipmentGroupId || null
+    if (!oldContext.activityId && oldNode?.attributes?.activityChoiceId) oldContext.activityId = expected.nodes.find((item) => item.nodeType === "activity" && item.attributes?.taxonomyId === oldNode.attributes.activityChoiceId)?.id || null
     const equipmentTypeId = node.attributes.taxonomyId || node.attributes.equipmentType || node.name
+    const activityNode = nodes.find((item) => item.id === context.activityId) || nodes.find((item) => item.nodeType === "activity" && item.attributes.taxonomyId === node.attributes.activityChoiceId)
+    const activityChoice = activityNode?.attributes.taxonomyId
+    const groupNode = nodes.find((item) => item.nodeType === "equipment_group" && item.attributes.registerId === context.groupId)
+    const groupChoiceId = groupNode?.attributes.taxonomyId || [...groupIds].find(([, id]) => id === context.groupId)?.[0]
+    const mapping = equipmentMapping(form, equipmentTypeId, activityChoice, groupChoiceId)
+    if (!mapping || !activityNode) throw new Error(`${node.name}: select an activity and a matching equipment group/type from the revised catalogue. Unmapped combinations require a catalogue addition.`)
+    context.activityId = activityNode.id
+    node.attributes.environmentId = mapping.environmentId
+    node.attributes.activityChoiceId = activityChoice
     const existing = entry.existing
+    if (existing && existing.builderEnvironmentId && !["planned", "draft"].includes(existing.status) &&
+      (existing.builderEnvironmentId !== mapping.environmentId || existing.equipmentTypeId !== equipmentTypeId)) throw new Error(`${node.name}: active equipment requires controlled reassignment before changing its environment or type.`)
+    const classification = { builderEnvironmentId: mapping.environmentId, builderActivityId: activityChoice,
+      builderGroupChoiceId: mapping.equipmentGroupId, taxonomyVersion: "brief-v1.2", equipmentNumber: existing?.equipmentNumber || node.attributes.equipmentNumber || "" }
+
     let payload
     if (!existing) {
       payload = prepareResource(tenantId, { name: node.name, internalNumber: instance.internalNumber,
         equipmentTypeId, equipmentGroupId: context.groupId || null, siteId: context.siteId || null,
-        currentStructureAsset: true, structureNodeId: node.id, structureUnitIndex: entry.index,
+        ...classification, currentStructureAsset: true, structureNodeId: node.id, structureUnitIndex: entry.index,
       }, instance.id, now)
       if (loaded.assets.some((asset) => String(asset.internalNumber || "").trim().toUpperCase() === payload.internalNumber)) throw new Error(`Asset ID ${payload.internalNumber} is already registered.`)
       reservations.push(payload)
     } else {
-      payload = { currentStructureAsset: true, structureNodeId: node.id, structureUnitIndex: entry.index,
+      payload = { ...classification, currentStructureAsset: true, structureNodeId: node.id, structureUnitIndex: entry.index,
         equipmentTypeId, equipmentGroupId: context.groupId || null, siteId: context.siteId || null,
         resourceVersion: (existing.resourceVersion || 0) + 1, updatedAt: now, updatedBy: actor }
       if (oldNode && existing.name === oldNode.name) payload.name = node.name

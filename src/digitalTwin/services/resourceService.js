@@ -93,6 +93,8 @@ export const updateResource = async (tenantId, resourceId, patch) => {
   const ref = resourceRef(tenantId, resourceId);
   const initial = await getResource(tenantId, resourceId);
   if (!initial) throw new Error("Asset not found.");
+  if (initial.builderEnvironmentId && ((patch.equipmentTypeId && patch.equipmentTypeId !== initial.equipmentTypeId) ||
+    (patch.equipmentGroupId && patch.equipmentGroupId !== initial.equipmentGroupId))) throw new Error("Equipment classification is sourced from the Digital Twin. Use a compatible reassignment rather than editing the type or group here.");
   const nextNumber = initial.resourceKind === RESOURCE_KIND.ASSET && (patch.internalNumber || initial.internalNumber)
     ? normalAssetNumber(patch.internalNumber || initial.internalNumber) : initial.internalNumber;
   if (nextNumber && nextNumber !== initial.internalNumber) {
