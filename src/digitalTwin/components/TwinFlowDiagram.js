@@ -37,6 +37,8 @@ const NODE_VISUALS = {
   facility:        { icon: Zap,       accent: "#b45309", soft: "#fffbeb", label: "Facility" },
 }
 
+const FREE_TEXT_NODE_TYPES = new Set(["site", "contract", "facility", "process_area"])
+
 const NODE_W = 200
 const NODE_H = 68
 const H_GAP = 52
@@ -289,7 +291,7 @@ export default function TwinFlowDiagram({
   const picked = nodeOptions.find((choice) => choice.id === choiceId)
   const newAsset = newNodeType === "asset" && !picked?.registerId
   const canAdd = newNodeType === "person" ? !!personRole.trim() :
-    (picked || ((newNodeType === "site" || choiceId === "__other__") && newNodeName.trim()))
+    (picked || ((FREE_TEXT_NODE_TYPES.has(newNodeType) || choiceId === "__other__") && newNodeName.trim()))
     && (!newAsset || (!!chosenActivity && !!picked && Number.isInteger(Number(quantity)) && Number(quantity) > 0 && Number(quantity) <= 50 && (picked || equipmentType.trim())))
 
   const openAdd = (parent, type = "site") => {
@@ -478,8 +480,11 @@ export default function TwinFlowDiagram({
               value={personRole} maxLength={120} onChange={(event) => setPersonRole(event.target.value)} />
             <datalist id="dt-structure-person-roles">{(peopleRoles[personCategory] || []).map((role) => <option key={role.id} value={role.name} />)}</datalist>
             <span className="dt-muted">Add employee names in Team Setup.</span>
-          </> : newNodeType === "site" ? <input aria-label="Site name" value={newNodeName} maxLength={120}
-            onChange={(event) => setNewNodeName(event.target.value)} placeholder="Enter site name" style={miniInput} /> : <>
+          </> : FREE_TEXT_NODE_TYPES.has(newNodeType) ? <label style={{ display: "grid", gap: 4 }}>
+            <span>{NODE_VISUALS[newNodeType].label} name *</span>
+            <input aria-label={`${NODE_VISUALS[newNodeType].label} name`} value={newNodeName} maxLength={120}
+              onChange={(event) => setNewNodeName(event.target.value)} placeholder={`Enter ${NODE_VISUALS[newNodeType].label.toLowerCase()} name`} style={miniInput} />
+          </label> : <>
             <select aria-label="Available options" value={choiceId} onChange={(event) => {
               setChoiceId(event.target.value)
               const choice = nodeOptions.find((item) => item.id === event.target.value)
