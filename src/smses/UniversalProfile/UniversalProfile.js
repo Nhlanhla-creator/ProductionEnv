@@ -341,9 +341,12 @@ export default function UniversalProfile() {
     !Array.isArray(profileSectionGrants) ||
     profileSectionGrants.includes(section.id)
   )
-  const sections = objectiveViewActive
+  const objectiveSections = objectiveViewActive
     ? filterProfileSectionsForObjective(permittedSections, primaryObjective)
     : permittedSections
+  const sections = objectiveViewActive && deepLinkSection === "brandAssets"
+    ? permittedSections.filter((section) => section.id === deepLinkSection || objectiveSections.some(({ id }) => id === section.id))
+    : objectiveSections
   const visibleProfileSectionIds = sections.map((section) => section.id)
 
   useEffect(() => {
@@ -519,6 +522,7 @@ export default function UniversalProfile() {
       if (section === "legalCompliance") { triggerPayload.triggerLegitimacyEvaluation = true; triggerPayload.triggerGovernanceEvaluation = true }
     }
     await setDoc(docRef, { ...triggerPayload, ...dataToSave }, { merge: true })
+    setProfileData((previous) => ({ ...previous, ...uploaded }))
     setEditHistory([...existingHistory, editLogEntry])
     setLoading(false)
   }
@@ -703,9 +707,15 @@ export default function UniversalProfile() {
                   brandsRepresented: brandsRepresented || merged.brandAssets?.brandsRepresented || "",
                   holdsFranchises: holdsFranchises || merged.brandAssets?.holdsFranchises || "",
                   holdsAgencies: holdsAgencies || merged.brandAssets?.holdsAgencies || "",
-                  companyLogo: companyLogo || merged.brandAssets?.companyLogo || "",
-                  companyLetterhead: companyLetterhead || merged.brandAssets?.companyLetterhead || "",
-                  orgStructure: orgStructure || merged.brandAssets?.orgStructure || "",
+                  companyLogo: merged.brandAssets?.companyLogoUpdatedAt === null
+                    ? merged.brandAssets?.companyLogo || ""
+                    : merged.brandAssets?.companyLogo || companyLogo || "",
+                  companyLetterhead: merged.brandAssets?.companyLetterheadUpdatedAt === null
+                    ? merged.brandAssets?.companyLetterhead || ""
+                    : merged.brandAssets?.companyLetterhead || companyLetterhead || "",
+                  orgStructure: merged.brandAssets?.orgStructureUpdatedAt === null
+                    ? merged.brandAssets?.orgStructure || ""
+                    : merged.brandAssets?.orgStructure || orgStructure || "",
                 }
               }
             }

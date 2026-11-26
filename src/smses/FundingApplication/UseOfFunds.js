@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import FormField from "./FormField"
+import { canIncludeLoan } from "./loanApplication"
 import { Plus, Trash2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react"
 import "./FundingApplication.css"
 
@@ -726,6 +727,7 @@ const UseOfFunds = ({ data, updateData }) => {
     const value = e.target.value
     updateData({
       fundingCategory: value,
+      includesLoan: "",
       fundingCategoryOther: value === "Other" ? data.fundingCategoryOther || "" : "",
       fundingInstrument: "",
       fundingInstrumentOther: "",
@@ -958,6 +960,22 @@ const UseOfFunds = ({ data, updateData }) => {
                 placeholder="Please specify the funding instrument"
                 required
               />
+            </FormField>
+          )}
+
+          {canIncludeLoan(data) && (
+            <FormField label="Does this funding request include a loan?">
+              <select
+                aria-label="Does this funding request include a loan?"
+                name="includesLoan"
+                value={data.includesLoan || ""}
+                onChange={handleChange}
+                className="form-select"
+              >
+                <option value="">Select</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
             </FormField>
           )}
 

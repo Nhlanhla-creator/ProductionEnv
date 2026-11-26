@@ -23,6 +23,9 @@ import { renderSocialImpact } from "./SocialImpact"
 import { renderDocumentUpload } from "./DocumentUpload"
 import { renderDeclarationCommitment } from "./DeclarationCommitment"
 
+import LoanDetails from "./LoanDetails"
+import { requiresLoanDetails } from "./loanApplication"
+
 import ApplicationSummary from "./application-summary"
 import AnalysisProgressOverlay from "./AnalysisProgressOverlay"
 import { useFundingApplications } from "./hooks/useFundingApplications"
@@ -34,7 +37,7 @@ import "./FundingApplication.css"
 // Financial Overview is handled in Universal Profile.
 // ============================================================
 
-const sectionsWithGuarantees = [
+const fundingSections = [
   {
     id: "applicationOverview",
     label: "Application\nOverview",
@@ -42,6 +45,10 @@ const sectionsWithGuarantees = [
   {
     id: "useOfFunds",
     label: "Use of\nFunds",
+  },
+  {
+    id: "loanDetails",
+    label: "Loan\nApplication",
   },
   {
     id: "enterpriseReadiness",
@@ -250,6 +257,15 @@ const FundingApplication = ({
     isSavingSection ||
     isSubmitting ||
     isAnalyzingGuarantees
+
+  const isLoanApplication = requiresLoanDetails(formData.useOfFunds)
+  const sectionsWithGuarantees = fundingSections.filter(
+    (section) => section.id !== "loanDetails" || isLoanApplication
+  )
+
+  useEffect(() => {
+    if (activeSection === "loanDetails" && !isLoanApplication) setActiveSection("useOfFunds")
+  }, [activeSection, isLoanApplication])
 
   const currentSectionIndex = sectionsWithGuarantees.findIndex(
     (section) => section.id === activeSection
@@ -731,6 +747,16 @@ const FundingApplication = ({
         return renderUseOfFunds(
           formData.useOfFunds || {},
           updateFormData
+        )
+
+      case "loanDetails":
+        return (
+          <LoanDetails
+            data={formData.loanDetails || {}}
+            update={(changes) => updateFormData("loanDetails", changes)}
+            amountRequested={formData.useOfFunds?.amountRequested}
+            profile={existingUniversalDocs.loanProfile}
+          />
         )
 
       case "enterpriseReadiness":

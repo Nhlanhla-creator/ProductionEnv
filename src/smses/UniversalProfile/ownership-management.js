@@ -6,7 +6,7 @@ import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import { db, auth, storage } from '../../firebaseConfig';
 import { getProfileOwnerId } from "../../utils/profile-context"
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, addDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, collection, addDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { validateCV } from '../../services/documentValidationService';
 
@@ -422,40 +422,99 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
   );
 };
 
+const sharedDirectorFields = {
+  name: "name",
+  country: "nationality",
+  linkedin: "linkedin",
+  race: "race",
+  gender: "gender",
+  isYouth: "isYouth",
+  isDisabled: "isDisabled",
+};
+
+function reindexLink(link, removedIndex) {
+  if (link === null || link === removedIndex) return null;
+  return link > removedIndex ? link - 1 : link;
+}
+
+function normalizeOwnership(data) {
+  const shareholders = (data.shareholders || []).map((row) => ({
+    ...DEFAULT_SHAREHOLDER, ...row, directorId: null, isAlsoDirector: false,
+  }));
+  const directors = (data.directors || data.governingBody || []).map((row) => ({
+    ...DEFAULT_DIRECTOR, ...row, linkedShareholderId: null,
+  }));
+  const originalDirectors = data.directors || data.governingBody || [];
+  const originalShareholders = data.shareholders || [];
+
+  const nameKey = (name) => (name || "").trim().toLowerCase();
+  const link = (shareholderIndex, directorIndex) => {
+    directors[directorIndex].linkedShareholderId = shareholderIndex;
+    shareholders[shareholderIndex].directorId = directorIndex;
+    shareholders[shareholderIndex].isAlsoDirector = true;
+  };
+
+  originalShareholders.forEach((shareholder, shareholderIndex) => {
+    if (!shareholder.isAlsoDirector) return;
+    const directorIndex = shareholder.directorId;
+    const director = originalDirectors[directorIndex];
+    if (!Number.isInteger(directorIndex) || !director || directors[directorIndex].linkedShareholderId !== null) return;
+    const namesMatch = nameKey(shareholder.name) === nameKey(director.name);
+    const reverseLink = director.linkedShareholderId;
+    if (namesMatch && (reverseLink === shareholderIndex || reverseLink === undefined)) {
+      link(shareholderIndex, directorIndex);
+    }
+  });
+
+  // Older deletions could leave stale indexes. Repair only unambiguous matches.
+  originalShareholders.forEach((shareholder, shareholderIndex) => {
+    if (!shareholder.isAlsoDirector || shareholders[shareholderIndex].isAlsoDirector) return;
+    const name = nameKey(shareholder.name);
+    if (!name || originalShareholders.filter((row) => nameKey(row.name) === name).length !== 1) return;
+    const matches = directors.filter((row) => nameKey(row.name) === name);
+    if (matches.length !== 1 || matches[0].linkedShareholderId !== null) return;
+    link(shareholderIndex, directors.indexOf(matches[0]));
+  });
+
+  return {
+    ...data,
+    shareholders,
+    directors,
+    founders: data.founders || [],
+    executives: data.executives || [],
+    businessLeadership: data.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP,
+  };
+}
+
 export default function OwnershipManagement({ data = { shareholders: [], directors: [], executives: [] }, updateData, isNGO: isNGOProp, allFormData }) {
   const isNGO = typeof isNGOProp === "boolean" ? isNGOProp : checkIsNGO(allFormData || {}, auth.currentUser);
   const legalStructure = allFormData?.entityOverview?.legalStructure || "";
   const governingBodyTitle = legalStructure === "Trust"
     ? "Board of Trustees"
-    : legalStructure === "Voluntary association"
+    : legalStructure.toLowerCase() === "voluntary association"
     ? "Management Committee"
     : isNGO
     ? "Governing Body / Board of Directors"
     : "Directors Table";
   const governingMemberLabel = legalStructure === "Trust"
     ? "Trustee"
-    : legalStructure === "Voluntary association"
+    : legalStructure.toLowerCase() === "voluntary association"
     ? "Committee Member"
     : isNGO
     ? "Board Member"
     : "Director";
 
-  const [formData, setFormData] = useState({
-    shareholders: [],
-    founders: [],
-    directors: [],
-    executives: [],
-    businessLeadership: DEFAULT_BUSINESS_LEADERSHIP,
-  });
+  const formData = normalizeOwnership(data);
   const [uploadingCVs, setUploadingCVs] = useState({ director: {}, executive: {} });
   const [isUploadOverlayVisible, setIsUploadOverlayVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const functions = getFunctions();
+  const boardSync = useRef(Promise.resolve());
 
   const updateFormData = (newData) => {
-    setFormData(newData);
     updateData(newData);
-    syncToGrowthSuite(newData.directors || []);
+    if (newData.directors !== formData.directors) {
+      boardSync.current = boardSync.current.then(() => syncToGrowthSuite(newData.directors));
+    }
   };
 
   const syncToGrowthSuite = async (directors) => {
@@ -481,99 +540,13 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     }
   };
 
-  // Load data
-  useEffect(() => {
-    const loadOwnershipManagement = async () => {
-      try {
-        setIsLoading(true);
-        const isOnboarding = sessionStorage.getItem("isOnboarding") === "true";
-        if (isOnboarding) {
-          setFormData({
-            ...data,
-            shareholders: data.shareholders || [],
-            founders: data.founders || [],
-            directors: data.directors || [],
-            executives: data.executives || [],
-            businessLeadership: data.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP,
-          });
-          setIsLoading(false);
-          return;
-        }
-
-        const userId = await getProfileOwnerId();
-        if (!userId) { setIsLoading(false); return; }
-        const docRef = doc(db, "universalProfiles", userId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const profileData = docSnap.data();
-          if (profileData.ownershipManagement) {
-            updateFormData({
-              ...profileData.ownershipManagement,
-              founders: profileData.ownershipManagement.founders || [],
-              businessLeadership: profileData.ownershipManagement.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP,
-            });
-          } else {
-            const initData = {
-              ...data,
-              founders: data.founders || [],
-              businessLeadership: data.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP,
-            };
-            if (!isNGO && !initData.shareholders?.length) initData.shareholders = [DEFAULT_SHAREHOLDER];
-            if (!initData.directors?.length) initData.directors = [DEFAULT_DIRECTOR];
-            if (!initData.executives?.length) initData.executives = [DEFAULT_EXECUTIVE];
-            updateFormData(initData);
-          }
-        } else {
-          const initData = {
-            shareholders: isNGO ? [] : [DEFAULT_SHAREHOLDER],
-            founders: [],
-            directors: [DEFAULT_DIRECTOR],
-            executives: [DEFAULT_EXECUTIVE],
-            businessLeadership: DEFAULT_BUSINESS_LEADERSHIP,
-          };
-          updateFormData(initData);
-        }
-      } catch (error) {
-        console.error("Error loading ownership management:", error);
-        const fallbackData = {
-          shareholders: isNGO ? [] : [DEFAULT_SHAREHOLDER],
-          founders: [],
-          directors: [DEFAULT_DIRECTOR],
-          executives: [DEFAULT_EXECUTIVE],
-          businessLeadership: DEFAULT_BUSINESS_LEADERSHIP,
-        };
-        updateFormData(fallbackData);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadOwnershipManagement();
-  }, []);
-
   // CV upload handlers
-  const handleDeleteCV = async (type, index) => {
+  const deleteExecutiveCV = async (executive) => {
+    if (!executive?.cv?.path) return;
     try {
-      const item = type === 'director' ? formData.directors[index] : formData.executives[index];
-      if (!item?.cv?.path) return;
       setIsUploadOverlayVisible(true);
       const userId = await getProfileOwnerId();
-      await deleteDocumentWithSync(
-        storage,
-        item.cv.path,
-        userId,
-        type,
-        item.name,
-        type === 'director' ? 'Board Member' : 'Executive'
-      );
-      if (type === 'director') {
-        const newDirectors = [...formData.directors];
-        newDirectors[index].cv = null;
-        updateFormData({ ...formData, directors: newDirectors });
-      } else {
-        const newExecutives = [...formData.executives];
-        newExecutives[index].cv = null;
-        updateFormData({ ...formData, executives: newExecutives });
-      }
+      await deleteDocumentWithSync(storage, executive.cv.path, userId, 'executive', executive.name, 'Executive');
     } catch (error) {
       console.error("Error deleting CV:", error);
     } finally {
@@ -633,51 +606,42 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     }
   };
 
-  const addShareholder = () => updateFormData({ ...formData, shareholders: [...formData.shareholders, DEFAULT_SHAREHOLDER] });
+  const addShareholder = () => updateFormData({ ...formData, shareholders: [...formData.shareholders, { ...DEFAULT_SHAREHOLDER }] });
 
   const updateShareholder = (index, field, value) => {
-    const newShareholders = [...formData.shareholders];
-    const shareholder = newShareholders[index];
+    const shareholders = [...formData.shareholders];
+    const shareholder = shareholders[index];
     if (field === "isAlsoDirector") {
-      if (value === true) {
-        const newDirector = { ...DEFAULT_DIRECTOR, name: shareholder.name, nationality: shareholder.country, linkedin: shareholder.linkedin, race: shareholder.race, gender: shareholder.gender, isYouth: shareholder.isYouth, isDisabled: shareholder.isDisabled, linkedShareholderId: index };
-        const newDirectors = [...formData.directors, newDirector];
-        newShareholders[index] = { ...shareholder, isAlsoDirector: true, directorId: newDirectors.length - 1 };
-        updateFormData({ ...formData, shareholders: newShareholders, directors: newDirectors });
-        return;
-      } else {
-        if (shareholder.directorId !== null) {
-          const newDirectors = formData.directors.filter((_, i) => i !== shareholder.directorId);
-          newShareholders[index] = { ...shareholder, isAlsoDirector: false, directorId: null };
-          updateFormData({ ...formData, shareholders: newShareholders, directors: newDirectors });
-          return;
-        }
+      if (value && shareholder.directorId === null) {
+        const director = { ...DEFAULT_DIRECTOR, linkedShareholderId: index };
+        Object.entries(sharedDirectorFields).forEach(([source, target]) => {
+          director[target] = shareholder[source] ?? DEFAULT_DIRECTOR[target];
+        });
+        shareholders[index] = { ...shareholder, isAlsoDirector: true, directorId: formData.directors.length };
+        updateFormData({ ...formData, shareholders, directors: [...formData.directors, director] });
+      } else if (!value && shareholder.directorId !== null) {
+        removeDirector(shareholder.directorId);
       }
+      return;
     }
-    newShareholders[index] = { ...shareholder, [field]: value };
-    if (shareholder.isAlsoDirector && shareholder.directorId !== null) {
-      const newDirectors = [...formData.directors];
-      const di = shareholder.directorId;
-      if (di < newDirectors.length) {
-        if (field === "name") newDirectors[di].name = value;
-        if (field === "country") newDirectors[di].nationality = value;
-        if (field === "linkedin") newDirectors[di].linkedin = value;
-        if (field === "race") newDirectors[di].race = value;
-        if (field === "gender") newDirectors[di].gender = value;
-        if (field === "isYouth") newDirectors[di].isYouth = value;
-        if (field === "isDisabled") newDirectors[di].isDisabled = value;
-        updateFormData({ ...formData, shareholders: newShareholders, directors: newDirectors });
-        return;
-      }
+
+    shareholders[index] = { ...shareholder, [field]: value };
+    const directorField = sharedDirectorFields[field];
+    if (shareholder.directorId !== null && directorField) {
+      const directors = [...formData.directors];
+      directors[shareholder.directorId] = { ...directors[shareholder.directorId], [directorField]: value };
+      updateFormData({ ...formData, shareholders, directors });
+      return;
     }
-    updateFormData({ ...formData, shareholders: newShareholders });
+    updateFormData({ ...formData, shareholders });
   };
 
   const removeShareholder = (index) => {
-    const shareholder = formData.shareholders[index];
-    let newDirectors = [...formData.directors];
-    if (shareholder.isAlsoDirector && shareholder.directorId !== null) newDirectors = newDirectors.filter((_, i) => i !== shareholder.directorId);
-    updateFormData({ ...formData, shareholders: formData.shareholders.filter((_, i) => i !== index), directors: newDirectors });
+    const directors = formData.directors.map((director) => ({
+      ...director,
+      linkedShareholderId: reindexLink(director.linkedShareholderId, index),
+    }));
+    updateFormData({ ...formData, directors, shareholders: formData.shareholders.filter((_, i) => i !== index) });
   };
 
   // Founders (NGOs)
@@ -695,36 +659,18 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
   const addDirector = () => updateFormData({ ...formData, directors: [...formData.directors, DEFAULT_DIRECTOR] });
 
   const updateDirector = (index, field, value) => {
-    const newDirectors = [...formData.directors];
-    newDirectors[index] = { ...newDirectors[index], [field]: value };
-    if (field === "roles" && !value.includes("Other")) newDirectors[index].customRole = "";
-    const linkedShareholderId = newDirectors[index].linkedShareholderId;
-    if (linkedShareholderId !== null && !isNGO) {
-      const newShareholders = [...formData.shareholders];
-      if (linkedShareholderId < newShareholders.length) {
-        if (field === "name") newShareholders[linkedShareholderId].name = value;
-        if (field === "nationality") newShareholders[linkedShareholderId].country = value;
-        if (field === "linkedin") newShareholders[linkedShareholderId].linkedin = value;
-        if (field === "race") newShareholders[linkedShareholderId].race = value;
-        if (field === "gender") newShareholders[linkedShareholderId].gender = value;
-        if (field === "isYouth") newShareholders[linkedShareholderId].isYouth = value;
-        if (field === "isDisabled") newShareholders[linkedShareholderId].isDisabled = value;
-        updateFormData({ ...formData, directors: newDirectors, shareholders: newShareholders });
-        return;
-      }
-    }
-    updateFormData({ ...formData, directors: newDirectors });
+    const directors = [...formData.directors];
+    directors[index] = { ...directors[index], [field]: value };
+    if (field === "roles" && !value.includes("Other")) directors[index].customRole = "";
+    updateFormData({ ...formData, directors });
   };
 
   const removeDirector = (index) => {
-    const director = formData.directors[index];
-    if (director.linkedShareholderId !== null && !isNGO) {
-      alert("To remove this director, uncheck 'Also Director' in the shareholder table.");
-      return;
-    }
-    if (director.cv) handleDeleteCV('director', index);
-    const newDirectors = formData.directors.filter((_, i) => i !== index);
-    updateFormData({ ...formData, directors: newDirectors });
+    const shareholders = formData.shareholders.map((shareholder) => {
+      const directorId = reindexLink(shareholder.directorId, index);
+      return { ...shareholder, directorId, isAlsoDirector: directorId !== null };
+    });
+    updateFormData({ ...formData, shareholders, directors: formData.directors.filter((_, i) => i !== index) });
   };
 
   const addExecutive = () => updateFormData({ ...formData, executives: [...(formData.executives || []), DEFAULT_EXECUTIVE] });
@@ -738,7 +684,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
 
   const removeExecutive = (index) => {
     const executive = formData.executives[index];
-    if (executive.cv) handleDeleteCV('executive', index);
+    deleteExecutiveCV(executive);
     updateFormData({ ...formData, executives: (formData.executives || []).filter((_, i) => i !== index) });
   };
 
@@ -816,14 +762,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     whiteSpace: 'nowrap'
   };
 
-  if (isLoading) {
-    return (
-      <div className="ownership-management-loading">
-        <h2 className="text-2xl font-bold text-brown-800 mb-6">{isNGO ? "Leadership & Governance" : "Ownership & Management"}</h2>
-        <p>Loading your information...</p>
-      </div>
-    );
-  }
+
 
   return (
     <div>
@@ -898,7 +837,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                     <td className="px-3 py-2 border-b text-center"><input type="checkbox" checked={shareholder.isYouth || false} onChange={(e) => updateShareholder(index, "isYouth", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" /></td>
                     <td className="px-3 py-2 border-b text-center"><input type="checkbox" checked={shareholder.isDisabled || false} onChange={(e) => updateShareholder(index, "isDisabled", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" /></td>
                     <td className="px-3 py-2 border-b text-center"><div className="flex flex-col items-center"><input type="checkbox" checked={shareholder.isAlsoDirector || false} onChange={(e) => updateShareholder(index, "isAlsoDirector", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" />{shareholder.isAlsoDirector && <span className="text-xs text-green-600 mt-1">✓ Linked</span>}</div></td>
-                    <td className="px-3 py-2 border-b"><button type="button" onClick={() => removeShareholder(index)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button></td>
+                    <td className="px-3 py-2 border-b"><button type="button" onClick={() => removeShareholder(index)} className="text-red-500 hover:text-red-700" aria-label={`Remove ${shareholder.name || "shareholder"}`} disabled={isUploadOverlayVisible}><Trash2 className="w-4 h-4" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1096,7 +1035,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                   <td className="px-3 py-2 border-b"><div className="space-y-2"><input type="text" placeholder="LinkedIn URL" value={director.linkedin || ""} onChange={(e) => updateDirector(index, "linkedin", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null && !isNGO} /><div className="flex items-center space-x-2">{director.cv ? (<><a href={director.cv.url} target="_blank" rel="noopener noreferrer" className={`flex-1 text-brown-600 hover:text-brown-800 text-xs truncate ${uploadingCVs.director[index] ? 'opacity-50' : ''}`} title={`View ${director.cv.name}`}>CV: {director.cv.name}</a></>) : (<span className={`flex-1 text-xs ${uploadingCVs.director[index] ? 'text-brown-400' : 'text-gray-400'}`}>{uploadingCVs.director[index] ? 'Uploading...' : 'No CV'}</span>)}<label className={`cursor-pointer ${uploadingCVs.director[index] ? 'opacity-50 pointer-events-none' : ''}`}><input type="file" accept=".pdf,.doc,.docx" onChange={(e) => { const file = e.target.files[0]; if (file) handleDirectorCVUpload(index, file); }} className="hidden" disabled={uploadingCVs.director[index]} /><span className="text-xs text-brown-600 hover:text-brown-800 underline">{uploadingCVs.director[index] ? '...' : director.cv ? 'Replace' : 'Upload'}</span></label></div></div></td>
                   <td className="px-3 py-2 border-b text-center"><input type="checkbox" checked={director.isYouth || false} onChange={(e) => updateDirector(index, "isYouth", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" disabled={director.linkedShareholderId !== null && !isNGO} /></td>
                   <td className="px-3 py-2 border-b text-center"><input type="checkbox" checked={director.isDisabled || false} onChange={(e) => updateDirector(index, "isDisabled", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" disabled={director.linkedShareholderId !== null && !isNGO} /></td>
-                  <td className="px-3 py-2 border-b"><button type="button" onClick={() => removeDirector(index)} className={`text-red-500 hover:text-red-700 ${director.linkedShareholderId !== null && !isNGO ? 'opacity-30 cursor-not-allowed' : ''}`} disabled={director.linkedShareholderId !== null && !isNGO}><Trash2 className="w-4 h-4" /></button></td>
+                  <td className="px-3 py-2 border-b"><button type="button" onClick={() => removeDirector(index)} className="text-red-500 hover:text-red-700" aria-label={`Remove ${director.name || governingMemberLabel}`} disabled={isUploadOverlayVisible}><Trash2 className="w-4 h-4" /></button></td>
                 </tr>
               ))}
             </tbody>

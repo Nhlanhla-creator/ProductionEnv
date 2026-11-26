@@ -98,6 +98,11 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
         updateData(newData)
     }
 
+    const updateBrandFile = (field, url) => {
+        setFormData((current) => ({ ...current, [field]: url }))
+        updateData({ [field]: url })
+    }
+
     useEffect(() => {
         const loadBrandAssets = async () => {
             try {
@@ -125,14 +130,19 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
                     const companyLogo = getDocumentUrlFromAnyLocation('Company Logo', profileData)
                     const orgStructure = getDocumentUrlFromAnyLocation('Org Structure', profileData)
 
+                    const brandFile = (field, syncedUrl) => {
+                        if (brandData[field] === "" && brandData[`${field}UpdatedAt`] === null) return ""
+                        return brandData[field] || syncedUrl || entityOverview[field] || ""
+                    }
+
                     updateFormData({
                         brandsOwned: brandData.brandsOwned || entityOverview.brandsOwned || "",
                         brandsRepresented: brandData.brandsRepresented || entityOverview.brandsRepresented || "",
                         holdsFranchises: brandData.holdsFranchises || entityOverview.holdsFranchises || "",
                         holdsAgencies: brandData.holdsAgencies || entityOverview.holdsAgencies || "",
-                        companyLogo: companyLogo || brandData.companyLogo || "",
-                        companyLetterhead: companyLetterhead || brandData.companyLetterhead || "",
-                        orgStructure: orgStructure || brandData.orgStructure || "",
+                        companyLogo: brandFile("companyLogo", companyLogo),
+                        companyLetterhead: brandFile("companyLetterhead", companyLetterhead),
+                        orgStructure: brandFile("orgStructure", orgStructure),
                     })
                 } else {
                     updateFormData(data || {})
@@ -206,12 +216,12 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
             const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {}
 
             await updateDoc(userDocRef, {
-                brandAssets: { ...(currentData.brandAssets || {}), companyLogo: downloadURL },
+                "brandAssets.companyLogo": downloadURL,
+                "brandAssets.companyLogoUpdatedAt": new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             })
 
-            const newFormData = { ...formData, companyLogo: downloadURL }
-            updateFormData(newFormData)
+            updateBrandFile("companyLogo", downloadURL)
 
             if (currentData.brandAssets?.companyLogo &&
                 currentData.brandAssets.companyLogo !== downloadURL &&
@@ -244,17 +254,14 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
             if (!currentUser) return
 
             const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId())
-            const currentProfileDoc = await getDoc(userDocRef)
-            const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {}
-
             await updateDoc(userDocRef, {
-                brandAssets: { ...(currentData.brandAssets || {}), companyLogo: "" },
+                "brandAssets.companyLogo": "",
+                "brandAssets.companyLogoUpdatedAt": null,
+                "entityOverview.companyLogo": "",
                 updatedAt: new Date().toISOString()
             })
 
-            const newFormData = { ...formData }
-            delete newFormData.companyLogo
-            updateFormData(newFormData)
+            updateBrandFile("companyLogo", "")
             setLogoPreview("")
             alert('Company Logo deleted successfully!')
         } catch (error) {
@@ -302,11 +309,12 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
             await uploadDocumentWithSync('Company Letterhead', downloadURL, validationResult)
 
             await updateDoc(userDocRef, {
-                brandAssets: { ...(userDoc.data()?.brandAssets || {}), companyLetterhead: downloadURL },
+                "brandAssets.companyLetterhead": downloadURL,
+                "brandAssets.companyLetterheadUpdatedAt": new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             })
 
-            updateFormData({ ...formData, companyLetterhead: downloadURL })
+            updateBrandFile("companyLetterhead", downloadURL)
             setLetterheadFile(file)
             alert('Company Letterhead uploaded and validated successfully!')
         } catch (error) {
@@ -324,15 +332,14 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
             await deleteDocumentWithSync('Company Letterhead')
 
             const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId())
-            const userDoc = await getDoc(userDocRef)
             await updateDoc(userDocRef, {
-                brandAssets: { ...(userDoc.data()?.brandAssets || {}), companyLetterhead: "" },
+                "brandAssets.companyLetterhead": "",
+                "brandAssets.companyLetterheadUpdatedAt": null,
+                "entityOverview.companyLetterhead": "",
                 updatedAt: new Date().toISOString()
             })
 
-            const newFormData = { ...formData }
-            delete newFormData.companyLetterhead
-            updateFormData(newFormData)
+            updateBrandFile("companyLetterhead", "")
             setLetterheadFile(null)
             alert('Company Letterhead deleted successfully!')
         } catch (error) {
@@ -369,13 +376,13 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
             await uploadDocumentWithSync('Org Structure', downloadURL, { status: 'ok', message: 'Org structure uploaded' })
 
             const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId())
-            const userDoc = await getDoc(userDocRef)
             await updateDoc(userDocRef, {
-                brandAssets: { ...(userDoc.data()?.brandAssets || {}), orgStructure: downloadURL },
+                "brandAssets.orgStructure": downloadURL,
+                "brandAssets.orgStructureUpdatedAt": new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             })
 
-            updateFormData({ ...formData, orgStructure: downloadURL })
+            updateBrandFile("orgStructure", downloadURL)
             alert('Org structure uploaded successfully!')
         } catch (error) {
             console.error('Error uploading org structure:', error)
@@ -392,15 +399,14 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
             await deleteDocumentWithSync('Org Structure')
 
             const userDocRef = doc(db, "universalProfiles", await getProfileOwnerId())
-            const userDoc = await getDoc(userDocRef)
             await updateDoc(userDocRef, {
-                brandAssets: { ...(userDoc.data()?.brandAssets || {}), orgStructure: "" },
+                "brandAssets.orgStructure": "",
+                "brandAssets.orgStructureUpdatedAt": null,
+                "entityOverview.orgStructure": "",
                 updatedAt: new Date().toISOString()
             })
 
-            const newFormData = { ...formData }
-            delete newFormData.orgStructure
-            updateFormData(newFormData)
+            updateBrandFile("orgStructure", "")
             alert('Org structure deleted successfully!')
         } catch (error) {
             console.error('Error deleting org structure:', error)
@@ -436,7 +442,10 @@ export default function BrandAssets({ data = {}, updateData, isNGO = false }) {
     return (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px' }}>Brand Assets</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 24 }}>
+                <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Brand Assets</h2>
+                <a href="/my-documents?filter=Brand%20Assets" style={{ color: '#5c3a1e', fontSize: 13 }}>View in My Documents</a>
+            </div>
 
             {/* Brands, Franchises & Agencies */}
             <SectionHeading title={isNGO ? "Organisation Brand Assets" : "Brands & Representation"} />

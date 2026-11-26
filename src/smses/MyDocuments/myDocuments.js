@@ -30,6 +30,31 @@ import {
   getObjectiveViewConfig,
 } from "../../utils/smeObjectiveView";
 
+const BRAND_ASSET_DOCUMENTS = {
+  "Company Logo": { id: "company_logo", field: "companyLogo" },
+  "Company Letterhead": { id: "company_letterhead", field: "companyLetterhead" },
+  "Org Structure": { id: "org_structure", field: "orgStructure" },
+};
+
+const getMyDocumentId = (label) => BRAND_ASSET_DOCUMENTS[label]?.id || getDocumentId(label);
+
+function getMyDocumentUrl(label, profile) {
+  const asset = BRAND_ASSET_DOCUMENTS[label];
+  if (!asset) return getDocumentUrlFromAnyLocation(label, profile);
+  const asUrl = (value) => {
+    const url = typeof value === "string" ? value : value?.url;
+    return typeof url === "string" && /^https?:\/\//i.test(url.trim()) ? url.trim() : "";
+  };
+  const brand = profile.brandAssets || {};
+  const current = asUrl(brand[asset.field]);
+  if (current || (brand[asset.field] === "" && brand[`${asset.field}UpdatedAt`] === null)) return current;
+
+  return asUrl(profile.documents?.[asset.field]) ||
+    asUrl(profile.documents?.[asset.id]) ||
+    asUrl(getDocumentUrlFromAnyLocation(label, profile)) ||
+    asUrl(profile.entityOverview?.[asset.field]);
+}
+
 const DOCUMENTS = [
  "5 Year Budget",
  "Bank Details Confirmation Letter",
@@ -39,7 +64,7 @@ const DOCUMENTS = [
  "Client References & Support Letters",
  "Company Profile / Brochure",
  "Company Registration Certificate",
- "Company Letterhead",
+ ...Object.keys(BRAND_ASSET_DOCUMENTS),
  "COIDA Letter of Good Standing",
  "CV",
  "Financial Statements",
@@ -92,6 +117,8 @@ const DOCUMENT_ID_TO_LABEL = {
   "pitch_deck": "Pitch Deck",
   "cv": "CV",
   "company_letterhead": "Company Letterhead",
+  "company_logo": "Company Logo",
+  "org_structure": "Org Structure",
   "funder_contract": "Funder/Catalyst Contract",
   "compliance_certificates": "COIDA Letter of Good Standing",
   // New mappings
@@ -233,8 +260,8 @@ const [highlightedDoc, setHighlightedDoc] = useState(null);
     !showEverything &&
     Boolean(getObjectiveViewConfig(primaryObjective));
   const documentFilterTypes = objectiveViewActive
-    ? ["all", ...Object.keys(objectiveDocumentCategories || {})]
-    : ["all", "Compliance", "Capital Appeal", "Governance", "Legitimacy", "Leadership", "Operations"]
+    ? ["all", "Brand Assets", ...Object.keys(objectiveDocumentCategories || {}).filter((category) => category !== "Brand Assets")]
+    : ["all", ...(!isInvestorView ? ["Brand Assets"] : []), "Compliance", "Capital Appeal", "Governance", "Legitimacy", "Leadership", "Operations"]
 
   // Expiry calculation for compliance documents (SP8.41)
   const getExpiringDocuments = () => {
@@ -242,7 +269,7 @@ const [highlightedDoc, setHighlightedDoc] = useState(null);
     const expiring = [];
 
     DOCUMENTS.forEach((docLabel) => {
-      const docId = getDocumentId(docLabel);
+      const docId = getMyDocumentId(docLabel);
       const verification = profileData.verification?.[docId];
       const explicitExpiry = verification?.expiryDate || verification?.validUntil || profileData.documents?.[`${docId}_expiry`];
       const isStatusExpired = verification?.status === "expired";
@@ -298,7 +325,7 @@ const [highlightedDoc, setHighlightedDoc] = useState(null);
 
  const checkSubmittedDocs = (documents, data) => {
    return documents.filter(docLabel => {
-     const url = getDocumentUrlFromAnyLocation(docLabel, data);
+     const url = getMyDocumentUrl(docLabel, data);
      return !!(url && url !== null && url !== '');
    });
  };
@@ -333,7 +360,7 @@ const [highlightedDoc, setHighlightedDoc] = useState(null);
     if (!user) return;
 
     try {
-      const documentId = getDocumentId(docLabel);
+      const documentId = getMyDocumentId(docLabel);
       const profileRef = doc(db, "universalProfiles", user.uid);
       
       const currentDocs = getMultipleDocumentData(docLabel, profileData);
@@ -457,7 +484,7 @@ useEffect(() => {
 }, []);
  useEffect(() => {
   if (!highlightedDoc || loading) return;
-  const id = getDocumentId(highlightedDoc);
+  const id = getMyDocumentId(highlightedDoc);
   const el = document.getElementById(`doc-row-${id}`);
   if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   const t = setTimeout(() => setHighlightedDoc(null), 6000);
@@ -467,43 +494,34 @@ useEffect(() => {
 
   useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          let profileId = user.uid;
-          
-          if (isInvestorView && viewingSMEId) {
-            profileId = viewingSMEId;
-            console.log("Loading documents for SME:", viewingSMEId);
-          } else {
-            console.log("Loading documents for logged-in user:", user.uid);
-          }
-          
-          const profileRef = doc(db, "universalProfiles", profileId);
-          
-          const unsubscribeSnapshot = onSnapshot(profileRef, (docSnap) => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              setProfileData(data);
-              const submitted = checkSubmittedDocs(DOCUMENTS, data);
-              setSubmittedDocuments(submitted);
-            } else {
-              console.log("No profile found for ID:", profileId);
-            }
-            setLoading(false);
-          });
-
-          return () => unsubscribeSnapshot(); 
-        } catch (err) {
-          console.error("Failed to load user documents:", err);
-          setLoading(false);
-        }
-      } else {
+    let unsubscribeProfile;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribeProfile?.();
+      setProfileData({});
+      setSubmittedDocuments([]);
+      if (!user) {
         setLoading(false);
+        return;
       }
+
+      setLoading(true);
+      const profileId = isInvestorView && viewingSMEId ? viewingSMEId : user.uid;
+      const profileRef = doc(db, "universalProfiles", profileId);
+      unsubscribeProfile = onSnapshot(profileRef, (snapshot) => {
+        const data = snapshot.data() || {};
+        setProfileData(data);
+        setSubmittedDocuments(checkSubmittedDocs(DOCUMENTS, data));
+        setLoading(false);
+      }, (error) => {
+        console.error("Failed to load user documents:", error);
+        setLoading(false);
+      });
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubscribeProfile?.();
+    };
   }, [isInvestorView, viewingSMEId]);
 
   useEffect(() => {
@@ -580,7 +598,7 @@ const validateDocumentWithAI = async (docLabel, file, registeredName, downloadUr
 };
  
  const getMultipleDocumentData = (docLabel, profileData) => {
-  const documentId = getDocumentId(docLabel);
+  const documentId = getMyDocumentId(docLabel);
   
   // Use the same pattern for ALL multi-upload documents including CVs
   if (MULTI_UPLOAD_DOCUMENTS.includes(docLabel) || docLabel === "CV") {
@@ -588,7 +606,7 @@ const validateDocumentWithAI = async (docLabel, file, registeredName, downloadUr
     
     // If no documents in the multiple array, check for legacy single document
     if (multipleDocs.length === 0) {
-      const singleUrl = getDocumentUrlFromAnyLocation(docLabel, profileData);
+      const singleUrl = getMyDocumentUrl(docLabel, profileData);
       if (singleUrl) {
         return [{
           url: singleUrl,
@@ -606,7 +624,7 @@ const validateDocumentWithAI = async (docLabel, file, registeredName, downloadUr
   }
   
   // For single documents
-  const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
+  const url = getMyDocumentUrl(docLabel, profileData);
   if (url) {
     return [{
       url: url,
@@ -633,7 +651,7 @@ const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
   try {
     const registeredName = await getRegisteredName();
     const storage = getStorage();
-    const documentId = getDocumentId(docLabel);
+    const documentId = getMyDocumentId(docLabel);
     const profileRef = doc(db, "universalProfiles", user.uid);
 
     // Upload to Firebase Storage first
@@ -713,7 +731,7 @@ const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
   if (!confirmDelete) return;
 
   try {
-    const documentId = getDocumentId(docLabel);
+    const documentId = getMyDocumentId(docLabel);
     const profileRef = doc(db, "universalProfiles", user.uid);
 
     const currentDocs = getMultipleDocumentData(docLabel, profileData);
@@ -782,7 +800,7 @@ const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
    if (!user) return;
 
    try {
-     const documentId = getDocumentId(docLabel);
+     const documentId = getMyDocumentId(docLabel);
      const profileRef = doc(db, "universalProfiles", user.uid);
 
      const currentDocs = getMultipleDocumentData(docLabel, profileData);
@@ -1014,7 +1032,7 @@ const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
      );
    }
 
-   const url = getDocumentUrlFromAnyLocation(label, profileData);
+   const url = getMyDocumentUrl(label, profileData);
 
    if (!url) {
      return (
@@ -1102,7 +1120,7 @@ const handleFileUpload = async (docLabel, file) => {
   try {
     const registeredName = await getRegisteredName();
     const storage = getStorage();
-    const documentId = getDocumentId(docLabel);
+    const documentId = getMyDocumentId(docLabel);
 
     const fileName = `${documentId}.${fileExtension}`;
     const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
@@ -1129,9 +1147,16 @@ console.info("Download URL retrieved successfully");
 
     await uploadDocumentWithSync(docLabel, downloadURL, validationResult);
 
+    const profileRef = doc(db, "universalProfiles", user.uid);
+    if (docLabel === "Company Letterhead") {
+      await updateDoc(profileRef, {
+        "brandAssets.companyLetterhead": downloadURL,
+        "brandAssets.companyLetterheadUpdatedAt": serverTimestamp(),
+      });
+    }
+
     setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
 
-    const profileRef = doc(db, "universalProfiles", user.uid);
     const updatedProfileSnap = await getDoc(profileRef);
     if (updatedProfileSnap.exists()) {
       setProfileData(updatedProfileSnap.data());
@@ -1183,15 +1208,15 @@ console.info("Download URL retrieved successfully");
       return "pending";
     }
     
-    const documentId = getDocumentId(docLabel);
-    const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
+    const documentId = getMyDocumentId(docLabel);
+    const url = getMyDocumentUrl(docLabel, profileData);
     const verification = profileData.verification?.[documentId];
     
     if (!url) {
       return "pending";
     }
     
-    if (!verification) {
+    if (!verification || (BRAND_ASSET_DOCUMENTS[docLabel] && ["ok", "warning"].includes(verification.status))) {
       return "pending";
     }
     
@@ -1310,16 +1335,18 @@ console.info("Download URL retrieved successfully");
   // shows what the business actually has on file instead of a blank table.
   const hasRequiredDocSet = catalystCoreDocuments.length > 0;
   const documentsToDisplay = isInvestorView
-    ? (hasRequiredDocSet ? catalystCoreDocuments : DOCUMENTS)
+    ? (hasRequiredDocSet ? catalystCoreDocuments : DOCUMENTS.filter((label) => !BRAND_ASSET_DOCUMENTS[label] || label === "Company Letterhead"))
     : DOCUMENTS;
     
   const filteredDocuments = documentsToDisplay.filter((docLabel) => {
+   const isBrandAsset = Boolean(BRAND_ASSET_DOCUMENTS[docLabel]);
    const isInObjectiveScope =
      !objectiveViewActive ||
+     isBrandAsset ||
      objectiveDocumentLabels?.has(docLabel);
    if (!isInObjectiveScope) return false;
 
-   const documentId = getDocumentId(docLabel);
+   const documentId = getMyDocumentId(docLabel);
 
    const fundingDocuments = [
      "5 Year Budget",
@@ -1387,7 +1414,7 @@ console.info("Download URL retrieved successfully");
    ];
 
 
-   const matchFilter = filter === "all" || (
+   const matchFilter = filter === "all" || (filter === "Brand Assets" && isBrandAsset) || (
      objectiveViewActive
        ? Boolean(objectiveDocumentCategories?.[filter]?.has(docLabel))
        : (filter === "Funding" && fundingDocuments.includes(docLabel)) ||
@@ -1403,7 +1430,9 @@ console.info("Download URL retrieved successfully");
      statusFilter === "all" ||
      hasDocumentMatchingStatusFilter(docLabel, statusFilter);
 
-   const matchSearch = docLabel.toLowerCase().includes(searchTerm.toLowerCase());
+   const search = searchTerm.trim().toLowerCase();
+   const searchLabel = docLabel === "Org Structure" ? "org structure organisational structure organization chart organogram" : docLabel.toLowerCase();
+   const matchSearch = searchLabel.includes(search);
 
    return matchFilter && matchStatusFilter && matchSearch;
  });
@@ -1497,8 +1526,8 @@ console.info("Download URL retrieved successfully");
    return <span style={badgeStyles("pending")}>Pending</span>;
  }
 
- const documentId = getDocumentId(docLabel);
- const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
+ const documentId = getMyDocumentId(docLabel);
+ const url = getMyDocumentUrl(docLabel, profileData);
  const verification = profileData.verification?.[documentId];
 
  if (!url) {
@@ -1506,7 +1535,7 @@ console.info("Download URL retrieved successfully");
  }
 
  let status = "pending";
- let displayStatus = "Pending";
+ let displayStatus = BRAND_ASSET_DOCUMENTS[docLabel] ? "Uploaded" : "Pending";
 
  if (verification) {
    if (verification.status === "verified" || verification.status === "verified:not_audited") {
@@ -1515,7 +1544,7 @@ console.info("Download URL retrieved successfully");
    } else if (verification.status === "expired") {
       status = "expired";
       displayStatus = "Expired";
-    } else {
+    } else if (!BRAND_ASSET_DOCUMENTS[docLabel] || !["ok", "warning"].includes(verification.status)) {
      status = "rejected";
      displayStatus = "Rejected";
    }
@@ -2467,10 +2496,12 @@ const badgeStyles = (status) => {
                </thead>
                <tbody>
                  {filteredDocuments.map((docLabel, index) => {
-                   const documentId = getDocumentId(docLabel);
+                   const documentId = getMyDocumentId(docLabel);
                    const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
+                   const brandAsset = BRAND_ASSET_DOCUMENTS[docLabel];
                       const isHighlighted = highlightedDoc === docLabel;
-                   let updatedAt = 
+                   let updatedAt =
+                     (brandAsset && profileData.brandAssets?.[`${brandAsset.field}UpdatedAt`]) ||
                      profileData?.documents?.[`${documentId}UpdatedAt`] || 
                      profileData?.documents?.[`${documentId}_multiple_updated`] ||
                      profileData?.[`${documentId}UpdatedAt`] ||
@@ -2483,13 +2514,13 @@ const badgeStyles = (status) => {
 
                    const isMultiUpload = MULTI_UPLOAD_DOCUMENTS.includes(docLabel);
                    
-                   const formattedDate = updatedAt ?
+                   const url = getMyDocumentUrl(docLabel, profileData);
+                   const formattedDate = updatedAt && (!brandAsset || url) ?
                      (updatedAt.seconds ? new Date(updatedAt.seconds * 1000).toLocaleDateString() : new Date(updatedAt).toLocaleDateString()) :
-                     "Never";
+                     brandAsset && url ? "—" : "Never";
 
                    const allDocs = isMultiUpload ? getMultipleDocumentData(docLabel, profileData) : [];
                    const validationResult = validationResults[docLabel];
-                   const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
                    const verification = profileData.verification?.[documentId];
                    
                    return (
@@ -2542,6 +2573,7 @@ const badgeStyles = (status) => {
                              (() => {
                                if (!url) return "No document uploaded";
                                if (validationResult) return validationResult.message || "Document uploaded";
+                               if (brandAsset && !verification) return "Available in Brand Assets";
                                if (!verification) return "Uploaded - Pending Verification";
                                return verification.message || "Document uploaded";
                              })()
@@ -2572,11 +2604,15 @@ const badgeStyles = (status) => {
                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", backgroundColor: "#f5f2f0", color: "#8d6e63", borderRadius: "4px", fontSize: "10px", fontWeight: "500" }}>
                                    <Eye size={12} /> Read only
                                  </span>
+                               ) : brandAsset && docLabel !== "Company Letterhead" ? (
+                                 <a href="/profile?section=brandAssets" style={{ color: "#5d4037", fontSize: "12px", fontWeight: "600" }}>
+                                   {url ? "Manage in Brand Assets" : "Upload in Brand Assets"}
+                                 </a>
                                ) : (
                                  <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", backgroundColor: "#a67c52", color: "white", borderRadius: "6px", fontSize: "11px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s ease", textTransform: "uppercase", letterSpacing: "0.5px" }}
                                    onMouseEnter={(e) => { e.target.style.backgroundColor = "#8d6e63"; e.target.style.transform = "translateY(-1px)"; }}
                                    onMouseLeave={(e) => { e.target.style.backgroundColor = "#a67c52"; e.target.style.transform = "translateY(0)"; }}>
-                                   <Upload size={12} /> {getDocumentUrlFromAnyLocation(docLabel, profileData) ? "Update" : "Upload"}
+                                   <Upload size={12} /> {getMyDocumentUrl(docLabel, profileData) ? "Update" : "Upload"}
                                    <input type="file" style={{ display: "none" }} onChange={(e) => handleFileUpload(docLabel, e.target.files[0])} accept=".pdf,.jpg,.jpeg,.png" />
                                  </label>
                                )}

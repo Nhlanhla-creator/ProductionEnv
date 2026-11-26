@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { ChevronDown, ChevronUp, ChevronLeft, Edit, ExternalLink, FileText, FileBarChart, TrendingUp, DollarSign, Building, Users, Heart, CheckSquare, Shield } from "lucide-react"
 import FundabilityScoreCard from './FundabilityScoreCard'
+import { LoanDetailsSummary } from "./LoanDetails"
+import { requiresLoanDetails } from "./loanApplication"
 
 const ApplicationSummary = ({ formData, onEdit, onBack }) => {
   const [expandedSections, setExpandedSections] = useState({
@@ -400,16 +402,17 @@ const ApplicationSummary = ({ formData, onEdit, onBack }) => {
                   }}>
                     {[
                       { label: "Amount Requested", value: formatValue(formData?.useOfFunds?.amountRequested, "R 0") },
+                      { label: "Funding Category", value: formData?.useOfFunds?.fundingCategory === "Other" ? formData?.useOfFunds?.fundingCategoryOther || "Other" : formatValue(formData?.useOfFunds?.fundingCategory) },
                       { label: "Personal Equity Contributed", value: formatValue(formData?.useOfFunds?.personalEquity, "R 0") },
                       { 
                         label: "Funding Instruments Preferred", 
-                        value: formatArray(formData?.useOfFunds?.fundingInstruments),
-                        detail: formData?.useOfFunds?.fundingInstruments?.includes('other') ? formData?.useOfFunds?.fundingInstrumentOther : null
+                        value: formData?.useOfFunds?.fundingInstrument || formatArray(formData?.useOfFunds?.fundingInstruments),
+                        detail: formData?.useOfFunds?.fundingInstrumentOther
                       },
                       { 
                         label: "Type of Funder Preferred", 
-                        value: formatArray(formData?.useOfFunds?.funderTypes),
-                        detail: formData?.useOfFunds?.funderTypes?.includes('other') ? formData?.useOfFunds?.funderTypeOther : null
+                        value: formData?.useOfFunds?.preferredFunderType || formatArray(formData?.useOfFunds?.funderTypes),
+                        detail: formData?.useOfFunds?.preferredFunderTypeOther || formData?.useOfFunds?.funderTypeOther
                       },
                       { label: "Equity Offered", value: formatValue(formData?.useOfFunds?.equityType, "0%") },
                     ].map((item, i) => (
@@ -642,6 +645,10 @@ const ApplicationSummary = ({ formData, onEdit, onBack }) => {
                 </div>
               )}
             </div>
+
+            {requiresLoanDetails(formData?.useOfFunds) && formData?.loanDetails && Object.keys(formData.loanDetails).length > 0 && (
+              <LoanDetailsSummary data={formData.loanDetails} amountRequested={formData.useOfFunds?.amountRequested} />
+            )}
 
             {/* Enterprise Readiness - WITH CREDIT INFORMATION ADDED */}
             <div style={{

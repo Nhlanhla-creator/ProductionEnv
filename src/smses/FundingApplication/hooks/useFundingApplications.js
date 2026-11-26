@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -21,6 +22,13 @@ import { getFunctions, httpsCallable } from "firebase/functions"
 import { db, auth } from "../../../firebaseConfig"
 import { getCurrentCompanyId } from "../../../utils/application-scope"
 
+import {
+  getLoanIssues,
+  getLoanProfile,
+  loanDataForSave,
+  requiresLoanDetails,
+} from "../loanApplication"
+
 const storage = getStorage()
 
 const USE_CLOUD_FUNCTION = true
@@ -30,6 +38,7 @@ const LOCAL_MATCHING_URL = "http://localhost:8000/api/funders/analyze"
 const SECTION_LABELS = {
   applicationOverview: "Application Overview",
   useOfFunds: "Use of Funds",
+  loanDetails: "Loan Application",
   enterpriseReadiness: "Enterprise Readiness",
   guarantees: "Guarantees",
   growthPotential: "Growth Potential",
@@ -39,6 +48,7 @@ const SECTION_LABELS = {
 }
 
 const SECTION_IDS = Object.keys(SECTION_LABELS)
+const sectionsFor = (form) => SECTION_IDS.filter((id) => id !== "loanDetails" || requiresLoanDetails(form.useOfFunds))
 
 // Financial Overview belongs to Universal Profile.
 // Preserve any previously saved funding data, but do not require an
@@ -76,6 +86,7 @@ const createEmptyForm = () => ({
       },
     ],
   },
+  loanDetails: {},
   enterpriseReadiness: {
     barriers: [],
   },
@@ -91,7 +102,7 @@ const createEmptyForm = () => ({
 })
 
 const createEmptyCompleted = () =>
-  Object.fromEntries(SECTION_IDS.map((id) => [id, false]))
+  Object.fromEntries(sectionsFor({}).map((id) => [id, false]))
 
 const createEmptyUniversalDocs = () => ({
   businessPlan: null,
@@ -190,7 +201,8 @@ const readableField = (field) =>
 function getIssuesForSection(
   sectionId,
   sectionData = {},
-  universalDocs = {}
+  universalDocs = {},
+  form = {}
 ) {
   const data = sectionData || {}
   const issues = []
@@ -214,6 +226,17 @@ function getIssuesForSection(
   }
 
   switch (sectionId) {
+    case "loanDetails": {
+      const loanIssues = getLoanIssues(data, form.useOfFunds, universalDocs.loanProfile)
+      const propertyGuarantee = form.guarantees?.securityInstruments?.some(
+        (item) => ["Property", "Land", "Buildings"].includes(item?.instrument)
+      )
+      if (requiresLoanDetails(form.useOfFunds) && propertyGuarantee && data.propertyOffered !== "yes") {
+        loanIssues.push("Add the property selected under Guarantees and enter its valuation and bond details.")
+      }
+      return loanIssues
+    }
+
     case "applicationOverview": {
       const requiredFields = {
         applicationType: "application type",
@@ -574,9 +597,9 @@ function getIssuesForSection(
 
 const completionForForm = (form, universalDocs) =>
   Object.fromEntries(
-    SECTION_IDS.map((id) => [
+    sectionsFor(form).map((id) => [
       id,
-      getIssuesForSection(id, form[id], universalDocs).length === 0,
+      getIssuesForSection(id, form[id], universalDocs, form).length === 0,
     ])
   )
 
@@ -767,6 +790,7 @@ export const useFundingApplications = ({
     const documents = profile.documents || {}
 
     const universalDocs = {
+      loanProfile: getLoanProfile(profile),
       businessPlan: documentUrl(documents.businessPlan),
       pitchDeck: documentUrl(documents.pitchDeck),
       financialStatements: documentUrls(
@@ -993,6 +1017,7 @@ export const useFundingApplications = ({
     setCompletedSections((previous) => ({
       ...previous,
       [section]: false,
+      ...(["useOfFunds", "guarantees"].includes(section) && { loanDetails: false }),
     }))
 
     setHasUnsavedChanges(true)
@@ -1002,16 +1027,18 @@ export const useFundingApplications = ({
     return getIssuesForSection(
       sectionId,
       formRef.current[sectionId],
-      universalDocsRef.current
+      universalDocsRef.current,
+      formRef.current
     )
   }, [])
 
   const getValidationMessages = useCallback(() => {
-    return SECTION_IDS.flatMap((sectionId) =>
+    return sectionsFor(formRef.current).flatMap((sectionId) =>
       getIssuesForSection(
         sectionId,
         formRef.current[sectionId],
-        universalDocsRef.current
+        universalDocsRef.current,
+        formRef.current
       ).map(
         (message) => `${SECTION_LABELS[sectionId]}: ${message}`
       )
@@ -1029,7 +1056,7 @@ export const useFundingApplications = ({
   )
 
   const getInvalidSections = useCallback(() => {
-    return SECTION_IDS.filter(
+    return sectionsFor(formRef.current).filter(
       (sectionId) => getSectionIssues(sectionId).length > 0
     ).map((sectionId) => SECTION_LABELS[sectionId])
   }, [getSectionIssues])
@@ -1062,21 +1089,26 @@ export const useFundingApplications = ({
         )
 
         const snapshot = formRef.current
-        const originalSection = snapshot[sectionId] || {}
-        const issues = getIssuesForSection(
-          sectionId,
-          originalSection,
-          universalDocsRef.current
-        )
-        const complete = issues.length === 0
+        const universalDocs = universalDocsRef.current
+        const sectionIds = [sectionId]
+        // The loan is validated against Use of Funds. Save both when those
+        // answers have changed and the applicant saves from the loan tab.
+        if (sectionId === "loanDetails" && snapshot.useOfFunds !== lastSavedRef.current.useOfFunds) {
+          sectionIds.unshift("useOfFunds")
+        }
 
-        const uploadedSection =
-          await uploadFilesAndReplaceWithURLs(
-            originalSection,
-            currentUser.uid,
-            documentId,
-            sectionId
-          )
+        const issuesBySection = {}
+        const uploadedSections = {}
+        for (const id of sectionIds) {
+          const data = snapshot[id] || {}
+          issuesBySection[id] = getIssuesForSection(id, data, universalDocs, snapshot)
+          const dataForSave = id === "loanDetails"
+            ? loanDataForSave(data, snapshot.useOfFunds, universalDocs.loanProfile || {})
+            : data
+          uploadedSections[id] = await uploadFilesAndReplaceWithURLs(dataForSave, currentUser.uid, documentId, id)
+        }
+        const issues = issuesBySection[sectionId]
+        const complete = issues.length === 0
 
         const existing = await getDoc(applicationRef)
 
@@ -1093,14 +1125,21 @@ export const useFundingApplications = ({
           ...(existing.exists()
             ? existing.data().completedSections || {}
             : {}),
-          [sectionId]: complete,
+          ...Object.fromEntries(sectionIds.map((id) => [id, issuesBySection[id].length === 0])),
+        }
+
+        if (["useOfFunds", "guarantees"].includes(sectionId)) {
+          const savedForm = { ...existing.data(), ...uploadedSections }
+          savedCompletion.loanDetails = requiresLoanDetails(savedForm.useOfFunds)
+            ? getIssuesForSection("loanDetails", savedForm.loanDetails, universalDocs, savedForm).length === 0
+            : deleteField()
         }
 
         const companyId = await getCurrentCompanyId()
         await setDoc(
           applicationRef,
           {
-            [sectionId]: uploadedSection,
+            ...uploadedSections,
             completedSections: savedCompletion,
             userId: currentUser.uid,
             ...(companyId ? { companyId } : {}),
@@ -1114,32 +1153,24 @@ export const useFundingApplications = ({
           { merge: true }
         )
 
-        // Record only the section actually saved.
-        const nextSaved = {
-          ...lastSavedRef.current,
-          [sectionId]: uploadedSection,
+        lastSavedRef.current = { ...lastSavedRef.current, ...uploadedSections }
+
+        // Preserve edits made while the section was being saved.
+        const nextForm = { ...formRef.current }
+        const nextCompletion = {}
+        for (const id of sectionIds) {
+          const unchanged = formRef.current[id] === snapshot[id]
+          if (unchanged) nextForm[id] = uploadedSections[id]
+          nextCompletion[id] = unchanged && issuesBySection[id].length === 0
         }
-
-        lastSavedRef.current = nextSaved
-
-        // Preserve any edits made while upload/save was running.
-        const sectionUnchanged =
-          formRef.current[sectionId] === originalSection
-
-        if (sectionUnchanged) {
-          const nextForm = {
-            ...formRef.current,
-            [sectionId]: uploadedSection,
-          }
-
-          formRef.current = nextForm
-          setFormData(nextForm)
+        if (["useOfFunds", "guarantees"].includes(sectionId) && requiresLoanDetails(nextForm.useOfFunds)) {
+          nextCompletion.loanDetails = formRef.current[sectionId] === snapshot[sectionId] &&
+            ["loanDetails", "useOfFunds", "guarantees"].every((id) => nextForm[id] === lastSavedRef.current[id]) &&
+            savedCompletion.loanDetails === true
         }
-
-        setCompletedSections((previous) => ({
-          ...previous,
-          [sectionId]: sectionUnchanged ? complete : false,
-        }))
+        formRef.current = nextForm
+        setFormData(nextForm)
+        setCompletedSections((previous) => ({ ...previous, ...nextCompletion }))
 
         const stillUnsaved = Object.keys(
           formRef.current
@@ -1155,13 +1186,10 @@ export const useFundingApplications = ({
         let warning = ""
 
         try {
-          await requestFundabilityAnalysis(
-            currentUser.uid,
-            documentId,
-            sectionId
-          )
-
-          analysisRequested = true
+          if (sectionIds.includes("useOfFunds") || sectionId !== "loanDetails") {
+            await requestFundabilityAnalysis(currentUser.uid, documentId, sectionIds[0])
+            analysisRequested = true
+          }
         } catch (error) {
           console.error(
             "Fundability analysis request failed:",
@@ -1364,11 +1392,12 @@ export const useFundingApplications = ({
 
       const snapshot = formRef.current
 
-      const messages = SECTION_IDS.flatMap((sectionId) =>
+      const messages = sectionsFor(snapshot).flatMap((sectionId) =>
         getIssuesForSection(
           sectionId,
           snapshot[sectionId],
-          universalDocs
+          universalDocs,
+          snapshot
         ).map(
           (message) => `${SECTION_LABELS[sectionId]}: ${message}`
         )
@@ -1407,7 +1436,9 @@ export const useFundingApplications = ({
       )) {
         uploaded[sectionId] =
           await uploadFilesAndReplaceWithURLs(
-            sectionData || {},
+            sectionId === "loanDetails"
+              ? loanDataForSave(sectionData || {}, snapshot.useOfFunds, universalDocs.loanProfile)
+              : sectionData || {},
             currentUser.uid,
             documentId,
             sectionId
@@ -1440,10 +1471,10 @@ export const useFundingApplications = ({
 
       uploaded.enterpriseReadiness = readiness
 
-      const completed = completionForForm(
-        uploaded,
-        universalDocs
-      )
+      const completed = completionForForm(uploaded, universalDocs)
+      const savedCompletion = requiresLoanDetails(uploaded.useOfFunds)
+        ? completed
+        : { ...completed, loanDetails: deleteField() }
 
       const entityOverview = profile.entityOverview || {}
 
@@ -1462,7 +1493,7 @@ export const useFundingApplications = ({
           ...(!existing.exists()
             ? { createdAt: serverTimestamp() }
             : {}),
-          completedSections: completed,
+          completedSections: savedCompletion,
           applicationType: "funding",
           version: "2.0",
         },

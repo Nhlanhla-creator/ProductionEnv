@@ -5,7 +5,7 @@ import {
   Shield, Package, CheckSquare, Linkedin, DollarSign, FileCheck, Target,
   AlertTriangle, Phone, MapPin, Layers, Briefcase, Star, Image as ImageIcon,
 } from "lucide-react"
-import { checkIsNGO } from "./ngoTaxonomy"
+import { checkIsNGO, NGO_FOCUS_AREAS, NGO_TARGET_BENEFICIARIES } from "./ngoTaxonomy"
 
 const ProfileSummary = ({
   data,
@@ -259,15 +259,21 @@ const ProfileSummary = ({
     }
 
     const renderTargetMarket = () => {
-      const target = isNGO ? (ps.targetBeneficiaryGroups || ps.targetMarket) : ps.targetMarket
-      if (!target) return null
+      const selectedTypes = Array.isArray(ps.customerTypes) && ps.customerTypes.length
+        ? ps.customerTypes
+        : isNGO && Array.isArray(ps.targetBeneficiaryGroups) ? ps.targetBeneficiaryGroups : []
+      const labels = selectedTypes.map((type) => isNGO
+        ? NGO_TARGET_BENEFICIARIES.find((option) => option.value === type)?.label || type
+        : type)
+      if (!labels.length && !ps.targetMarket) return null
       return (
         <div style={{ marginBottom: "16px" }}>
           <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#4a352f", marginBottom: "10px" }}>
             <Target size={14} style={{ display: "inline", marginRight: "6px" }} /> {isNGO ? "Target Beneficiaries & Communities" : "Target Market"}
           </h3>
           <div style={fieldCardStyle}>
-            <span style={fieldValueStyle}>{Array.isArray(target) ? target.map(formatLabel).join(" • ") : target}</span>
+            {labels.length > 0 && <span style={fieldValueStyle}>{labels.join(" • ")}</span>}
+            {ps.targetMarket && <span style={fieldValueStyle}>{ps.targetMarket}</span>}
           </div>
         </div>
       )
@@ -290,16 +296,40 @@ const ProfileSummary = ({
               </span>
             </div>
           )}
-          {clients.map((client, idx) => (
-            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "10px" }}>
-              <div style={grid3}>
-                <div><span style={fieldLabelStyle}>{isNGO ? "Partner / Funder" : "Client"}</span><span style={fieldValueStyle}>{client.name || "Not provided"}</span></div>
-                <div><span style={fieldLabelStyle}>{isNGO ? "Contact Person" : "Type"}</span><span style={fieldValueStyle}>{client.contactPerson || client.clientType || "Not provided"}</span></div>
-                <div><span style={fieldLabelStyle}>Contact</span><span style={fieldValueStyle}>{client.contactNumber || client.contactEmail || "Not provided"}</span></div>
-                <div><span style={fieldLabelStyle}>{isNGO ? "% Funding" : "% Revenue"}</span><span style={fieldValueStyle}>{client.revenuePercentage ? `${client.revenuePercentage}%` : "Not provided"}</span></div>
-              </div>
-            </div>
-          ))}
+          {clients.map((client, idx) => {
+            const type = /^other$/i.test(client.clientType || "") ? client.clientTypeOther || "Other" : client.clientType
+            const industries = (client.industries || []).map((industry) => isNGO
+              ? NGO_FOCUS_AREAS.find((option) => option.value === industry)?.label || industry
+              : industry)
+            const details = [
+              ["Contact name", client.contactName ?? client.contactPerson],
+              ["Contact role", client.contactRole],
+              ["Email", client.contactEmail],
+              ["Phone", client.contactNumber],
+              [isNGO ? "Focus areas" : "Industries", industries.join(" • ")],
+              [isNGO ? "Programmes supported" : "Offerings delivered", (client.offeringsDelivered || []).join(" • ")],
+              ["Period", [client.deliveryStart, client.deliveryEnd].filter(Boolean).map(formatDate).join(" – ")],
+              ["Reference consent", client.referencePermission],
+              [isNGO ? "Continuation potential" : "Growth potential", client.growthPotential],
+              [isNGO ? "Continuation details" : "Growth details", client.growthDetails],
+            ].filter(([, value]) => value)
+            return (
+              <details key={client.id || idx} style={{ ...fieldCardStyle, marginBottom: 10 }}>
+                <summary style={{ cursor: "pointer", color: "#4a352f", fontWeight: 600, overflowWrap: "anywhere" }}>
+                  {[client.name || (isNGO ? "Unnamed partner" : "Unnamed client"), type,
+                    client.revenuePercentage !== "" && client.revenuePercentage != null
+                      ? `${client.revenuePercentage}% ${isNGO ? "funding" : "revenue"}` : ""].filter(Boolean).join(" · ")}
+                </summary>
+                {details.length > 0 && (
+                  <div style={{ ...grid3, marginTop: 10, overflowWrap: "anywhere" }}>
+                    {details.map(([label, value]) => (
+                      <div key={label}><span style={fieldLabelStyle}>{label}</span><span style={fieldValueStyle}>{value}</span></div>
+                    ))}
+                  </div>
+                )}
+              </details>
+            )
+          })}
         </div>
       )
     }
@@ -443,7 +473,7 @@ const ProfileSummary = ({
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                  {["Name", "Country", "%", "Issued", "Race", "Gender", "DOA", "Youth", "Disabled", "Also Director"].map((h) => (
+                  {["Name", "Country", "%", "Issued", "Race", "Gender", "Appointment Date", "LinkedIn", "Youth", "Disabled", "Also Director"].map((h) => (
                     <th key={h} style={{ padding: "6px 4px", textAlign: "left", fontSize: "9px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -458,6 +488,7 @@ const ProfileSummary = ({
                     <td style={{ padding: "5px 4px", color: "#4a352f", fontSize: "11px" }}>{sh.race || "—"}</td>
                     <td style={{ padding: "5px 4px", color: "#4a352f", fontSize: "11px" }}>{sh.gender || "—"}</td>
                     <td style={{ padding: "5px 4px", color: "#4a352f", fontSize: "11px" }}>{formatDate(sh.doa)}</td>
+                    <td style={{ padding: "5px 4px" }}>{sh.linkedin ? renderLinkedInLink(sh.linkedin) : "—"}</td>
                     <td style={{ padding: "5px 4px", fontSize: "11px" }}>{formatBoolean(sh.isYouth)}</td>
                     <td style={{ padding: "5px 4px", fontSize: "11px" }}>{formatBoolean(sh.isDisabled)}</td>
                     <td style={{ padding: "5px 4px", fontSize: "11px" }}>{formatBoolean(sh.isAlsoDirector)}</td>
@@ -476,7 +507,7 @@ const ProfileSummary = ({
       const structure = data?.entityOverview?.legalStructure
       const bodyTitle = structure === "Trust"
         ? "Board of Trustees"
-        : structure === "Voluntary Association"
+        : structure?.toLowerCase() === "voluntary association"
           ? "Management Committee"
           : isNGO ? "Governing Board / Directors" : "Directors"
 
@@ -487,7 +518,7 @@ const ProfileSummary = ({
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #c8b6a6" }}>
-                  {["Name", "Roles", "Nationality", "Exec/Non-Exec", "Race", "Gender", "CV"].map((h) => (
+                  {["Name", "Roles", "Nationality", "Appointment Date", ...(isNGO ? ["Term End"] : []), "Committee Membership", "Exec/Non-Exec", "Race", "Gender", "LinkedIn & CV", "Youth", "Disabled"].map((h) => (
                     <th key={h} style={{ padding: "6px 4px", textAlign: "left", fontSize: "9px", fontWeight: "700", color: "#7d5a50", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -501,6 +532,9 @@ const ProfileSummary = ({
                     </td>
                     <td style={{ padding: "5px 4px", color: "#4a352f", fontSize: "10px" }}>{(d.roles || []).map((r) => r === "Other" ? (d.customRole || "Other") : r).join(", ") || "Member"}</td>
                     <td style={{ padding: "5px 4px", color: "#4a352f", fontSize: "11px" }}>{d.nationality || "—"}</td>
+                    <td style={{ padding: "5px 4px" }}>{formatDate(d.doa)}</td>
+                    {isNGO && <td style={{ padding: "5px 4px" }}>{formatDate(d.termEndDate)}</td>}
+                    <td style={{ padding: "5px 4px" }}>{(d.committeeMembership || []).map((item) => item === "Other" ? d.customCommittee || item : item).join(", ") || "—"}</td>
                     <td style={{ padding: "5px 4px", color: "#4a352f", fontSize: "11px" }}>{d.execType || "Non-Executive"}</td>
                     <td style={{ padding: "5px 4px", color: "#4a352f", fontSize: "11px" }}>{d.race || "—"}</td>
                     <td style={{ padding: "5px 4px", color: "#4a352f", fontSize: "11px" }}>{d.gender || "—"}</td>
@@ -511,6 +545,8 @@ const ProfileSummary = ({
                         {!d.linkedin && !d.cv && "—"}
                       </div>
                     </td>
+                    <td style={{ padding: "5px 4px" }}>{formatBoolean(d.isYouth)}</td>
+                    <td style={{ padding: "5px 4px" }}>{formatBoolean(d.isDisabled)}</td>
                   </tr>
                 ))}
               </tbody>

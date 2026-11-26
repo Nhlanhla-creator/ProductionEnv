@@ -1,14 +1,12 @@
 "use client"
-import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { createPortal } from 'react-dom'
+import React, { useState, useEffect, useRef, useMemo, useId } from 'react'
 import {
-  Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronUp, Search, Copy,
+  Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronUp, Copy,
   ArrowUp, ArrowDown, Star, AlertTriangle, CheckCircle, Circle
 } from 'lucide-react'
 import FormField from "./form-field"
 import './UniversalProfile.css';
 import {
-  deliveryModes,
   productDeliveryRoleOptions,
   serviceOperatingModelOptions,
   commercialDeliveryPatternOptions,
@@ -103,353 +101,298 @@ const focusHandlers = {
   onBlur: (e) => { e.currentTarget.style.borderColor = '#d6c4a8'; e.currentTarget.style.boxShadow = 'none' },
 }
 
-const pillStyle = (active) => ({
-  padding: '4px 10px',
-  borderRadius: '999px',
-  fontSize: '11px',
-  fontWeight: '600',
-  border: `1px solid ${active ? '#8B4513' : '#d6c4a8'}`,
-  backgroundColor: active ? '#8B4513' : 'white',
-  color: active ? 'white' : '#5c3a1e',
-  cursor: 'pointer',
-  userSelect: 'none',
-  whiteSpace: 'nowrap',
-})
+const optionListFor = (options) =>
+  options.map((option) => typeof option === 'string' ? { value: option, label: option } : option)
 
-// MultiSelect component for dropdown-style multi-select
-function MultiSelect({ options, selected = [], onChange, label, placeholder, isTagMode = false }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const triggerRef = useRef(null)
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
+const otherOption = 'Other'
+const isOther = (value) => /^other$/i.test(value)
+const detailsStyle = { border: '1px solid #e4d5c2', borderRadius: 6, backgroundColor: '#fff', padding: '10px 12px' }
+const summaryStyle = { cursor: 'pointer', color: '#5c3a1e', fontWeight: 600, fontSize: 13 }
+const fieldGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '12px 16px' }
+const tableInputStyle = { ...inputStyle, padding: '8px 10px', fontSize: 12 }
 
-  const toggleDropdown = () => setIsOpen(!isOpen)
-  const closeDropdown = () => setIsOpen(false)
-
-  const handleSelect = (value) => {
-    const newSelected = selected.includes(value)
-      ? selected.filter((item) => item !== value)
-      : [...selected, value]
-    onChange(newSelected)
-  }
-
-  useEffect(() => {
-    if (isOpen && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      setCoords({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width })
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    const updateCoords = () => {
-      if (isOpen && triggerRef.current) {
-        const rect = triggerRef.current.getBoundingClientRect()
-        setCoords({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width })
-      }
-    }
-    window.addEventListener('resize', updateCoords)
-    window.addEventListener('scroll', updateCoords, true)
-    return () => {
-      window.removeEventListener('resize', updateCoords)
-      window.removeEventListener('scroll', updateCoords, true)
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (isOpen && triggerRef.current && !triggerRef.current.contains(event.target)) {
-        if (event.target.closest('[data-multiselect-portal="true"]')) return
-        closeDropdown()
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [isOpen])
-
-  const optionList = options.map(opt => typeof opt === 'string' ? { value: opt, label: opt } : opt)
+function ChoiceWithOther({ label, options, value = '', onChange, style = inputStyle }) {
+  const [editingOther, setEditingOther] = useState(false)
+  const choices = optionListFor(options).filter((option) => !isOther(option.value))
+  const otherSelected = editingOther || Boolean(value && !choices.some((option) => option.value === value))
 
   return (
-    <div ref={triggerRef} style={{ position: 'relative', width: '100%' }}>
-      <div
-        onClick={toggleDropdown}
-        style={{
-          border: '1px solid #d6c4a8', borderRadius: '6px', padding: '10px 14px', cursor: 'pointer',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '44px',
-          backgroundColor: 'white', transition: 'border-color 0.2s, box-shadow 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+    <>
+      <select
+        aria-label={label}
+        style={style}
+        value={otherSelected ? otherOption : value}
+        onChange={(event) => {
+          const next = event.target.value
+          setEditingOther(next === otherOption)
+          onChange(next)
         }}
-        onMouseEnter={(e) => e.currentTarget.style.borderColor = '#8B4513'}
-        onMouseLeave={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+        {...focusHandlers}
       >
-        {selected && selected.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', flex: 1 }}>
-            {selected.map((cat) => (
-              <span key={cat} style={{
-                backgroundColor: '#f0e8d8', padding: '4px 12px', borderRadius: '14px', fontSize: '13px',
-                color: '#5c3a1e', fontWeight: '500', display: 'inline-flex', alignItems: 'center', gap: '4px'
-              }}>
-                {optionList.find((opt) => opt.value === cat)?.label || cat}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span style={{ color: '#999', fontSize: '14px' }}>{placeholder || `Select ${label}`}</span>
-        )}
-        {isOpen ? <ChevronUp size={20} color="#5c3a1e" /> : <ChevronDown size={20} color="#5c3a1e" />}
-      </div>
+        <option value="">Select</option>
+        {choices.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        <option value={otherOption}>Other (specify)</option>
+      </select>
+      {otherSelected && (
+        <input
+          type="text"
+          aria-label={`Specify ${label.toLowerCase()}`}
+          value={isOther(value) ? '' : value}
+          onChange={(event) => onChange(event.target.value || otherOption)}
+          placeholder="Please specify"
+          maxLength={120}
+          style={{ ...style, marginTop: 6 }}
+          {...focusHandlers}
+        />
+      )}
+    </>
+  )
+}
 
-      {isOpen && createPortal(
-        <div
-          data-multiselect-portal="true"
-          style={{
-            position: 'absolute', top: `${coords.top + 4}px`, left: `${coords.left}px`, width: `${coords.width}px`,
-            backgroundColor: 'white', border: '1px solid #d6c4a8', borderRadius: '6px', zIndex: 99999,
-            maxHeight: '280px', overflow: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', minWidth: '250px'
-          }}
-        >
-          <div style={{ padding: '4px' }}>
-            {optionList.map((option) => (
-              <div
-                key={option.value}
-                onClick={() => handleSelect(option.value)}
-                style={{
-                  padding: '10px 14px', cursor: 'pointer',
-                  backgroundColor: selected.includes(option.value) ? '#fdf6ed' : 'white',
-                  display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #f5f0e8',
-                  fontSize: '14px', borderRadius: '4px', transition: 'background-color 0.15s'
-                }}
-                onMouseEnter={(e) => { if (!selected.includes(option.value)) e.currentTarget.style.backgroundColor = '#faf5ef' }}
-                onMouseLeave={(e) => { if (!selected.includes(option.value)) e.currentTarget.style.backgroundColor = 'white' }}
-              >
-                <div style={{
-                  width: '20px', height: '20px', borderRadius: '4px',
-                  border: `2px solid ${selected.includes(option.value) ? '#8B4513' : '#d1d5db'}`,
-                  backgroundColor: selected.includes(option.value) ? '#8B4513' : 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                }}>
-                  {selected.includes(option.value) && <span style={{ color: 'white', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
-                </div>
-                <span style={{ color: '#3d2b1f' }}>{option.label}</span>
+function MultiSelect({ options, selected = [], onChange, label, placeholder, allowOther = false }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [specifyingOther, setSpecifyingOther] = useState(false)
+  const [otherText, setOtherText] = useState('')
+  const rootRef = useRef(null)
+  const id = useId()
+  const choices = optionListFor(options).filter((option) => !allowOther || !isOther(option.value))
+  const savedOptions = [
+    ...choices,
+    ...selected.filter((value) => !choices.some((option) => option.value === value))
+      .map((value) => ({ value, label: value })),
+  ]
+  const selection = selected.map((value) => savedOptions.find((option) => option.value === value)?.label || value)
+  const title = label || placeholder || 'Select options'
+
+  useEffect(() => {
+    if (!isOpen) return
+    const closeOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) setIsOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  }, [isOpen])
+
+  const addOther = () => {
+    const value = otherText.trim()
+    if (!value) return
+    const match = savedOptions.find((option) => option.label.toLowerCase() === value.toLowerCase())
+    const values = selected.filter((item) => !isOther(item))
+    const next = match?.value || value
+    onChange(values.includes(next) ? values : [...values, next])
+    setOtherText('')
+    setSpecifyingOther(false)
+  }
+
+  return (
+    <div ref={rootRef} onKeyDown={(event) => {
+      if (event.key === 'Escape' && isOpen) {
+        setIsOpen(false)
+        rootRef.current?.querySelector('button')?.focus()
+      }
+    }}>
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={id}
+        aria-label={`${title}${selection.length ? `, ${selection.length} selected` : ''}`}
+        onClick={() => setIsOpen((open) => !open)}
+        style={{ ...inputStyle, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, textAlign: 'left' }}
+        {...focusHandlers}
+      >
+        <span style={{ overflowWrap: 'anywhere' }}>
+          {selection.length ? selection.slice(0, 2).join(', ') : placeholder || `Select ${title}`}
+          {selection.length > 2 && ` +${selection.length - 2}`}
+        </span>
+        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+      <div id={id} hidden={!isOpen} style={{ ...detailsStyle, marginTop: 4 }}>
+        {isOpen && (
+          <>
+            <div style={{ maxHeight: 224, overflowY: 'auto' }}>
+              {savedOptions.map((option) => (
+                <label key={option.value} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 0', fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(option.value)}
+                    onChange={(event) => onChange(event.target.checked
+                      ? [...selected, option.value]
+                      : selected.filter((value) => value !== option.value))}
+                  />
+                  {option.label}
+                </label>
+              ))}
+              {allowOther && (
+                <button type="button" className="btn btn-secondary" onClick={() => setSpecifyingOther((show) => !show)}>
+                  Other (specify)
+                </button>
+              )}
+            </div>
+            {allowOther && specifyingOther && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <input
+                  type="text"
+                  aria-label={`Specify another ${label || 'option'}`}
+                  value={otherText}
+                  maxLength={120}
+                  placeholder="Please specify"
+                  onChange={(event) => setOtherText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      addOther()
+                    }
+                  }}
+                  style={inputStyle}
+                  {...focusHandlers}
+                />
+                <button type="button" className="btn btn-secondary" onClick={addOther} disabled={!otherText.trim()}>Add</button>
               </div>
-            ))}
-          </div>
-          <div style={{ padding: '10px', borderTop: '1px solid #d6c4a8', backgroundColor: '#fdfaf5', borderRadius: '0 0 6px 6px', position: 'sticky', bottom: 0 }}>
+            )}
             <button
               type="button"
-              onClick={closeDropdown}
-              style={{ width: '100%', padding: '10px', backgroundColor: '#8B4513', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', fontSize: '14px', transition: 'background-color 0.2s' }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5c3a1e'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B4513'}
+              className="btn btn-secondary"
+              onClick={() => {
+                setIsOpen(false)
+                rootRef.current?.querySelector('button')?.focus()
+              }}
+              style={{ marginTop: 8 }}
             >
               Done
             </button>
-          </div>
-        </div>,
-        document.body
-      )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// TaxonomySearch — Section 4.3 / 5.1
-// Searchable, search-first Offering Category selector. Begins suggesting after
-// two characters, shows breadcrumb + definition + examples, never restricts by
-// profile industry (industries only re-rank), and offers "Suggest a category"
-// without blocking completion when nothing matches.
-// ---------------------------------------------------------------------------
-function TaxonomySearch({ offeringType, value, breadcrumb, onSelect, onRequestCustomCategory, industryHints }) {
+function ExtraDetails({ title, children }) {
+  return (
+    <details style={detailsStyle}>
+      <summary style={summaryStyle}>{title}</summary>
+      <div style={{ marginTop: 12 }}>{children}</div>
+    </details>
+  )
+}
+
+function TaxonomySearch({ offeringType, value, customCategory, onSelect, onRequestCustomCategory, industryHints }) {
   const [query, setQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [showCustomForm, setShowCustomForm] = useState(false)
   const [customText, setCustomText] = useState('')
   const triggerRef = useRef(null)
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
-
-  const results = useMemo(
-    () => searchTaxonomy(query, { offeringType, industryHints }),
-    [query, offeringType, industryHints]
-  )
-
-  useEffect(() => {
-    if (isOpen && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      setCoords({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width })
-    }
-  }, [isOpen, query])
+  const panelId = useId()
+  const selected = getLeafById(value)
+  const results = useMemo(() => {
+    if (query.trim().length >= 2) return searchTaxonomy(query, { offeringType, industryHints })
+    const type = offeringType === 'products' ? 'Product' : 'Service'
+    return taxonomyLeaves
+      .filter((leaf) => leaf.offeringTypes.includes(type))
+      .sort((first, second) => first.breadcrumb.localeCompare(second.breadcrumb))
+  }, [query, offeringType, industryHints])
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (isOpen && triggerRef.current && !triggerRef.current.contains(event.target)) {
-        if (event.target.closest('[data-taxonomy-portal="true"]')) return
-        setIsOpen(false)
-      }
+    if (!isOpen) return
+    const closeOutside = (event) => {
+      if (!triggerRef.current?.contains(event.target)) setIsOpen(false)
     }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
   }, [isOpen])
 
-  const selectLeaf = (leaf) => {
-    onSelect(leaf)
+  const closePicker = () => {
     setQuery('')
     setIsOpen(false)
     setShowCustomForm(false)
+    triggerRef.current?.querySelector('button')?.focus()
   }
 
-  const submitCustomCategory = () => {
-    if (!customText.trim()) return
-    onRequestCustomCategory(customText.trim())
-    setCustomText('')
-    setShowCustomForm(false)
-    setIsOpen(false)
-  }
-
-  // Selected state (Section 5.1): show full breadcrumb, definition and a Change action.
-  if (value && !isOpen) {
-    const leaf = getLeafById(value)
-    return (
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
-        padding: '12px 14px', border: '1px solid #d6c4a8', borderRadius: '6px', backgroundColor: '#fdf6ed'
-      }}>
-        <div>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: '#5c3a1e' }}>{breadcrumb}</div>
-          {leaf?.definition && <div style={{ fontSize: '11px', color: '#8B6F47', marginTop: '2px' }}>{leaf.definition}</div>}
-        </div>
-        <button type="button" onClick={() => setIsOpen(true)} style={{
-          padding: '6px 14px', fontSize: '12px', fontWeight: '600', color: '#5c3a1e',
-          backgroundColor: '#f0e8d8', border: 'none', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap'
-        }}>
-          Change
-        </button>
-      </div>
-    )
+  const saveCustom = () => {
+    const name = customText.trim()
+    if (!name) return
+    onRequestCustomCategory(name)
+    closePicker()
   }
 
   return (
-    <div ref={triggerRef} style={{ position: 'relative', width: '100%' }}>
-      <div style={{ position: 'relative' }}>
-        <Search size={16} color="#8B6F47" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setIsOpen(true) }}
-          onFocus={() => setIsOpen(true)}
-          placeholder="Start typing what your business provides..."
-          style={{ ...inputStyle, paddingLeft: '36px' }}
-          {...focusHandlers}
-        />
-      </div>
-
-      {isOpen && createPortal(
-        <div
-          data-taxonomy-portal="true"
-          style={{
-            position: 'absolute', top: `${coords.top + 4}px`, left: `${coords.left}px`, width: `${Math.max(coords.width, 320)}px`,
-            backgroundColor: 'white', border: '1px solid #d6c4a8', borderRadius: '6px', zIndex: 99999,
-            maxHeight: '360px', overflow: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.15)'
-          }}
-        >
-          {query.trim().length < 2 ? (
-            <div style={{ padding: '16px', fontSize: '12px', color: '#8B6F47' }}>
-              Keep typing (e.g. "aircon", "cleaning", "PPE", "irrigation") — suggestions appear after 2 characters.
-            </div>
-          ) : results.length === 0 ? (
-            <div style={{ padding: '14px' }}>
-              <div style={{ fontSize: '12px', color: '#8B6F47', marginBottom: '10px' }}>
-                No close match found for "{query}".
-              </div>
-              {!showCustomForm ? (
-                <button type="button" onClick={() => setShowCustomForm(true)} style={{
-                  fontSize: '12px', fontWeight: '600', color: '#8B4513', background: 'none', border: 'none', cursor: 'pointer', padding: 0
-                }}>
-                  Can't find it? Suggest a category
-                </button>
-              ) : (
-                <div>
-                  <textarea
-                    value={customText}
-                    onChange={(e) => setCustomText(e.target.value)}
-                    rows={2}
-                    placeholder="Describe what your business provides (5-160 characters)"
-                    maxLength={160}
-                    style={{ ...inputStyle, fontSize: '12px', resize: 'vertical', fontFamily: 'inherit' }}
-                  />
-                  <button type="button" onClick={submitCustomCategory} disabled={customText.trim().length < 5} style={{
-                    marginTop: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', color: 'white',
-                    backgroundColor: customText.trim().length < 5 ? '#d6c4a8' : '#8B4513', border: 'none', borderRadius: '4px',
-                    cursor: customText.trim().length < 5 ? 'not-allowed' : 'pointer'
-                  }}>
-                    Submit for review
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div>
+    <div ref={triggerRef} onKeyDown={(event) => {
+      if (isOpen && event.key === 'Escape') closePicker()
+    }}>
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={panelId}
+        onClick={() => setIsOpen((open) => !open)}
+        style={{ ...inputStyle, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, textAlign: 'left' }}
+        {...focusHandlers}
+      >
+        <span>{selected?.breadcrumb || customCategory || "Select an offering category"}</span>
+        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+      <div id={panelId} hidden={!isOpen} style={{ ...detailsStyle, marginTop: 4 }}>
+        {isOpen && (
+          <>
+            <input
+              type="search"
+              value={query}
+              aria-label="Filter offering categories"
+              placeholder="Find a category"
+              onChange={(event) => setQuery(event.target.value)}
+              style={{ ...inputStyle, marginBottom: 8 }}
+              {...focusHandlers}
+            />
+            <div style={{ maxHeight: 224, overflowY: 'auto' }}>
               {results.map((leaf) => (
-                <div
+                <button
                   key={leaf.id}
-                  onClick={() => selectLeaf(leaf)}
-                  style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f5f0e8' }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#faf5ef'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                  type="button"
+                  aria-pressed={value === leaf.id}
+                  title={leaf.definition}
+                  onClick={() => {
+                    onSelect(leaf)
+                    closePicker()
+                  }}
+                  style={{
+                    display: 'block', textAlign: 'left', width: '100%', padding: '7px 8px',
+                    cursor: 'pointer', border: 0, borderBottom: '1px solid #f0e8d8',
+                    background: value === leaf.id ? '#f0e8d8' : 'white', color: '#5c3a1e',
+                  }}
                 >
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#5c3a1e' }}>{leaf.breadcrumb}</div>
-                  {leaf.leafOptions.length > 0 && (
-                    <div style={{ fontSize: '11px', color: '#8B6F47', marginTop: '2px' }}>
-                      e.g. {leaf.leafOptions.slice(0, 3).join(', ')}
-                    </div>
-                  )}
-                </div>
+                  {leaf.breadcrumb}
+                </button>
               ))}
-              <div style={{ padding: '10px 14px', borderTop: '1px solid #d6c4a8', backgroundColor: '#fdfaf5' }}>
-                {!showCustomForm ? (
-                  <button type="button" onClick={() => setShowCustomForm(true)} style={{
-                    fontSize: '12px', fontWeight: '600', color: '#8B4513', background: 'none', border: 'none', cursor: 'pointer', padding: 0
-                  }}>
-                    Can't find it? Suggest a category
-                  </button>
-                ) : (
-                  <div>
-                    <textarea
-                      value={customText}
-                      onChange={(e) => setCustomText(e.target.value)}
-                      rows={2}
-                      placeholder="Describe what your business provides (5-160 characters)"
-                      maxLength={160}
-                      style={{ ...inputStyle, fontSize: '12px', resize: 'vertical', fontFamily: 'inherit' }}
-                    />
-                    <button type="button" onClick={submitCustomCategory} disabled={customText.trim().length < 5} style={{
-                      marginTop: '8px', padding: '6px 14px', fontSize: '12px', fontWeight: '600', color: 'white',
-                      backgroundColor: customText.trim().length < 5 ? '#d6c4a8' : '#8B4513', border: 'none', borderRadius: '4px',
-                      cursor: customText.trim().length < 5 ? 'not-allowed' : 'pointer'
-                    }}>
-                      Submit for review
-                    </button>
-                  </div>
-                )}
-              </div>
+              {!results.length && <p style={{ fontSize: 12 }}>No matching categories.</p>}
             </div>
-          )}
-        </div>,
-        document.body
-      )}
+            <button type="button" className="btn btn-secondary"
+              onClick={() => {
+                setShowCustomForm((show) => !show)
+                setCustomText(customCategory || '')
+              }}
+              style={{ marginTop: 8 }}>
+              Other (specify)
+            </button>
+            {showCustomForm && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <input type="text" aria-label="Specify offering category"
+                  value={customText} maxLength={160} placeholder="Name the category"
+                  onChange={(event) => setCustomText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      saveCustom()
+                    }
+                  }}
+                  style={inputStyle} {...focusHandlers} />
+                <button type="button" className="btn btn-secondary" onClick={saveCustom} disabled={!customText.trim()}>Add</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
-
-// Yes/No dropdown — still used for a couple of simple boolean-style fields.
-const YesNoDropdown = ({ value, onChange }) => (
-  <select
-    value={value || ""}
-    onChange={(e) => onChange(e.target.value)}
-    style={{ ...inputStyle, minHeight: '44px', cursor: 'pointer' }}
-    {...focusHandlers}
-  >
-    <option value="">Select...</option>
-    <option value="Yes">Yes</option>
-    <option value="No">No</option>
-  </select>
-)
 
 // Section wrapper component
 const Section = ({ title, description, children }) => (
@@ -707,7 +650,9 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
           {/* Completion Checklist */}
-          <CompletionChecklist offering={offering} />
+          <ExtraDetails title="Completion checklist">
+            <CompletionChecklist offering={offering} />
+          </ExtraDetails>
 
           {duplicateWarning && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 12px', backgroundColor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '6px' }}>
@@ -723,7 +668,7 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             <TaxonomySearch
               offeringType={offering.offeringType === 'Product' ? 'products' : 'services'}
               value={offering.taxonomyLeafId}
-              breadcrumb={offering.breadcrumb}
+              customCategory={offering.customCategoryRequest || offering.customCategory}
               industryHints={offering.industries}
               onSelect={(leafNode) => onUpdate({
                 taxonomyLeafId: leafNode.id,
@@ -747,7 +692,7 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
           </FormField>
 
           {/* Name & description & primary - Side by side in 2 columns */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={fieldGrid}>
             <FormField label="Name of your product or service" required>
               <input
                 type="text"
@@ -782,142 +727,140 @@ function OfferingCard({ offering, index, total, onUpdate, onRemove, onDuplicate,
             <p style={{ fontSize: '10px', color: '#a08a6d', margin: '4px 0 0 0', textAlign: 'right' }}>{offering.description.length}/1000 (min 20)</p>
           </FormField>
 
-          {/* Delivery role & Commercial pattern - Side by side */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <FormField label={roleFieldLabel} required>
-              <MultiSelect 
-                options={roleOptions.map((o) => ({ value: o.value, label: o.label }))} 
-                selected={offering.deliveryRole} 
-                onChange={(v) => onUpdate({ deliveryRole: v })} 
-                placeholder={`Select ${roleFieldLabel.toLowerCase()}...`}
-              />
-            </FormField>
-            <FormField label="Contract / commercial delivery pattern">
-              <MultiSelect 
-                options={commercialDeliveryPatternOptions} 
-                selected={offering.commercialPattern} 
-                onChange={(v) => onUpdate({ commercialPattern: v })} 
-                placeholder="Select commercial delivery patterns..."
-              />
-            </FormField>
-          </div>
+          <FormField label="Industries served" required>
+            <MultiSelect allowOther options={industryOptions} selected={offering.industries}
+              onChange={(value) => onUpdate({ industries: value })} label="Industries" placeholder="Select industries" />
+          </FormField>
 
-          {/* Delivery Standards — Section 10 */}
-          <div style={{ padding: '12px 14px', backgroundColor: '#fdfaf5', borderRadius: '6px', border: '1px solid #eee0cc' }}>
-            <h5 style={{ fontSize: '11px', fontWeight: '700', color: '#5c3a1e', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              Delivery standards
-            </h5>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <FormField label={pattern.fieldLabel} required>
-                <MultiSelect 
-                  options={pattern.options} 
-                  selected={offering.deliveryStandard ? [offering.deliveryStandard] : []} 
-                  onChange={(v) => onUpdate({ deliveryStandard: v[v.length - 1] || '' })} 
-                  placeholder={`Select ${pattern.fieldLabel.toLowerCase()}...`}
-                />
+          <FormField label={roleFieldLabel} required>
+            <MultiSelect allowOther options={roleOptions} selected={offering.deliveryRole}
+              onChange={(value) => onUpdate({ deliveryRole: value })} label={roleFieldLabel} placeholder="Select delivery roles" />
+          </FormField>
+
+          <ExtraDetails title="Delivery standards, lead times and coverage">
+            <div style={{ display: 'grid', gap: 12 }}>
+              <FormField label="Contract / commercial delivery pattern">
+                <MultiSelect allowOther options={commercialDeliveryPatternOptions} selected={offering.commercialPattern}
+                  onChange={(value) => onUpdate({ commercialPattern: value })} label="Commercial delivery patterns" placeholder="Select patterns" />
               </FormField>
-              <FormField label="Geographic delivery coverage">
-                <MultiSelect 
-                  options={geographicCoverageOptions} 
-                  selected={offering.geographicCoverage} 
-                  onChange={(v) => onUpdate({ geographicCoverage: v })} 
-                  placeholder="Select geographic coverage..."
-                />
-              </FormField>
-            </div>
 
-            <div style={{ marginTop: '12px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', color: '#3d2b1f', marginBottom: '8px' }}>
-                <input type="checkbox" checked={offering.dependsOnScope} onChange={(e) => onUpdate({ dependsOnScope: e.target.checked })}
-                  style={{ width: '16px', height: '16px', accentColor: '#8B4513', cursor: 'pointer' }} />
-                A typical lead-time range can't reasonably be supplied ("Depends on scope")
-              </label>
+              {/* Delivery Standards — Section 10 */}
+              <div style={{ padding: '12px 14px', backgroundColor: '#fdfaf5', borderRadius: '6px', border: '1px solid #eee0cc' }}>
+                <h5 style={{ fontSize: '11px', fontWeight: '700', color: '#5c3a1e', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                  Delivery standards
+                </h5>
+                <div style={fieldGrid}>
+                  <FormField label={pattern.fieldLabel} required>
+                    <ChoiceWithOther label={pattern.fieldLabel} options={pattern.options} value={offering.deliveryStandard}
+                      onChange={(value) => onUpdate({ deliveryStandard: value })} />
+                  </FormField>
+                  <FormField label="Geographic delivery coverage">
+                    <MultiSelect
+                      allowOther
+                      label="Coverage areas"
+                      options={geographicCoverageOptions}
+                      selected={offering.geographicCoverage}
+                      onChange={(v) => onUpdate({ geographicCoverage: v })}
+                      placeholder="Select geographic coverage..."
+                    />
+                  </FormField>
+                </div>
 
-              {offering.dependsOnScope ? (
-                <textarea
-                  value={offering.scopeExplanation}
-                  onChange={(e) => onUpdate({ scopeExplanation: e.target.value })}
-                  rows={2}
-                  placeholder="Explain what drives lead time for this offering"
-                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', fontSize: '12px' }}
-                  {...focusHandlers}
-                />
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', color: '#5c3a1e', marginBottom: '3px' }}>Minimum time</label>
-                    <div style={{ display: 'flex' }}>
-                      <input type="number" min="0" value={offering.minLeadTime} onChange={(e) => onUpdate({ minLeadTime: e.target.value })}
-                        placeholder="e.g., 2" style={{ ...inputStyle, borderRadius: '4px 0 0 4px', flex: 1, fontSize: '12px' }} {...focusHandlers} />
-                      <select value={offering.minLeadTimeUnit} onChange={(e) => onUpdate({ minLeadTimeUnit: e.target.value })}
-                        style={{ padding: '6px 8px', border: '1px solid #d6c4a8', borderLeft: 'none', borderRadius: '0 4px 4px 0', backgroundColor: 'white', fontSize: '11px', cursor: 'pointer', color: '#3d2b1f' }}>
-                        {leadTimeUnitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', color: '#5c3a1e', marginBottom: '3px' }}>Maximum time</label>
-                    <div style={{ display: 'flex' }}>
-                      <input type="number" min="0" value={offering.maxLeadTime} onChange={(e) => onUpdate({ maxLeadTime: e.target.value })}
-                        placeholder="e.g., 5" style={{ ...inputStyle, borderRadius: '4px 0 0 4px', flex: 1, fontSize: '12px' }} {...focusHandlers} />
-                      <select value={offering.maxLeadTimeUnit} onChange={(e) => onUpdate({ maxLeadTimeUnit: e.target.value })}
-                        style={{ padding: '6px 8px', border: '1px solid #d6c4a8', borderLeft: 'none', borderRadius: '0 4px 4px 0', backgroundColor: 'white', fontSize: '11px', cursor: 'pointer', color: '#3d2b1f' }}>
-                        {leadTimeUnitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  {leadTimeInvalid && (
-                    <div style={{ gridColumn: '1 / -1', fontSize: '10px', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <AlertTriangle size={12} /> Minimum time may not exceed maximum time.
+                <div style={{ marginTop: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', color: '#3d2b1f', marginBottom: '8px' }}>
+                    <input type="checkbox" checked={offering.dependsOnScope} onChange={(e) => onUpdate({ dependsOnScope: e.target.checked })}
+                      style={{ width: '16px', height: '16px', accentColor: '#8B4513', cursor: 'pointer' }} />
+                    A typical lead-time range can't reasonably be supplied ("Depends on scope")
+                  </label>
+
+                  {offering.dependsOnScope ? (
+                    <textarea
+                      value={offering.scopeExplanation}
+                      onChange={(e) => onUpdate({ scopeExplanation: e.target.value })}
+                      rows={2}
+                      placeholder="Explain what drives lead time for this offering"
+                      style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', fontSize: '12px' }}
+                      {...focusHandlers}
+                    />
+                  ) : (
+                    <div style={fieldGrid}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', color: '#5c3a1e', marginBottom: '3px' }}>Minimum time</label>
+                        <div style={{ display: 'flex' }}>
+                          <input type="number" min="0" value={offering.minLeadTime} onChange={(e) => onUpdate({ minLeadTime: e.target.value })}
+                            placeholder="e.g., 2" style={{ ...inputStyle, borderRadius: '4px 0 0 4px', flex: 1, fontSize: '12px' }} {...focusHandlers} />
+                          <select value={offering.minLeadTimeUnit} onChange={(e) => onUpdate({ minLeadTimeUnit: e.target.value })}
+                            style={{ padding: '6px 8px', border: '1px solid #d6c4a8', borderLeft: 'none', borderRadius: '0 4px 4px 0', backgroundColor: 'white', fontSize: '11px', cursor: 'pointer', color: '#3d2b1f' }}>
+                            {leadTimeUnitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', color: '#5c3a1e', marginBottom: '3px' }}>Maximum time</label>
+                        <div style={{ display: 'flex' }}>
+                          <input type="number" min="0" value={offering.maxLeadTime} onChange={(e) => onUpdate({ maxLeadTime: e.target.value })}
+                            placeholder="e.g., 5" style={{ ...inputStyle, borderRadius: '4px 0 0 4px', flex: 1, fontSize: '12px' }} {...focusHandlers} />
+                          <select value={offering.maxLeadTimeUnit} onChange={(e) => onUpdate({ maxLeadTimeUnit: e.target.value })}
+                            style={{ padding: '6px 8px', border: '1px solid #d6c4a8', borderLeft: 'none', borderRadius: '0 4px 4px 0', backgroundColor: 'white', fontSize: '11px', cursor: 'pointer', color: '#3d2b1f' }}>
+                            {leadTimeUnitOptions.map((u) => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      {leadTimeInvalid && (
+                        <div style={{ gridColumn: '1 / -1', fontSize: '10px', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertTriangle size={12} /> Minimum time may not exceed maximum time.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* Industries served — Full width */}
-          <FormField label="Industries served" required>
-            <MultiSelect options={industryOptions} selected={offering.industries} onChange={(v) => onUpdate({ industries: v })} label="industries" placeholder="Select the industries this offering serves..." />
-            <p style={{ fontSize: '10px', color: '#8B6F47', marginTop: '4px', marginBottom: 0 }}>
-              Selecting Mining, for example, ranks mining-relevant categories higher elsewhere in this form — it never hides other categories.
-            </p>
-          </FormField>
-
-          {/* Industry application — Section 6.1/11.3 */}
-          {relevantGroups.length > 0 && (
-            <FormField label="In which industries can this offering be used?">
-              {depthHint[depth] && (
-                <p style={{ fontSize: '10px', color: '#8B6F47', margin: '0 0 6px 0' }}>Ask only for: {depthHint[depth]}</p>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                {relevantGroups.map((g) => (
-                  <div key={g.group}>
-                    <div style={{ fontSize: '10px', fontWeight: '600', color: '#8B6F47', marginBottom: '4px' }}>{g.group}</div>
-                    <MultiSelect
-                      options={g.values}
-                      selected={offering.industryApplications.filter((val) => g.values.includes(val))}
-                      onChange={(v) => {
-                        const others = offering.industryApplications.filter((val) => !g.values.includes(val))
-                        onUpdate({ industryApplications: [...others, ...v] })
-                      }}
-                      placeholder={`Select ${g.group}...`}
+              {/* Industry application — Section 6.1/11.3 */}
+              {relevantGroups.length > 0 && (
+                <FormField label="In which industries can this offering be used?">
+                  {depthHint[depth] && (
+                    <p style={{ fontSize: '10px', color: '#8B6F47', margin: '0 0 6px 0' }}>{depthHint[depth]}</p>
+                  )}
+                  <div style={fieldGrid}>
+                    {relevantGroups.map((g) => (
+                      <div key={g.group}>
+                        <div style={{ fontSize: '10px', fontWeight: '600', color: '#8B6F47', marginBottom: '4px' }}>{g.group}</div>
+                        <MultiSelect
+                          options={g.values}
+                          selected={offering.industryApplications.filter((val) => g.values.includes(val))}
+                          onChange={(v) => {
+                            const others = offering.industryApplications.filter((val) => !g.values.includes(val))
+                            onUpdate({ industryApplications: [...others, ...v] })
+                          }}
+                          placeholder={`Select ${g.group}...`}
+                        />
+                      </div>
+                    ))}
+                    <MultiSelect allowOther options={[]} label="Other applications" placeholder="Add another application"
+                      selected={offering.industryApplications.filter((value) => !applicationGroups.some((group) => group.values.includes(value)))}
+                      onChange={(values) => onUpdate({
+                        industryApplications: [
+                          ...offering.industryApplications.filter((value) => applicationGroups.some((group) => group.values.includes(value))),
+                          ...values,
+                        ],
+                      })}
                     />
                   </div>
-                ))}
-              </div>
-            </FormField>
-          )}
+                </FormField>
+              )}
 
-          {/* Capability preview — Section 12, informational only */}
-          {capabilityProfile && (
-            <div style={{ padding: '8px 12px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '700', color: '#1e40af', marginBottom: '2px' }}>
-                Capability profile this will generate: {capabilityProfile.label}
-              </div>
-              <div style={{ fontSize: '10px', color: '#1e40af' }}>{capabilityProfile.focus}</div>
+              {/* Capability preview — Section 12, informational only */}
+              {capabilityProfile && (
+                <div style={{ padding: '8px 12px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: '#1e40af', marginBottom: '2px' }}>
+                    Capability profile this will generate: {capabilityProfile.label}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#1e40af' }}>{capabilityProfile.focus}</div>
+                </div>
+              )}
             </div>
-          )}
+          </ExtraDetails>
 
           {missing.length > 0 && (
             <div style={{ fontSize: '10px', color: '#92400e', backgroundColor: '#fef3c7', border: '1px solid #fde68a', borderRadius: '6px', padding: '6px 10px' }}>
@@ -1156,7 +1099,9 @@ function NgoProgrammeCard({
       {/* Card Body */}
       {!offering.collapsed && (
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <NgoCompletionChecklist offering={offering} />
+          <ExtraDetails title="Completion checklist">
+            <NgoCompletionChecklist offering={offering} />
+          </ExtraDetails>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', paddingBottom: '12px', borderBottom: '1px solid #f0e8d8' }}>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#5c3a1e' }}>
@@ -1185,24 +1130,15 @@ function NgoProgrammeCard({
             </FormField>
 
             <FormField label="Primary Focus Area" required>
-              <select
-                value={offering.focusArea || ""}
-                onChange={(e) => onUpdate({ focusArea: e.target.value })}
-                style={{ ...inputStyle, minHeight: '44px', cursor: 'pointer' }}
-                {...focusHandlers}
-                required
-              >
-                <option value="">Select primary focus area...</option>
-                {NGO_FOCUS_AREAS.map((fa) => (
-                  <option key={fa.value} value={fa.value}>{fa.label}</option>
-                ))}
-              </select>
+              <ChoiceWithOther label="Primary focus area" options={NGO_FOCUS_AREAS} value={offering.focusArea}
+                onChange={(value) => onUpdate({ focusArea: value })} />
             </FormField>
           </div>
 
           {/* Row 2: Target Beneficiary Groups */}
           <FormField label="Target Beneficiary Groups" required>
             <MultiSelect
+              allowOther
               options={NGO_TARGET_BENEFICIARIES}
               selected={offering.targetBeneficiaryGroups || []}
               onChange={(v) => onUpdate({ targetBeneficiaryGroups: v })}
@@ -1282,6 +1218,7 @@ function NgoProgrammeCard({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
             <FormField label="Geographic Delivery Coverage">
               <MultiSelect
+                allowOther
                 options={geographicCoverageOptions}
                 selected={offering.geographicCoverage || []}
                 onChange={(v) => onUpdate({ geographicCoverage: v })}
@@ -1327,11 +1264,88 @@ function NgoProgrammeCard({
 }
 
 // ---------------------------------------------------------------------------
+const contactRoleOptions = [
+  'Owner / Director', 'Procurement', 'Operations', 'Finance', 'Project / Programme management',
+  'Account management', 'Administration',
+]
+
+function ClientDetails({ client, isNGO, offeringOptions, update }) {
+  const input = (field, label, type = 'text') => (
+    <label style={{ display: 'grid', gap: 4, fontSize: 12, color: '#5c3a1e' }}>
+      {label}
+      <input type={type} value={client[field] ?? (field === 'contactName' ? client.contactPerson || '' : '')} onChange={(event) => update(field, event.target.value)}
+        style={tableInputStyle} {...focusHandlers} />
+    </label>
+  )
+
+  const select = (field, label, options) => (
+    <label style={{ display: 'grid', gap: 4, fontSize: 12, color: '#5c3a1e' }}>
+      {label}
+      <select value={client[field] || ''} onChange={(event) => update(field, event.target.value)}
+        style={tableInputStyle} {...focusHandlers}>
+        <option value="">Select</option>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        {client[field] && !options.includes(client[field]) && <option value={client[field]}>{client[field]}</option>}
+      </select>
+    </label>
+  )
+
+  return (
+    <div style={fieldGrid}>
+      <fieldset style={detailsStyle}>
+        <legend style={summaryStyle}>Contact</legend>
+        {input('contactName', 'Contact name')}
+        <FormField label="Contact role">
+          <ChoiceWithOther label="Contact role" options={contactRoleOptions} value={client.contactRole}
+            onChange={(value) => update('contactRole', value)} style={tableInputStyle} />
+        </FormField>
+        {input('contactEmail', 'Email', 'email')}
+        {input('contactNumber', 'Phone', 'tel')}
+      </fieldset>
+      <fieldset style={detailsStyle}>
+        <legend style={summaryStyle}>{isNGO ? 'Grant or project' : 'Delivery'}</legend>
+        {isOther(client.clientType) && input('clientTypeOther', isNGO ? 'Specify partner type' : 'Specify client type')}
+        <FormField label={isNGO ? 'Focus areas' : 'Industries'}>
+          <MultiSelect allowOther options={isNGO ? NGO_FOCUS_AREAS : industryOptions} selected={client.industries || []}
+            onChange={(value) => update('industries', value)} label={isNGO ? 'Focus areas' : 'Industries'} placeholder="Select" />
+        </FormField>
+        <FormField label={isNGO ? 'Programmes supported' : 'Offerings delivered'}>
+          {offeringOptions.length || client.offeringsDelivered?.length ? (
+            <MultiSelect options={offeringOptions} selected={client.offeringsDelivered || []}
+              onChange={(value) => update('offeringsDelivered', value)}
+              label={isNGO ? 'Programmes supported' : 'Offerings delivered'} placeholder="Select from catalogue" />
+          ) : <span style={{ fontSize: 12 }}>Add an offering to the catalogue first.</span>}
+        </FormField>
+        <div style={fieldGrid}>
+          {input('deliveryStart', 'Start date', 'date')}
+          {input('deliveryEnd', 'End date', 'date')}
+        </div>
+      </fieldset>
+      <fieldset style={detailsStyle}>
+        <legend style={summaryStyle}>{isNGO ? 'Reference and continuation' : 'Reference and growth'}</legend>
+        {select('referencePermission', 'Reference consent', referencePermissionOptions)}
+        {select('growthPotential', isNGO ? 'Continuation potential' : 'Growth potential', growthPotentialOptions)}
+        {(client.growthPotential === 'High' || client.growthPotential === 'Medium' || client.growthDetails) && (
+          <label style={{ display: 'grid', gap: 4, fontSize: 12, color: '#5c3a1e' }}>
+            {isNGO ? 'Continuation details' : 'Growth details'}
+            <textarea rows={2} value={client.growthDetails || ''}
+              onChange={(event) => update('growthDetails', event.target.value)}
+              style={{ ...tableInputStyle, resize: 'vertical', fontFamily: 'inherit' }} {...focusHandlers} />
+          </label>
+        )}
+      </fieldset>
+    </div>
+  )
+}
+
 // Main component
 // ---------------------------------------------------------------------------
 export default function ProductsServices({ data = {}, updateData, isNGO: isNgoProp, allFormData }) {
   const isNGO = typeof isNgoProp === "boolean" ? isNgoProp : checkIsNGO(allFormData || { productsServices: data })
   const [showExplanation, setShowExplanation] = useState(false)
+  const [openOfferings, setOpenOfferings] = useState([])
+  const [expandedClientIndex, setExpandedClientIndex] = useState(null)
+  const clientDetailsId = useId()
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -1342,7 +1356,17 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
     updateData({ offeringType: e.target.value })
   }
 
-  const offerings = data.offerings || []
+  const offerings = useMemo(() => (data.offerings || []).map((offering, index) => ({
+    ...offering,
+    id: offering.id || `legacy-offering-${index}`,
+    name: offering.name || '',
+    description: offering.description || '',
+    deliveryRole: offering.deliveryRole || [],
+    commercialPattern: offering.commercialPattern || [],
+    industries: offering.industries || [],
+    industryApplications: offering.industryApplications || [],
+    geographicCoverage: offering.geographicCoverage || [],
+  })), [data.offerings])
   const selectedOfferingType = data.offeringType || (isNGO ? 'programmes' : '')
 
   const showProducts = !isNGO && (selectedOfferingType === 'products' || selectedOfferingType === 'both')
@@ -1353,12 +1377,15 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
 
   // ---- Offerings CRUD -------------------------------------------------
   const addOffering = (offeringType) => {
-    updateData({ offerings: [...offerings, emptyOffering(offeringType, isNGO)] })
+    const offering = emptyOffering(offeringType, isNGO)
+    setOpenOfferings((ids) => [...ids, offering.id])
+    updateData({ offerings: [...offerings, offering] })
   }
   const updateOffering = (id, patch) => {
     updateData({ offerings: offerings.map((o) => (o.id === id ? { ...o, ...patch } : o)) })
   }
   const removeOffering = (id) => {
+    setOpenOfferings((ids) => ids.filter((openId) => openId !== id))
     updateData({ offerings: offerings.filter((o) => o.id !== id) })
   }
   const duplicateOffering = (id) => {
@@ -1368,6 +1395,7 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
     const idx = offerings.findIndex((o) => o.id === id)
     const next = [...offerings]
     next.splice(idx + 1, 0, copy)
+    setOpenOfferings((ids) => [...ids, copy.id])
     updateData({ offerings: next })
   }
   const moveOffering = (id, direction) => {
@@ -1382,7 +1410,7 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
     updateData({ offerings: offerings.map((o) => ({ ...o, isPrimary: o.id === id })) })
   }
   const toggleCollapse = (id) => {
-    updateData({ offerings: offerings.map((o) => (o.id === id ? { ...o, collapsed: !o.collapsed } : o)) })
+    setOpenOfferings((ids) => ids.includes(id) ? ids.filter((openId) => openId !== id) : [...ids, id])
   }
 
   // Duplicate warning
@@ -1457,15 +1485,17 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
   const removeClient = (index) => {
     const keyClients = [...(data.keyClients || [])]
     keyClients.splice(index, 1)
+    setExpandedClientIndex((current) => current === index ? null : current > index ? current - 1 : current)
     updateData({ keyClients })
   }
 
   const totalRevenuePercent = (data.keyClients || []).reduce((sum, c) => sum + (parseFloat(c.revenuePercentage) || 0), 0)
   const revenueOver100 = totalRevenuePercent > 100
 
-  const offeringNameOptions = offerings.filter((o) => o.name).map((o) => o.name)
+  const offeringNameOptions = [...new Set(offerings.filter((o) => o.name).map((o) => o.name))]
+  const clientTypes = isNGO ? NGO_PARTNER_TYPES : clientTypeOptions
 
-  const offeringTypeRadioOptions = isNGO
+  const offeringTypeOptions = isNGO
     ? [
         { value: 'programmes', label: 'Community programmes only' },
         { value: 'services', label: 'Services & training only' },
@@ -1536,22 +1566,12 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
       {/* ============================================================ */}
       <Section title={isNGO ? "Community Programmes & Services" : "Products & Services Catalogue"}>
         <FormField label={isNGO ? "What does your organisation deliver?" : "What does your business offer?"} required>
-          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-            {offeringTypeRadioOptions.map(({ value, label }) => (
-              <label key={value} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', color: '#3d2b1f' }}>
-                <input
-                  type="radio"
-                  name="offeringType"
-                  value={value}
-                  checked={selectedOfferingType === value}
-                  onChange={handleOfferingTypeChange}
-                  style={{ width: '18px', height: '18px', accentColor: '#8B4513', cursor: 'pointer' }}
-                  required
-                />
-                <span>{label}</span>
-              </label>
-            ))}
-          </div>
+          <select name="offeringType" value={selectedOfferingType} onChange={handleOfferingTypeChange}
+            aria-label={isNGO ? "What does your organisation deliver?" : "What does your business offer?"}
+            style={{ ...inputStyle, maxWidth: 420 }} {...focusHandlers}>
+            <option value="">Select offering type</option>
+            {offeringTypeOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+          </select>
         </FormField>
 
         {/* NGO Programmes */}
@@ -1566,7 +1586,7 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
               programmeOfferings.map((offering) => (
                 <NgoProgrammeCard
                   key={offering.id}
-                  offering={offering}
+                  offering={{ ...offering, collapsed: !openOfferings.includes(offering.id) }}
                   index={offerings.findIndex((o) => o.id === offering.id)}
                   total={offerings.length}
                   duplicateWarning={duplicateIds.has(offering.id)}
@@ -1595,7 +1615,7 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
               productOfferings.map((offering) => (
                 <OfferingCard
                   key={offering.id}
-                  offering={offering}
+                  offering={{ ...offering, collapsed: !openOfferings.includes(offering.id) }}
                   index={offerings.findIndex((o) => o.id === offering.id)}
                   total={offerings.length}
                   duplicateWarning={duplicateIds.has(offering.id)}
@@ -1631,7 +1651,7 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
                 isNGO ? (
                   <NgoProgrammeCard
                     key={offering.id}
-                    offering={offering}
+                    offering={{ ...offering, collapsed: !openOfferings.includes(offering.id) }}
                     index={offerings.findIndex((o) => o.id === offering.id)}
                     total={offerings.length}
                     duplicateWarning={duplicateIds.has(offering.id)}
@@ -1646,7 +1666,7 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
                 ) : (
                   <OfferingCard
                     key={offering.id}
-                    offering={offering}
+                    offering={{ ...offering, collapsed: !openOfferings.includes(offering.id) }}
                     index={offerings.findIndex((o) => o.id === offering.id)}
                     total={offerings.length}
                     duplicateWarning={duplicateIds.has(offering.id)}
@@ -1673,6 +1693,7 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
           {isNGO ? (
             <MultiSelect
               options={NGO_TARGET_BENEFICIARIES}
+              allowOther
               selected={customerTypes}
               onChange={(v) => updateData({ customerTypes: v })}
               label="beneficiary groups"
@@ -1681,6 +1702,7 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
           ) : (
             <MultiSelect
               options={customerTypeOptions}
+              allowOther
               selected={customerTypes}
               onChange={(v) => updateData({ customerTypes: v })}
               label="customer types"
@@ -1690,50 +1712,47 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
         </FormField>
 
         {hasAnySummaryData && (
-          <div style={{ marginTop: '16px', marginBottom: '16px', padding: '14px 16px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px' }}>
-            <h5 style={{ fontSize: '12px', fontWeight: '700', color: '#1e40af', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              {isNGO ? "Beneficiary Reach Summary — from your programmes & services above" : "Generated summary — from your offerings above"}
-            </h5>
-            {isNGO ? (
-              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#1e40af', lineHeight: '1.8' }}>
-                {allFocusAreas.length > 0 && <li><strong>Focus Areas:</strong> {allFocusAreas.join(', ')}</li>}
-                {allBeneficiaryLabels.length > 0 && <li><strong>Target Beneficiaries:</strong> {allBeneficiaryLabels.join(', ')}</li>}
-                {allGeography.length > 0 && <li><strong>Delivery Locations:</strong> {allGeography.join(', ')}</li>}
-                {offerings.length > 0 && (
-                  <li>
-                    <strong>Programme Scale:</strong> {offerings.length} total initiative{offerings.length === 1 ? '' : 's'} ({activeProgrammesCount} active)
-                    {totalHistoricBeneficiaries > 0 ? ` · ${totalHistoricBeneficiaries.toLocaleString()} historic beneficiaries reached` : ''}
-                    {totalAnnualTarget > 0 ? ` · ${totalAnnualTarget.toLocaleString()} targeted annually` : ''}
-                  </li>
-                )}
-              </ul>
-            ) : (
-              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#1e40af', lineHeight: '1.8' }}>
-                {customerTypes.length > 0 && <li><strong>Customer types:</strong> {customerTypes.join(', ')}</li>}
-                {allIndustries.length > 0 && <li><strong>Industries served:</strong> {allIndustries.join(', ')}</li>}
-                {allGeography.length > 0 && <li><strong>Geographic markets:</strong> {allGeography.join(', ')}</li>}
-                {allApplications.length > 0 && <li><strong>Client applications:</strong> {allApplications.join(', ')}</li>}
-                {offeringSummaries.length > 0 && <li><strong>Offering category &amp; delivery model:</strong> {offeringSummaries.join('; ')}</li>}
-              </ul>
-            )}
-          </div>
+          <ExtraDetails title={isNGO ? "Beneficiary reach summary" : "Target market summary"}>
+            <div style={{ marginTop: '16px', marginBottom: '16px', padding: '14px 16px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px' }}>
+              {isNGO ? (
+                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#1e40af', lineHeight: '1.8' }}>
+                  {allFocusAreas.length > 0 && <li><strong>Focus Areas:</strong> {allFocusAreas.join(', ')}</li>}
+                  {allBeneficiaryLabels.length > 0 && <li><strong>Target Beneficiaries:</strong> {allBeneficiaryLabels.join(', ')}</li>}
+                  {allGeography.length > 0 && <li><strong>Delivery Locations:</strong> {allGeography.join(', ')}</li>}
+                  {offerings.length > 0 && (
+                    <li>
+                      <strong>Programme Scale:</strong> {offerings.length} total initiative{offerings.length === 1 ? '' : 's'} ({activeProgrammesCount} active)
+                      {totalHistoricBeneficiaries > 0 ? ` · ${totalHistoricBeneficiaries.toLocaleString()} historic beneficiaries reached` : ''}
+                      {totalAnnualTarget > 0 ? ` · ${totalAnnualTarget.toLocaleString()} targeted annually` : ''}
+                    </li>
+                  )}
+                </ul>
+              ) : (
+                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#1e40af', lineHeight: '1.8' }}>
+                  {customerTypes.length > 0 && <li><strong>Customer types:</strong> {customerTypes.join(', ')}</li>}
+                  {allIndustries.length > 0 && <li><strong>Industries served:</strong> {allIndustries.join(', ')}</li>}
+                  {allGeography.length > 0 && <li><strong>Geographic markets:</strong> {allGeography.join(', ')}</li>}
+                  {allApplications.length > 0 && <li><strong>Client applications:</strong> {allApplications.join(', ')}</li>}
+                  {offeringSummaries.length > 0 && <li><strong>Offering category &amp; delivery model:</strong> {offeringSummaries.join('; ')}</li>}
+                </ul>
+              )}
+            </div>
+          </ExtraDetails>
         )}
 
-        <FormField label={isNGO ? "Community context & vulnerability criteria" : "Anything else about your target customers?"} required>
-          <textarea
-            name="targetMarket"
-            value={data.targetMarket || ""}
-            onChange={handleChange}
-            rows={3}
-            placeholder={isNGO
-              ? "Provide details about the specific communities, geographical demographics, or vulnerability criteria your programmes target..."
-              : "Add anything important about the customers you are targeting that is not already captured above."
-            }
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-            {...focusHandlers}
-            required
-          />
-        </FormField>
+        <div style={{ marginTop: 10 }}>
+          <ExtraDetails title={isNGO ? "Community context" : "Additional target market details"}>
+            <textarea
+              name="targetMarket"
+              aria-label={isNGO ? "Community context" : "Additional target market details"}
+              value={data.targetMarket || ""}
+              onChange={handleChange}
+              rows={3}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+              {...focusHandlers}
+            />
+          </ExtraDetails>
+        </div>
       </Section>
 
       {/* ============================================================ */}
@@ -1778,201 +1797,99 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
           <table className="min-w-full bg-white border border-brown-200 rounded-lg" style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                <th style={thStyle}>{isNGO ? "Funder / Partner Organisation" : "Client Name"}</th>
-                <th style={thStyle}>{isNGO ? "Partner Type" : "Type"}</th>
-                <th style={thStyle}>Contact</th>
-                <th style={thStyle}>{isNGO ? "Funding %" : "Revenue %"}</th>
-                <th style={thStyle}>{isNGO ? "Focus Area" : "Industry"}</th>
-                <th style={thStyle}>{isNGO ? "Programmes Supported" : "Offerings Delivered"}</th>
-                <th style={thStyle}>{isNGO ? "Grant / Project Period" : "Delivery Period"}</th>
-                <th style={thStyle}>{isNGO ? "Reference Consent" : "Reference"}</th>
-                <th style={thStyle}>{isNGO ? "Continuation Potential" : "Growth Potential"}</th>
-                <th style={{ ...thStyle, width: '50px' }}>Actions</th>
+                <th scope="col" style={thStyle}>{isNGO ? "Funder / Partner" : "Client Name"}</th>
+                <th scope="col" style={thStyle}>{isNGO ? "Partner Type" : "Type"}</th>
+                <th scope="col" style={thStyle}>{isNGO ? "Funding %" : "Revenue %"}</th>
+                <th scope="col" style={thStyle}>Details</th>
+                <th scope="col" style={thStyle}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {(data.keyClients || []).map((client, index) => (
-                <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
-                  <td className="px-3 py-2 border-b">
-                    <input
-                      type="text"
-                      value={client.name || ""}
-                      onChange={(e) => updateClient(index, "name", e.target.value)}
-                      placeholder={isNGO ? "Funder / Partner name" : "Client name"}
-                      style={{ ...inputStyle, padding: '8px 10px', fontSize: '12px', minWidth: '140px' }}
-                      {...focusHandlers}
-                    />
-                  </td>
-                  <td className="px-3 py-2 border-b">
-                    <select
-                      value={client.clientType || ""}
-                      onChange={(e) => updateClient(index, "clientType", e.target.value)}
-                      style={{ ...inputStyle, padding: '8px 10px', fontSize: '12px', cursor: 'pointer' }}
-                      {...focusHandlers}
-                    >
-                      <option value="">Select {isNGO ? "partner type" : "type"}</option>
-                      {isNGO
-                        ? NGO_PARTNER_TYPES.map((opt) => <option key={opt} value={opt}>{opt}</option>)
-                        : clientTypeOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)
-                      }
-                    </select>
-                  </td>
-                  <td className="px-3 py-2 border-b" style={{ minWidth: '180px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <input
-                        type="text"
-                        value={client.contactName || ""}
-                        onChange={(e) => updateClient(index, "contactName", e.target.value)}
-                        placeholder="Contact name"
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }}
-                        {...focusHandlers}
-                      />
-                      <input
-                        type="text"
-                        value={client.contactRole || ""}
-                        onChange={(e) => updateClient(index, "contactRole", e.target.value)}
-                        placeholder={isNGO ? "Role / Title" : "Role"}
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }}
-                        {...focusHandlers}
-                      />
-                      <input
-                        type="email"
-                        value={client.contactEmail || ""}
-                        onChange={(e) => updateClient(index, "contactEmail", e.target.value)}
-                        placeholder="Email"
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }}
-                        {...focusHandlers}
-                      />
-                      <input
-                        type="text"
-                        value={client.contactNumber || ""}
-                        onChange={(e) => updateClient(index, "contactNumber", e.target.value)}
-                        placeholder="Phone"
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }}
-                        {...focusHandlers}
-                      />
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 border-b">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={client.revenuePercentage || ""}
-                        onChange={(e) => {
-                          const val = Math.min(100, Math.max(0, Number(e.target.value)))
-                          updateClient(index, "revenuePercentage", val === 0 ? "" : String(val))
-                        }}
-                        placeholder="%"
-                        style={{ ...inputStyle, width: '64px', padding: '8px 10px', fontSize: '12px' }}
-                        {...focusHandlers}
-                      />
-                      <span style={{ fontSize: '12px', color: '#5c3a1e', fontWeight: '600' }}>%</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 border-b" style={{ minWidth: '170px' }}>
-                    {isNGO ? (
-                      <MultiSelect
-                        options={NGO_FOCUS_AREAS}
-                        selected={client.industries || []}
-                        onChange={(v) => updateClient(index, "industries", v)}
-                        label="focus areas"
-                        placeholder="Select focus areas..."
-                      />
-                    ) : (
-                      <MultiSelect
-                        options={industryOptions}
-                        selected={client.industries || []}
-                        onChange={(v) => updateClient(index, "industries", v)}
-                        label="industries"
-                        placeholder="Select..."
-                      />
-                    )}
-                  </td>
-                  <td className="px-3 py-2 border-b" style={{ minWidth: '170px' }}>
-                    {offeringNameOptions.length === 0 ? (
-                      <span style={{ fontSize: '11px', color: '#a08a6d' }}>
-                        {isNGO ? "Add a programme above first" : "Add an offering above first"}
-                      </span>
-                    ) : (
-                      <MultiSelect
-                        options={offeringNameOptions}
-                        selected={client.offeringsDelivered || []}
-                        onChange={(v) => updateClient(index, "offeringsDelivered", v)}
-                        placeholder={isNGO ? "Select programmes..." : "Select offerings..."}
-                      />
-                    )}
-                  </td>
-                  <td className="px-3 py-2 border-b" style={{ minWidth: '170px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <input
-                        type="date"
-                        value={client.deliveryStart || ""}
-                        onChange={(e) => updateClient(index, "deliveryStart", e.target.value)}
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }}
-                        {...focusHandlers}
-                      />
-                      <input
-                        type="date"
-                        value={client.deliveryEnd || ""}
-                        onChange={(e) => updateClient(index, "deliveryEnd", e.target.value)}
-                        style={{ ...inputStyle, padding: '6px 10px', fontSize: '11px' }}
-                        {...focusHandlers}
-                      />
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 border-b">
-                    <select
-                      value={client.referencePermission || ""}
-                      onChange={(e) => updateClient(index, "referencePermission", e.target.value)}
-                      style={{ ...inputStyle, padding: '8px 10px', fontSize: '12px', cursor: 'pointer' }}
-                      {...focusHandlers}
-                    >
-                      <option value="">Select</option>
-                      {referencePermissionOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2 border-b">
-                    <select
-                      value={client.growthPotential || ""}
-                      onChange={(e) => updateClient(index, "growthPotential", e.target.value)}
-                      style={{ ...inputStyle, padding: '8px 10px', fontSize: '12px', cursor: 'pointer' }}
-                      {...focusHandlers}
-                    >
-                      <option value="">Select</option>
-                      {growthPotentialOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                    {(client.growthPotential === 'High' || client.growthPotential === 'Medium') && (
-                      <textarea
-                        value={client.growthDetails || ""}
-                        onChange={(e) => updateClient(index, "growthDetails", e.target.value)}
-                        placeholder={isNGO ? "Continuation / Renewal details..." : "Growth details..."}
-                        rows={1}
-                        style={{ ...inputStyle, marginTop: '6px', padding: '6px 10px', fontSize: '11px', resize: 'vertical', fontFamily: 'inherit' }}
-                        {...focusHandlers}
-                      />
-                    )}
-                  </td>
-                  <td className="px-3 py-2 border-b" style={{ textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => removeClient(index)}
-                      style={{ padding: '6px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {(data.keyClients || []).map((client, index) => {
+                const isExpanded = expandedClientIndex === index
+                const rowLabel = client.name || `${isNGO ? 'partner' : 'client'} ${index + 1}`
+                const detailsId = `${clientDetailsId}-${index}`
+                return (
+                  <React.Fragment key={client.id || index}>
+                    <tr className={index % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
+                      <td className="px-3 py-2 border-b">
+                        <input
+                          type="text"
+                          aria-label={`${isNGO ? 'Partner' : 'Client'} name ${index + 1}`}
+                          value={client.name || ""}
+                          onChange={(event) => updateClient(index, "name", event.target.value)}
+                          placeholder={isNGO ? "Partner name" : "Client name"}
+                          style={{ ...tableInputStyle, minWidth: 120 }}
+                          {...focusHandlers}
+                        />
+                      </td>
+                      <td className="px-3 py-2 border-b">
+                        <select
+                          aria-label={`Type for ${rowLabel}`}
+                          value={client.clientType || ""}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            updateClient(index, "clientType", value)
+                            if (value === otherOption) setExpandedClientIndex(index)
+                          }}
+                          style={{ ...tableInputStyle, minWidth: 120 }}
+                          {...focusHandlers}
+                        >
+                          <option value="">Select type</option>
+                          {clientTypes.map((type) => <option key={type} value={type}>{isOther(type) ? "Other (specify)" : type}</option>)}
+                          {client.clientType && !clientTypes.includes(client.clientType) && <option value={client.clientType}>{client.clientType}</option>}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2 border-b">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          aria-label={`${isNGO ? 'Funding' : 'Revenue'} percentage for ${rowLabel}`}
+                          value={client.revenuePercentage ?? ""}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            updateClient(index, "revenuePercentage", value === '' ? '' : String(Math.min(100, Math.max(0, Number(value)))))
+                          }}
+                          placeholder="%"
+                          style={{ ...tableInputStyle, width: 75 }}
+                          {...focusHandlers}
+                        />
+                      </td>
+                      <td className="px-3 py-2 border-b">
+                        <button type="button" className="btn btn-secondary" aria-expanded={isExpanded} aria-controls={detailsId}
+                          onClick={() => setExpandedClientIndex(isExpanded ? null : index)}>
+                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          {isExpanded ? "Hide details" : "Details"}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 border-b" style={{ textAlign: 'center' }}>
+                        <button type="button" aria-label={`Remove ${rowLabel}`} onClick={() => removeClient(index)}
+                          style={{ padding: 6, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>
+                          <Trash2 size={17} />
+                        </button>
+                      </td>
+                    </tr>
+                    <tr id={detailsId} hidden={!isExpanded}>
+                      {isExpanded && (
+                        <td colSpan={5} style={{ padding: 16, background: '#fcf8f2', borderBottom: '1px solid #e4d5c2' }}>
+                          <ClientDetails
+                            client={client}
+                            isNGO={isNGO}
+                            offeringOptions={offeringNameOptions}
+                            update={(field, value) => updateClient(index, field, value)}
+                          />
+                        </td>
+                      )}
+                    </tr>
+                  </React.Fragment>
+                )
+              })}
               {(data.keyClients || []).length === 0 && (
                 <tr>
-                  <td colSpan="10" style={{ textAlign: 'center', padding: '40px', color: '#999', fontSize: '13px', backgroundColor: '#fdfaf5' }}>
-                    {isNGO
-                      ? "No funding partners or grantmakers added yet. Click 'Add Funder / Partner' to record your major donors and partners."
-                      : "No clients added yet. Click 'Add Client' to get started."}
+                  <td colSpan={5} style={{ textAlign: 'center', padding: 24, color: '#8B6F47', fontSize: 13 }}>
+                    {isNGO ? "No funders or partners added." : "No clients added."}
                   </td>
                 </tr>
               )}
@@ -1982,4 +1899,4 @@ export default function ProductsServices({ data = {}, updateData, isNGO: isNgoPr
       </Section>
     </div>
   )
-}
+}
